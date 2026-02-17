@@ -257,18 +257,27 @@ async function pollServer(s) {
     const summary = summaryFromResponse(resp);
     // If summary is missing, but sessions exist, compute summary from sessions
     let sessions = summary.sessions || [];
-    let count = summary.count || sessions.length;
+    let count = sessions.length;
     let summaryObj = summary.summary;
     if (!summaryObj && Array.isArray(sessions)) {
       let directPlays = 0, transcodes = 0, totalBandwidth = 0, lanBandwidth = 0, wanBandwidth = 0;
       sessions.forEach(sess => {
-        if (sess.transcoding) transcodes++;
+        // Robust transcoding detection
+        let isTranscoding = false;
+        if (typeof sess.transcoding === 'boolean') {
+          isTranscoding = sess.transcoding;
+        } else if (sess.stream && typeof sess.stream === 'string' && sess.stream.toLowerCase().includes('transcode')) {
+          isTranscoding = true;
+        } else if (sess.state && typeof sess.state === 'string' && sess.state.toLowerCase().includes('transcode')) {
+          isTranscoding = true;
+        }
+        if (isTranscoding) transcodes++;
         else directPlays++;
         if (sess.bandwidth) totalBandwidth += Number(sess.bandwidth);
         if (sess.location && sess.location.toUpperCase().includes('LAN') && sess.bandwidth) lanBandwidth += Number(sess.bandwidth);
         if (sess.location && sess.location.toUpperCase().includes('WAN') && sess.bandwidth) wanBandwidth += Number(sess.bandwidth);
       });
-      summaryObj = { directPlays, transcodes, totalBandwidth, lanBandwidth, wanBandwidth };
+      summaryObj = { directPlays, transcodes, totalStreams: count, totalBandwidth, lanBandwidth, wanBandwidth };
     }
     statuses[s.id] = {
       id: s.id,

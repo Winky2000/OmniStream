@@ -122,13 +122,13 @@
           const summary = st.summary || {};
           const directPlays = typeof summary.directPlays === 'number' ? summary.directPlays : 0;
           const transcodes = typeof summary.transcodes === 'number' ? summary.transcodes : 0;
+          const totalStreams = typeof summary.totalStreams === 'number' ? summary.totalStreams : (typeof st.count === 'number' ? st.count : 0);
           const totalBandwidth = typeof summary.totalBandwidth === 'number' ? summary.totalBandwidth : 0;
           const lanBandwidth = typeof summary.lanBandwidth === 'number' ? summary.lanBandwidth : 0;
           const wanBandwidth = typeof summary.wanBandwidth === 'number' ? summary.wanBandwidth : 0;
-          const count = typeof st.count === 'number' ? st.count : 0;
           const summaryDiv = document.createElement('div');
           summaryDiv.className = 'meta';
-          summaryDiv.innerHTML = `Total Streams: <b>${count}</b> &nbsp;|&nbsp; Direct Play: <b>${directPlays}</b> &nbsp;|&nbsp; Transcoding: <b>${transcodes}</b><br>Bandwidth: ${totalBandwidth.toFixed(1)} Mbps (LAN: ${lanBandwidth.toFixed(1)} Mbps, WAN: ${wanBandwidth.toFixed(1)} Mbps)`;
+          summaryDiv.innerHTML = `Total Streams: <b>${totalStreams}</b> &nbsp;|&nbsp; Direct Play: <b>${directPlays}</b> &nbsp;|&nbsp; Transcoding: <b>${transcodes}</b><br>Bandwidth: ${totalBandwidth.toFixed(1)} Mbps (LAN: ${lanBandwidth.toFixed(1)} Mbps, WAN: ${wanBandwidth.toFixed(1)} Mbps)`;
           card.appendChild(summaryDiv);
         }
         // Sessions
