@@ -36,6 +36,7 @@
     }
 
     function render(data) {
+      const { servers = [], statuses = {} } = data;
       servers.forEach(s => {
         const st = statuses && statuses[s.id] ? statuses[s.id] : { online: false };
         const card = document.createElement('div');
