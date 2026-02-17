@@ -139,9 +139,9 @@ function summaryFromResponse(resp) {
         }
       };
     }
-    if (Array.isArray(d) && d.length > 0 && d[0].NowPlayingItem) {
-      // Jellyfin/Emby sessions
-      const sessions = d.map(s => {
+    if (Array.isArray(d) && d.length > 0) {
+      // Jellyfin/Emby sessions: only include active playback (NowPlayingItem exists and PlayState.Playing is true)
+      const sessions = d.filter(s => s.NowPlayingItem && s.PlayState && s.PlayState.Playing === true).map(s => {
         let posterUrl;
         // Live TV poster extraction for Jellyfin/Emby
         if (s.NowPlayingItem?.Type === 'LiveTv' && s.NowPlayingItem?.ImageTags?.Primary && resp.config && resp.config.serverConfig) {
