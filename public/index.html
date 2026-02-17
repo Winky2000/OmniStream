@@ -6,9 +6,11 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <style>
     body{font-family:Segoe UI,Arial;background:#181c24;color:#e0e3e8;margin:0;padding:20px}
-    h1{margin:0 0 12px;color:#fff;letter-spacing:1px}
-    #grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
-    .card{background:#232837;border-radius:8px;padding:12px;box-shadow:0 1px 8px #0004}
+    h1{margin:0;color:#fff;letter-spacing:1px;display:inline-block;vertical-align:middle;font-size:2.2em}
+    .header-flex{display:flex;align-items:center;gap:18px;margin-bottom:24px;}
+    .logo-img{height:90px;max-width:120px;object-fit:contain;box-shadow:0 2px 8px #0003;border-radius:8px;}
+    #grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:18px}
+    .card{background:#232837;border-radius:12px;padding:20px;box-shadow:0 2px 12px #0004}
     .offline{opacity:0.5}
     .title{font-weight:600;margin-bottom:6px;color:#fff}
     .meta{font-size:13px;color:#a0a4b0;margin-bottom:8px}
@@ -24,10 +26,10 @@
   </style>
 </head>
 <body>
-  <div style="text-align:center;margin-bottom:16px;">
-    <img src="omnistream_logo.png" alt="OmniStream Logo" style="height:64px;max-width:90vw;object-fit:contain;box-shadow:0 2px 8px #0003;border-radius:8px;" />
+  <div class="header-flex">
+    <img src="omnistream_logo.png" alt="OmniStream Logo" class="logo-img" />
+    <h1>OmniStream</h1>
   </div>
-  <h1>OmniStream</h1>
   <div id="grid"></div>
 
   <script>
