@@ -29,8 +29,8 @@
       background: #232837;
       border-radius: 18px;
       padding: 32px 32px 28px 32px;
-      box-shadow: 0 2px 18px #0004, 0 0 18px #00bfff44;
-      border: 4px solid #00bfff;
+      box-shadow: 0 2px 18px #0004, 0 0 24px 6px orange, 0 0 18px #00bfff44;
+      border: 4px solid orange;
       min-width: 420px;
       max-width: 520px;
       width: 100%;
@@ -149,8 +149,12 @@
           sessionsDiv.className = 'sessions';
           sessionsDiv.innerHTML = `<strong>${st.sessions.length} active</strong>`;
           st.sessions.forEach(sess => {
-            const session = document.createElement('div'); 
+            const session = document.createElement('div');
             session.className = 'session';
+            // Layout: poster left, info right
+            const row = document.createElement('div');
+            row.style.display = 'flex';
+            row.style.alignItems = 'flex-start';
             // Poster
             if (sess.poster) {
               const img = document.createElement('img');
@@ -158,10 +162,15 @@
               img.src = sess.poster;
               img.alt = 'Poster';
               img.onerror = function() { this.style.display = 'none'; };
-              session.appendChild(img);
+              row.appendChild(img);
             }
+            // Info block
+            const info = document.createElement('div');
+            info.style.display = 'flex';
+            info.style.flexDirection = 'column';
+            info.style.marginLeft = '10px';
             // User and title
-            const title = document.createElement('div'); 
+            const title = document.createElement('div');
             title.className = 'session-user';
             title.textContent = sess.user || sess.userName || 'Unknown';
             // Direct Play/Transcoding label
@@ -179,38 +188,50 @@
               streamType.style.border = '1px solid #0af';
             }
             title.appendChild(streamType);
-            const sub = document.createElement('div'); 
+            info.appendChild(title);
+            const sub = document.createElement('div');
             sub.className = 'session-title';
             sub.textContent = sess.title || sess.channel || 'Idle';
-            // Meta info
-            const meta = document.createElement('div');
-            meta.className = 'session-meta';
-            meta.innerHTML =
-              (sess.episode ? `<b>Ep:</b> ${sess.episode} ` : '') +
-              (sess.episodeTitle ? `<b>EpTitle:</b> ${sess.episodeTitle} ` : '') +
-              (sess.year ? `<b>Year:</b> ${sess.year} ` : '') +
-              (sess.platform ? `<b>Platform:</b> ${sess.platform} ` : '') +
-              (sess.product ? `<b>Product:</b> ${sess.product} ` : '') +
-              (sess.player ? `<b>Player:</b> ${sess.player} ` : '') +
-              (sess.quality ? `<b>Quality:</b> ${sess.quality} ` : '') +
-              (sess.stream ? `<b>Stream:</b> ${sess.stream} ` : '') +
-              (sess.container ? `<b>Container:</b> ${sess.container} ` : '') +
-              (sess.video ? `<b>Video:</b> ${sess.video} ` : '') +
-              (sess.audio ? `<b>Audio:</b> ${sess.audio} ` : '') +
-              (sess.subtitle ? `<b>Subtitle:</b> ${sess.subtitle} ` : '') +
-              (sess.location ? `<b>Location:</b> ${sess.location} ` : '') +
-              (sess.ip ? `<b>IP:</b> ${sess.ip} ` : '') +
-              (sess.bandwidth ? `<b>Bandwidth:</b> ${sess.bandwidth} Mbps ` : '');
+            info.appendChild(sub);
+            // Vertical info list
+            const infoList = document.createElement('div');
+            infoList.style.fontSize = '11px';
+            infoList.style.color = '#b0b3b8';
+            infoList.style.display = 'flex';
+            infoList.style.flexDirection = 'column';
+            infoList.style.gap = '2px';
+            function addInfo(label, value) {
+              if (value) {
+                const div = document.createElement('div');
+                div.innerHTML = `<b>${label}:</b> ${value}`;
+                infoList.appendChild(div);
+              }
+            }
+            addInfo('Product', sess.product);
+            addInfo('Player', sess.player);
+            addInfo('Quality', sess.quality);
+            addInfo('Stream', sess.stream);
+            addInfo('Container', sess.container);
+            addInfo('Video', sess.video);
+            addInfo('Audio', sess.audio);
+            addInfo('Subtitle', sess.subtitle);
+            addInfo('Location', sess.location);
+            if (sess.location && sess.location.toUpperCase().includes('WAN')) {
+              addInfo('WAN', sess.ip);
+            }
+            if (typeof sess.bandwidth === 'number' && sess.bandwidth > 0) {
+              addInfo('Bandwidth', sess.bandwidth.toFixed(1) + ' Mbps');
+            }
+            info.appendChild(infoList);
+            row.appendChild(info);
+            session.appendChild(row);
             // Progress bar
-            const bar = document.createElement('div'); 
+            const bar = document.createElement('div');
             bar.className = 'progress-bar';
-            const fill = document.createElement('div'); 
+            const fill = document.createElement('div');
             fill.className = 'progress-fill';
             fill.style.width = (sess.progress || 0) + '%';
             bar.appendChild(fill);
-            session.appendChild(title); 
-            session.appendChild(sub);
-            session.appendChild(meta);
             session.appendChild(bar);
             sessionsDiv.appendChild(session);
           });
