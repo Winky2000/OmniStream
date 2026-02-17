@@ -1,4 +1,12 @@
-// Edit/update server info
+// ...existing code...
+const express = require('express');
+const axios = require('axios');
+const fs = require('fs');
+const path = require('path');
+const cors = require('cors');
+// ...existing code...
+
+// Edit/update server info (must be after app is defined)
 app.put('/api/servers/:id', (req, res) => {
   const idx = servers.findIndex(s => s.id == req.params.id);
   if (idx === -1) return res.status(404).json({error:'Not found'});
@@ -12,12 +20,6 @@ app.put('/api/servers/:id', (req, res) => {
   }
   res.json(servers[idx]);
 });
-// ...existing code...
-const express = require('express');
-const axios = require('axios');
-const fs = require('fs');
-const path = require('path');
-const cors = require('cors');
 
 const app = express();
 app.use(cors());
