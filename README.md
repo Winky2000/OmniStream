@@ -41,20 +41,36 @@ Each server entry supports:
  
 ## Docker
 
-Build and run with Docker:
+### Local build
+
+Build and run locally:
 
 ```bash
 docker build -t omnistream:latest .
 docker run --rm -p 3000:3000 -v $(pwd)/servers.json:/usr/src/app/servers.json omnistream:latest
 ```
 
-Or using `docker-compose` (recommended for local editing of `servers.json`):
+Or using `docker-compose`:
 
 ```bash
 docker-compose up --build -d
 ```
 
 The UI will be available at `http://localhost:3000`.
+
+### Remote pull from GHCR
+
+On a remote machine (after pushing to GitHub), use `docker-compose.remote.yml` to pull the pre-built image:
+
+1. Download or copy `docker-compose.remote.yml` (or create a `servers.json` in the working folder).
+2. Edit `docker-compose.remote.yml` and replace `YOUR_USER` with your GitHub username.
+3. Run:
+
+```bash
+docker-compose -f docker-compose.remote.yml up -d
+```
+
+This will pull `ghcr.io/YOUR_USER/omnistream:latest` and start the container. No build needed.
 
 ## Publish to GitHub & pull image remotely
 

@@ -3,8 +3,8 @@
     "id": "plex-1",
     "name": "My Plex",
     "type": "plex",
-    "baseUrl": "http://PLEX_HOST:32400",
-    "token": "YOUR_PLEX_TOKEN",
+    "baseUrl": "http://192.168.1.138:32400",
+    "token": "RrqrzCMCg4WbPWaNEWsh",
     "tokenLocation": "query",
     "apiPath": "/status/sessions"
   },
@@ -12,8 +12,8 @@
     "id": "jelly-1",
     "name": "My Jellyfin",
     "type": "jellyfin",
-    "baseUrl": "http://JELLYFIN_HOST:8096",
-    "token": "YOUR_JELLYFIN_TOKEN",
+    "baseUrl": "http://192.168.1.138:8096",
+    "token": "dd16020b673747798d72adf3cf595587",
     "tokenLocation": "header",
     "apiPath": "/System/Info"
   },
