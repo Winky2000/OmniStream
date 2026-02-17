@@ -32,21 +32,23 @@ function summaryFromResponse(resp) {
   try {
     const d = resp.data;
     if (!d) return {};
-    if (d.MediaContainer) {
-      const sessions = (d.MediaContainer.Metadata || []).map(m => ({
-        user: m.User?.title || 'Unknown',
-        title: m.title || m.grandparentTitle || 'Unknown',
-        episode: m.grandparentTitle ? m.title : undefined,
-        year: m.year,
-        platform: m.Player?.platform || m.Player?.product || '',
-        state: m.Player?.state || '',
-        poster: m.thumb ? `/proxy/plex/poster?url=${encodeURIComponent(m.thumb)}` : undefined,
-        duration: m.duration ? Math.round(m.duration / 1000) : 0,
-        viewOffset: m.viewOffset || 0,
-        progress: m.duration ? Math.round((m.viewOffset || 0) / m.duration * 100) : 0
-      }));
-      return { type: 'plex', sessions, count: sessions.length };
-    }
+      if (d.MediaContainer) {
+        const sessions = (d.MediaContainer.Metadata || []).map(m => ({
+          user: m.User?.title || 'Unknown',
+          title: m.title || m.grandparentTitle || 'Unknown',
+          episode: m.grandparentTitle ? m.title : undefined,
+          year: m.year,
+          platform: m.Player?.platform || m.Player?.product || '',
+          state: m.Player?.state || '',
+          poster: m.thumb && resp.config && resp.config.serverConfig
+            ? `${resp.config.serverConfig.baseUrl}${m.thumb}?X-Plex-Token=${encodeURIComponent(resp.config.serverConfig.token)}`
+            : undefined,
+          duration: m.duration ? Math.round(m.duration / 1000) : 0,
+          viewOffset: m.viewOffset || 0,
+          progress: m.duration ? Math.round((m.viewOffset || 0) / m.duration * 100) : 0
+        }));
+        return { type: 'plex', sessions, count: sessions.length };
+      }
     if (Array.isArray(d) && d.length > 0 && d[0].NowPlayingItem) {
       // Jellyfin/Emby sessions
       const sessions = d.map(s => ({
@@ -93,7 +95,13 @@ async function pollServer(s) {
   }
 
   try {
-    const resp = await axios.get(finalUrl, { timeout: 10000, headers });
+      const resp = await axios.get(finalUrl, { timeout: 10000, headers });
+      // Attach server config for poster URL generation
+      resp.config.serverConfig = {
+        baseUrl: s.baseUrl,
+        token: s.token || '',
+        type: s.type || ''
+      };
     const latency = Date.now() - start;
     const summary = summaryFromResponse(resp);
     
