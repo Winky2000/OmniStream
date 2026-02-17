@@ -38,40 +38,6 @@ app.put('/api/servers/:id', (req, res) => {
 
 const statuses = {}; // keyed by server.id
 
-// ...existing code...
-
-// Edit/update server info (must be after app is defined)
-app.put('/api/servers/:id', (req, res) => {
-  const idx = servers.findIndex(s => s.id == req.params.id);
-  if (idx === -1) return res.status(404).json({error:'Not found'});
-  // Merge new data into existing server object
-  servers[idx] = { ...servers[idx], ...req.body, id: servers[idx].id };
-  try {
-    fs.writeFileSync(SERVERS_FILE, JSON.stringify(servers, null, 2));
-  } catch (e) {
-    console.error('Failed to write servers.json', e.message);
-    return res.status(500).json({error:'Failed to save'});
-  }
-  res.json(servers[idx]);
-});
-
-const app = express();
-app.use(cors());
-app.use(express.json());
-app.use(express.static('public'));
-
-const SERVERS_FILE = path.join(__dirname, 'servers.json');
-let servers = [];
-try {
-  if (fs.existsSync(SERVERS_FILE)) {
-    servers = JSON.parse(fs.readFileSync(SERVERS_FILE));
-  }
-} catch (e) {
-  console.error('Failed to read servers.json:', e.message);
-}
-
-const statuses = {}; // keyed by server.id
-
 const defaultPathForType = (t) => {
   if (t === 'plex') return '/status/sessions';
   if (t === 'jellyfin') return '/Sessions';
