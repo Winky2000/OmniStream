@@ -66,12 +66,19 @@ function summaryFromResponse(resp) {
         } else if (m.thumb && resp.config && resp.config.serverConfig) {
           posterUrl = `${resp.config.serverConfig.baseUrl}${m.thumb}?X-Plex-Token=${encodeURIComponent(resp.config.serverConfig.token)}`;
         }
-        // Use 'transcoding' boolean if present
+        // Robust transcoding detection for Plex
         let transcoding = false;
-        if (typeof m.transcoding === 'boolean') {
-          transcoding = m.transcoding;
-        } else if (typeof m.transcodeDecision === 'string') {
-          transcoding = m.transcodeDecision.toLowerCase().includes('transcode');
+        if (m.Media && Array.isArray(m.Media)) {
+          for (const media of m.Media) {
+            if (media.Part && Array.isArray(media.Part)) {
+              for (const part of media.Part) {
+                if (typeof part.decision === 'string' && part.decision.toLowerCase() === 'transcode') {
+                  transcoding = true;
+                  break;
+                }
+              }
+            }
+          }
         }
         // Bandwidth as number (parse from string like '0.0 Mbps')
         let bandwidth = 0;
@@ -277,8 +284,11 @@ async function pollServer(s) {
         if (sess.bandwidth) totalBandwidth += Number(sess.bandwidth);
         if (sess.location && sess.location.toUpperCase().includes('LAN') && sess.bandwidth) lanBandwidth += Number(sess.bandwidth);
         if (sess.location && sess.location.toUpperCase().includes('WAN') && sess.bandwidth) wanBandwidth += Number(sess.bandwidth);
-        // Log session classification
+        // Log session classification and full session object for diagnosis
         console.log(`[Session ${idx+1}] user: ${sess.user || sess.userName}, transcoding: ${sess.transcoding}, stream: ${sess.stream}, state: ${sess.state}, classified as: ${isTranscoding ? 'Transcoding' : 'Direct Play'}`);
+        if (!isTranscoding && idx === 0) {
+          console.log('[Session 1] Full session object:', JSON.stringify(sess, null, 2));
+        }
       });
       console.log(`[OmniStream] Totals for ${s.name || s.baseUrl}: directPlays=${directPlays}, transcodes=${transcodes}, totalStreams=${count}`);
       summaryObj = { directPlays, transcodes, totalStreams: count, totalBandwidth, lanBandwidth, wanBandwidth };
