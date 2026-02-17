@@ -246,16 +246,30 @@ async function pollServer(s) {
   }
 
   try {
-      const resp = await axios.get(finalUrl, { timeout: 10000, headers });
-      // Attach server config for poster URL generation
-      resp.config.serverConfig = {
-        baseUrl: s.baseUrl,
-        token: s.token || '',
-        type: s.type || ''
-      };
+    const resp = await axios.get(finalUrl, { timeout: 10000, headers });
+    // Attach server config for poster URL generation
+    resp.config.serverConfig = {
+      baseUrl: s.baseUrl,
+      token: s.token || '',
+      type: s.type || ''
+    };
     const latency = Date.now() - start;
     const summary = summaryFromResponse(resp);
-    
+    // If summary is missing, but sessions exist, compute summary from sessions
+    let sessions = summary.sessions || [];
+    let count = summary.count || sessions.length;
+    let summaryObj = summary.summary;
+    if (!summaryObj && Array.isArray(sessions)) {
+      let directPlays = 0, transcodes = 0, totalBandwidth = 0, lanBandwidth = 0, wanBandwidth = 0;
+      sessions.forEach(sess => {
+        if (sess.transcoding) transcodes++;
+        else directPlays++;
+        if (sess.bandwidth) totalBandwidth += Number(sess.bandwidth);
+        if (sess.location && sess.location.toUpperCase().includes('LAN') && sess.bandwidth) lanBandwidth += Number(sess.bandwidth);
+        if (sess.location && sess.location.toUpperCase().includes('WAN') && sess.bandwidth) wanBandwidth += Number(sess.bandwidth);
+      });
+      summaryObj = { directPlays, transcodes, totalBandwidth, lanBandwidth, wanBandwidth };
+    }
     statuses[s.id] = {
       id: s.id,
       name: s.name || s.baseUrl,
@@ -263,8 +277,9 @@ async function pollServer(s) {
       online: true,
       statusCode: resp.status,
       latency,
-      sessions: summary.sessions || [],
-      sessionCount: summary.count || 0,
+      sessions,
+      sessionCount: count,
+      summary: summaryObj,
       lastChecked: new Date().toISOString()
     };
   } catch (err) {
