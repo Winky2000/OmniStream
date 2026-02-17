@@ -11,8 +11,14 @@
     .card{background:white;border-radius:8px;padding:12px;box-shadow:0 1px 4px rgba(0,0,0,0.08)}
     .offline{opacity:0.6}
     .title{font-weight:600;margin-bottom:6px}
-    .meta{font-size:13px;color:#555}
-    .small{font-size:12px;color:#777}
+    .meta{font-size:13px;color:#555;margin-bottom:8px}
+    .small{font-size:12px;color:#777;margin-bottom:8px}
+    .sessions{font-size:11px;border-top:1px solid #eee;padding-top:8px;margin-top:8px}
+    .session{background:#f9f9f9;padding:6px;border-radius:4px;margin-bottom:4px;line-height:1.4}
+    .session-user{font-weight:600;color:#333}
+    .session-title{color:#666;font-size:11px}
+    .progress-bar{background:#e0e0e0;height:4px;border-radius:2px;margin-top:2px;overflow:hidden}
+    .progress-fill{background:#4CAF50;height:100%;transition:width 0.3s}
   </style>
 </head>
 <body>
@@ -39,13 +45,48 @@
         const st = statuses && statuses[s.id] ? statuses[s.id] : { online: false };
         const card = document.createElement('div');
         card.className = 'card ' + (st.online ? '' : 'offline');
+        
         const title = document.createElement('div'); title.className = 'title';
         title.textContent = s.name || s.baseUrl;
+        
         const meta = document.createElement('div'); meta.className = 'meta';
         meta.textContent = `${s.type || 'generic'} • ${st.online ? 'Online' : 'Offline'}`;
+        
         const small = document.createElement('div'); small.className = 'small';
-        small.innerHTML = `Latency: ${st.latency ?? '-'}ms<br/>Last: ${st.lastChecked ?? '-'}<br/>${st.online ? 'Status: ' + (st.statusCode||'') : 'Error: ' + (st.error||'')}`;
-        card.appendChild(title); card.appendChild(meta); card.appendChild(small);
+        small.innerHTML = `Latency: ${st.latency ?? '-'}ms<br/>Last: ${st.lastChecked ? new Date(st.lastChecked).toLocaleTimeString() : '-'}`;
+        
+        card.appendChild(title); 
+        card.appendChild(meta); 
+        card.appendChild(small);
+        
+        // Sessions
+        if (st.online && st.sessions && st.sessions.length > 0) {
+          const sessionsDiv = document.createElement('div'); 
+          sessionsDiv.className = 'sessions';
+          sessionsDiv.innerHTML = `<strong>${st.sessions.length} active</strong>`;
+          st.sessions.forEach(sess => {
+            const session = document.createElement('div'); 
+            session.className = 'session';
+            const title = document.createElement('div'); 
+            title.className = 'session-user';
+            title.textContent = sess.user || 'Unknown';
+            const sub = document.createElement('div'); 
+            sub.className = 'session-title';
+            sub.textContent = sess.title || 'Idle';
+            const bar = document.createElement('div'); 
+            bar.className = 'progress-bar';
+            const fill = document.createElement('div'); 
+            fill.className = 'progress-fill';
+            fill.style.width = (sess.progress || 0) + '%';
+            bar.appendChild(fill);
+            session.appendChild(title); 
+            session.appendChild(sub); 
+            session.appendChild(bar);
+            sessionsDiv.appendChild(session);
+          });
+          card.appendChild(sessionsDiv);
+        }
+        
         grid.appendChild(card);
       });
     }

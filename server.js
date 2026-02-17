@@ -23,8 +23,8 @@ const statuses = {}; // keyed by server.id
 
 const defaultPathForType = (t) => {
   if (t === 'plex') return '/status/sessions';
-  if (t === 'jellyfin') return '/System/Info';
-  if (t === 'emby') return '/System/Info';
+  if (t === 'jellyfin') return '/Sessions';
+  if (t === 'emby') return '/Sessions';
   return '/';
 };
 
@@ -32,7 +32,29 @@ function summaryFromResponse(resp) {
   try {
     const d = resp.data;
     if (!d) return {};
-    if (d.MediaContainer) return { type: 'plex', size: d.MediaContainer.size || null };
+    if (d.MediaContainer) {
+      const sessions = (d.MediaContainer.Metadata || []).map(m => ({
+        user: m.User?.title || 'Unknown',
+        title: m.title || m.grandparentTitle || 'Unknown',
+        duration: m.duration ? Math.round(m.duration / 1000) : 0,
+        viewOffset: m.viewOffset || 0,
+        progress: m.duration ? Math.round((m.viewOffset || 0) / m.duration * 100) : 0
+      }));
+      return { type: 'plex', sessions, count: sessions.length };
+    }
+    if (Array.isArray(d) && d.length > 0 && d[0].NowPlayingItem) {
+      // Jellyfin/Emby sessions
+      const sessions = d.map(s => ({
+        user: s.UserName || 'Unknown',
+        title: s.NowPlayingItem?.Name || 'Idle',
+        duration: s.NowPlayingItem?.RunTimeTicks ? Math.round(s.NowPlayingItem.RunTimeTicks / 10000 / 1000) : 0,
+        viewOffset: s.PlayState?.PositionTicks ? Math.round(s.PlayState.PositionTicks / 10000 / 1000) : 0,
+        progress: (s.PlayState?.PositionTicks && s.NowPlayingItem?.RunTimeTicks) 
+          ? Math.round(s.PlayState.PositionTicks / s.NowPlayingItem.RunTimeTicks * 100) 
+          : 0
+      }));
+      return { type: 'jellyfin/emby', sessions, count: sessions.length };
+    }
     if (typeof d === 'object') return { keys: Object.keys(d).slice(0, 6) };
     return { type: typeof d };
   } catch (e) {
@@ -42,7 +64,7 @@ function summaryFromResponse(resp) {
 
 async function pollServer(s) {
   const base = (s.baseUrl || '').replace(/\/$/, '');
-  const pathSuffix = s.apiPath || defaultPathForType(s.type) || '/';
+  let pathSuffix = s.apiPath || defaultPathForType(s.type) || '/';
   let finalUrl = base + pathSuffix;
   const start = Date.now();
   const headers = {};
@@ -61,6 +83,8 @@ async function pollServer(s) {
   try {
     const resp = await axios.get(finalUrl, { timeout: 10000, headers });
     const latency = Date.now() - start;
+    const summary = summaryFromResponse(resp);
+    
     statuses[s.id] = {
       id: s.id,
       name: s.name || s.baseUrl,
@@ -68,7 +92,8 @@ async function pollServer(s) {
       online: true,
       statusCode: resp.status,
       latency,
-      summary: summaryFromResponse(resp),
+      sessions: summary.sessions || [],
+      sessionCount: summary.count || 0,
       lastChecked: new Date().toISOString()
     };
   } catch (err) {
@@ -80,6 +105,8 @@ async function pollServer(s) {
       online: false,
       error: err.message,
       latency,
+      sessions: [],
+      sessionCount: 0,
       lastChecked: new Date().toISOString()
     };
   }

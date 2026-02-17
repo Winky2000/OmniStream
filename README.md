@@ -2,6 +2,14 @@
 
 OmniStream — simple dashboard to monitor multiple Plex, Jellyfin, and Emby servers on one screen.
 
+## Features
+- Monitor multiple media servers (Plex, Jellyfin, Emby) on a single dashboard
+- Real-time server status (online/offline, latency)
+- **Live session tracking** — see who's watching what, with playback progress
+- Responsive web UI
+- Docker support with CI/CD publishing to GHCR
+- Local and remote deployment options
+
 ## What this is
 - A lightweight Node.js app that polls configured servers and exposes `/api/status`.
 - A tiny web UI in `public/index.html` that shows online/offline, latency, and basic info.
@@ -63,25 +71,25 @@ The UI will be available at `http://localhost:3000`.
 On a remote machine (after pushing to GitHub), use `docker-compose.remote.yml` to pull the pre-built image:
 
 1. Download or copy `docker-compose.remote.yml` (or create a `servers.json` in the working folder).
-2. Edit `docker-compose.remote.yml` and replace `YOUR_USER` with your GitHub username.
+2. Edit `docker-compose.remote.yml` and replace `YOUR_USERwinky2000` with your GitHub username.
 3. Run:
 
 ```bash
 docker-compose -f docker-compose.remote.yml up -d
 ```
 
-This will pull `ghcr.io/YOUR_USER/omnistream:latest` and start the container. No build needed.
+This will pull `ghcr.io/YOUR_USERwinky2000/omnistream:latest` and start the container. No build needed.
 
 ## Publish to GitHub & pull image remotely
 
-You can push this repo to GitHub and let GitHub Actions build and publish a Docker image to GitHub Container Registry (GHCR). The included workflow will run on pushes to `main` and publish `ghcr.io/OWNER/omnistream:latest`.
+You can push this repo to GitHub and let GitHub Actions build and publish a Docker image to GitHub Container Registry (GHCR). The included workflow will run on pushes to `main` and publish `ghcr.io/OWNERwinky2000/omnistream:latest`.
 
 Steps:
 
 1. Create the GitHub repo (example using `gh` CLI):
 
 ```bash
-gh repo create YOUR_USER/omnistream --public --source=. --remote=origin --push
+gh repo create YOUR_USEwinky2000R/omnistream --public --source=. --remote=origin --push
 ```
 
 Or create a repository on github.com and then run:
@@ -91,15 +99,15 @@ git init
 git add .
 git commit -m "Initial commit"
 git branch -M main
-git remote add origin git@github.com:YOUR_USER/omnistream.git
+git remote add origin git@github.com:YOUR_USERwinky2000/omnistream.git
 git push -u origin main
 ```
 
 2. After pushing, Actions will build and publish to GHCR. To pull on a remote machine (public repo / public package):
 
 ```bash
-docker pull ghcr.io/YOUR_USER/omnistream:latest
-docker run --rm -p 3000:3000 ghcr.io/YOUR_USER/omnistream:latest
+docker pull ghcr.io/YOUR_USERwinky2000/omnistream:latest
+docker run --rm -p 3000:3000 ghcr.io/YOUR_USERwinky2000/omnistream:latest
 ```
 
 If the package is private, authenticate on the remote machine:

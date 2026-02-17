@@ -7,7 +7,7 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./servers.json:/usr/src/app/servers.json
+      - ${SERVERS_PATH}:/usr/src/app/servers.json
     restart: unless-stopped
     environment:
       - NODE_ENV=production
