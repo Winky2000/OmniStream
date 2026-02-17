@@ -5,7 +5,7 @@ const app = express();
 app.get('/status/sessions', (req, res) => {
   res.json({
     MediaContainer: {
-      size: 2,
+      size: 3,
       Metadata: [
         {
           title: 'Breaking Bad S1E1',
@@ -26,6 +26,15 @@ app.get('/status/sessions', (req, res) => {
           thumb: 'https://static.tvmaze.com/uploads/images/original_untouched/85/213184.jpg',
           duration: 1320000,
           viewOffset: 660000
+        },
+        {
+          title: 'Live News Channel',
+          type: 'live',
+          User: { title: 'carol' },
+          Player: { platform: 'FireTV', state: 'playing' },
+          thumb: 'https://static.tvmaze.com/uploads/images/original_untouched/1/2668.jpg',
+          duration: 3600000,
+          viewOffset: 1800000
         }
       ]
     }

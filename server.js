@@ -29,6 +29,14 @@ const defaultPathForType = (t) => {
 };
 
 function summaryFromResponse(resp) {
+        // Debug: log poster URLs for all sessions
+        if (d.MediaContainer && d.MediaContainer.Metadata) {
+          d.MediaContainer.Metadata.forEach(m => {
+            if (m.type === 'live') {
+              console.log('Live TV session:', m.title, 'Poster:', m.thumb);
+            }
+          });
+        }
   try {
     const d = resp.data;
     if (!d) return {};
