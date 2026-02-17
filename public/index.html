@@ -25,6 +25,29 @@
       scrollbar-width: thin;
       align-items: flex-start;
     }
+    .card.flex-card {
+      min-width: 420px;
+      max-width: 520px;
+      width: 420px;
+      display: flex;
+      flex-direction: column;
+    }
+    .card.grid-card {
+      min-width: 420px;
+      max-width: 520px;
+      width: 100%;
+      display: block;
+    }
+    .sessions.flex-sessions {
+      flex-direction: row;
+      flex-wrap: wrap;
+      gap: 18px;
+      align-items: flex-start;
+    }
+    .sessions.grid-sessions {
+      flex-direction: column;
+      gap: 8px;
+    }
     .card {
       background: #232837;
       border-radius: 18px;
@@ -122,17 +145,7 @@
       servers.forEach(s => {
         const st = statuses && statuses[s.id] ? statuses[s.id] : { online: false };
         const card = document.createElement('div');
-        card.className = 'card ' + (st.online ? '' : 'offline');
-        // In flex (horizontal) mode, cards are fixed width; in grid (vertical), cards are full width
-        if (layoutMode === 'flex') {
-          card.style.minWidth = '420px';
-          card.style.maxWidth = '520px';
-          card.style.width = '420px';
-        } else {
-          card.style.minWidth = '420px';
-          card.style.maxWidth = '520px';
-          card.style.width = '100%';
-        }
+        card.className = 'card ' + (st.online ? '' : 'offline') + (layoutMode === 'flex' ? ' flex-card' : ' grid-card');
 
         const title = document.createElement('div'); title.className = 'title';
         title.textContent = s.name || s.baseUrl;
@@ -175,7 +188,7 @@
         // Sessions
         if (st.online && st.sessions && st.sessions.length > 0) {
           const sessionsDiv = document.createElement('div');
-          sessionsDiv.className = 'sessions' + (layoutMode === 'flex' ? ' flex-sessions' : '');
+          sessionsDiv.className = 'sessions ' + (layoutMode === 'flex' ? 'flex-sessions' : 'grid-sessions');
           sessionsDiv.innerHTML = `<strong>${st.sessions.length} active</strong>`;
           st.sessions.forEach(sess => {
             const session = document.createElement('div');
