@@ -28,7 +28,7 @@
     }
     .sessions.horizontal-grid {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(4, 1fr);
       gap: 18px;
       align-items: flex-start;
     }
@@ -226,10 +226,22 @@
             }
             title.appendChild(streamType);
             info.appendChild(title);
+            // TV show: show grandparentTitle as main title, and season/episode line
+            let showTitle = sess.grandparentTitle || sess.title || sess.channel || 'Idle';
             const sub = document.createElement('div');
             sub.className = 'session-title';
-            sub.textContent = sess.title || sess.channel || 'Idle';
+            sub.textContent = showTitle;
             info.appendChild(sub);
+            // If TV show, add season/episode line
+            if (sess.grandparentTitle && (sess.parentIndex || sess.index)) {
+              const seLine = document.createElement('div');
+              seLine.className = 'session-meta';
+              let seText = '';
+              if (sess.parentIndex) seText += 'Season ' + sess.parentIndex;
+              if (sess.index) seText += (seText ? ' • ' : '') + 'Episode ' + sess.index;
+              seLine.textContent = seText;
+              info.appendChild(seLine);
+            }
             // Info list
             const infoList = document.createElement('div');
             infoList.style.fontSize = '11px';
