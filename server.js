@@ -46,13 +46,13 @@ function summaryFromResponse(resp) {
     if (!d) return {};
     if (d.MediaContainer) {
       const sessions = (d.MediaContainer.Metadata || []).map(m => {
-        // Live TV poster extraction
         let posterUrl;
         if (m.type === 'live' && m.thumb && resp.config && resp.config.serverConfig) {
           posterUrl = `${resp.config.serverConfig.baseUrl}${m.thumb}?X-Plex-Token=${encodeURIComponent(resp.config.serverConfig.token)}`;
         } else if (m.thumb && resp.config && resp.config.serverConfig) {
           posterUrl = `${resp.config.serverConfig.baseUrl}${m.thumb}?X-Plex-Token=${encodeURIComponent(resp.config.serverConfig.token)}`;
         }
+        // Extract rich session info
         return {
           user: m.User?.title || 'Unknown',
           title: m.title || m.grandparentTitle || 'Unknown',
@@ -63,10 +63,44 @@ function summaryFromResponse(resp) {
           poster: posterUrl,
           duration: m.duration ? Math.round(m.duration / 1000) : 0,
           viewOffset: m.viewOffset || 0,
-          progress: m.duration ? Math.round((m.viewOffset || 0) / m.duration * 100) : 0
+          progress: m.duration ? Math.round((m.viewOffset || 0) / m.duration * 100) : 0,
+          product: m.Player?.product || '',
+          player: m.Player?.title || '',
+          quality: m.quality || '',
+          stream: m.transcodeDecision || '',
+          container: m.container || '',
+          video: m.Video && m.Video[0] ? `${m.Video[0].decision || ''} (${m.Video[0].codec || ''} ${m.Video[0].resolution || ''})` : '',
+          audio: m.Audio && m.Audio[0] ? `${m.Audio[0].decision || ''} (${m.Audio[0].language || ''} ${m.Audio[0].codec || ''} ${m.Audio[0].channels || ''})` : '',
+          subtitle: m.Subtitle && m.Subtitle[0] ? `${m.Subtitle[0].language || ''}` : 'None',
+          location: m.Player?.local ? 'LAN' : 'WAN',
+          ip: m.Player?.address || '',
+          bandwidth: m.bandwidth || '',
+          channel: m.channelTitle || '',
+          episodeTitle: m.episodeTitle || '',
+          userName: m.User?.title || '',
         };
       });
-      return { type: 'plex', sessions, count: sessions.length };
+      // Session summary
+      let directPlays = 0, transcodes = 0, totalBandwidth = 0, lanBandwidth = 0, wanBandwidth = 0;
+      sessions.forEach(sess => {
+        if (sess.stream && sess.stream.toLowerCase().includes('direct')) directPlays++;
+        else if (sess.stream && sess.stream.toLowerCase().includes('transcode')) transcodes++;
+        if (sess.bandwidth) totalBandwidth += Number(sess.bandwidth);
+        if (sess.location === 'LAN' && sess.bandwidth) lanBandwidth += Number(sess.bandwidth);
+        if (sess.location === 'WAN' && sess.bandwidth) wanBandwidth += Number(sess.bandwidth);
+      });
+      return {
+        type: 'plex',
+        sessions,
+        count: sessions.length,
+        summary: {
+          directPlays,
+          transcodes,
+          totalBandwidth,
+          lanBandwidth,
+          wanBandwidth
+        }
+      };
     }
     if (Array.isArray(d) && d.length > 0 && d[0].NowPlayingItem) {
       // Jellyfin/Emby sessions

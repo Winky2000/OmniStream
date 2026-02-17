@@ -36,13 +36,6 @@
     }
 
     function render(data) {
-      const {servers, statuses} = data;
-      const grid = document.getElementById('grid');
-      grid.innerHTML = '';
-      if (!servers || servers.length === 0) {
-        grid.innerHTML = '<div class="card">No servers configured. Copy servers.json.example to servers.json and edit.</div>';
-        return;
-      }
       servers.forEach(s => {
         const st = statuses && statuses[s.id] ? statuses[s.id] : { online: false };
         const card = document.createElement('div');
@@ -52,7 +45,7 @@
         title.textContent = s.name || s.baseUrl;
         
         const meta = document.createElement('div'); meta.className = 'meta';
-        meta.textContent = `${s.type || 'generic'} • ${st.online ? 'Online' : 'Offline'}`;
+        meta.textContent = `${s.type || 'generic'} \u2022 ${st.online ? 'Online' : 'Offline'}`;
         
         const small = document.createElement('div'); small.className = 'small';
         small.innerHTML = `Latency: ${st.latency ?? '-'}ms<br/>Last: ${st.lastChecked ? new Date(st.lastChecked).toLocaleTimeString() : '-'}`;
@@ -60,7 +53,13 @@
         card.appendChild(title); 
         card.appendChild(meta); 
         card.appendChild(small);
-        
+        // Session summary
+        if (st.online && st.summary) {
+          const summaryDiv = document.createElement('div');
+          summaryDiv.className = 'meta';
+          summaryDiv.innerHTML = `Sessions: ${st.count} streams (${st.summary.directPlays} direct plays, ${st.summary.transcodes} transcodes) | Bandwidth: ${st.summary.totalBandwidth.toFixed(1)} Mbps (LAN: ${st.summary.lanBandwidth.toFixed(1)} Mbps, WAN: ${st.summary.wanBandwidth.toFixed(1)} Mbps)`;
+          card.appendChild(summaryDiv);
+        }
         // Sessions
         if (st.online && st.sessions && st.sessions.length > 0) {
           const sessionsDiv = document.createElement('div'); 
@@ -81,18 +80,29 @@
             // User and title
             const title = document.createElement('div'); 
             title.className = 'session-user';
-            title.textContent = sess.user || 'Unknown';
+            title.textContent = sess.user || sess.userName || 'Unknown';
             const sub = document.createElement('div'); 
             sub.className = 'session-title';
-            sub.textContent = sess.title || 'Idle';
+            sub.textContent = sess.title || sess.channel || 'Idle';
             // Meta info
             const meta = document.createElement('div');
             meta.className = 'session-meta';
             meta.innerHTML =
               (sess.episode ? `<b>Ep:</b> ${sess.episode} ` : '') +
+              (sess.episodeTitle ? `<b>EpTitle:</b> ${sess.episodeTitle} ` : '') +
               (sess.year ? `<b>Year:</b> ${sess.year} ` : '') +
               (sess.platform ? `<b>Platform:</b> ${sess.platform} ` : '') +
-              (sess.state ? `<b>State:</b> ${sess.state} ` : '');
+              (sess.product ? `<b>Product:</b> ${sess.product} ` : '') +
+              (sess.player ? `<b>Player:</b> ${sess.player} ` : '') +
+              (sess.quality ? `<b>Quality:</b> ${sess.quality} ` : '') +
+              (sess.stream ? `<b>Stream:</b> ${sess.stream} ` : '') +
+              (sess.container ? `<b>Container:</b> ${sess.container} ` : '') +
+              (sess.video ? `<b>Video:</b> ${sess.video} ` : '') +
+              (sess.audio ? `<b>Audio:</b> ${sess.audio} ` : '') +
+              (sess.subtitle ? `<b>Subtitle:</b> ${sess.subtitle} ` : '') +
+              (sess.location ? `<b>Location:</b> ${sess.location} ` : '') +
+              (sess.ip ? `<b>IP:</b> ${sess.ip} ` : '') +
+              (sess.bandwidth ? `<b>Bandwidth:</b> ${sess.bandwidth} Mbps ` : '');
             // Progress bar
             const bar = document.createElement('div'); 
             bar.className = 'progress-bar';
@@ -104,6 +114,12 @@
             session.appendChild(sub);
             session.appendChild(meta);
             session.appendChild(bar);
+            sessionsDiv.appendChild(session);
+          });
+          card.appendChild(sessionsDiv);
+        }
+        grid.appendChild(card);
+      });
             sessionsDiv.appendChild(session);
           });
           card.appendChild(sessionsDiv);
