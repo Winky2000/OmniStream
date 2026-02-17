@@ -25,6 +25,17 @@
       scrollbar-width: thin;
       align-items: flex-start;
     }
+    .card.flex-full {
+      min-width: 100%;
+      max-width: 100%;
+      width: 100%;
+    }
+    .sessions.horizontal-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+      align-items: flex-start;
+    }
     /* Remove forced flex/grid for cards and sessions, revert to original */
     .card {
       background: #232837;
@@ -123,12 +134,12 @@
       servers.forEach(s => {
         const st = statuses && statuses[s.id] ? statuses[s.id] : { online: false };
         const card = document.createElement('div');
-        card.className = 'card ' + (st.online ? '' : 'offline');
-        // In flex (horizontal) mode, cards are fixed width; in grid (vertical), cards are full width
+        card.className = 'card ' + (st.online ? '' : 'offline') + (layoutMode === 'flex' ? ' flex-full' : '');
+        // In flex (horizontal) mode, cards are 100% width; in grid (vertical), cards are full width
         if (layoutMode === 'flex') {
-          card.style.minWidth = '420px';
-          card.style.maxWidth = '520px';
-          card.style.width = '420px';
+          card.style.minWidth = '100%';
+          card.style.maxWidth = '100%';
+          card.style.width = '100%';
         } else {
           card.style.minWidth = '420px';
           card.style.maxWidth = '520px';
@@ -176,7 +187,7 @@
         // Sessions
         if (st.online && st.sessions && st.sessions.length > 0) {
           const sessionsDiv = document.createElement('div');
-          sessionsDiv.className = 'sessions';
+          sessionsDiv.className = 'sessions' + (layoutMode === 'flex' ? ' horizontal-grid' : '');
           sessionsDiv.innerHTML = `<strong>${st.sessions.length} active</strong>`;
           st.sessions.forEach(sess => {
             const session = document.createElement('div');
