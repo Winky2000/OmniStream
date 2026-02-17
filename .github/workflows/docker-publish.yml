@@ -28,11 +28,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set lowercase repo owner
+        run: echo "REPO_OWNER=$(echo ${{ github.repository_owner }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+        shell: bash
+
       - name: Build and push image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner | downcase }}/omnistream:latest
-            ghcr.io/${{ github.repository_owner | downcase }}/omnistream:${{ github.sha }}
+            ghcr.io/${{ env.REPO_OWNER }}/omnistream:latest
+            ghcr.io/${{ env.REPO_OWNER }}/omnistream:${{ github.sha }}
