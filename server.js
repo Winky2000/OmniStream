@@ -29,47 +29,45 @@ const defaultPathForType = (t) => {
 };
 
 function summaryFromResponse(resp) {
-              // Log session extraction for debugging
-              if (d.MediaContainer && d.MediaContainer.Metadata) {
-                d.MediaContainer.Metadata.forEach(m => {
-                  console.log('Session:', m.title, 'Type:', m.type, 'Thumb:', m.thumb);
-                });
-              }
-        // Debug: log poster URLs for all sessions
-        if (d.MediaContainer && d.MediaContainer.Metadata) {
-          d.MediaContainer.Metadata.forEach(m => {
-            if (m.type === 'live') {
-              console.log('Live TV session:', m.title, 'Poster:', m.thumb);
-            }
-          });
-        }
   try {
     const d = resp.data;
+    // Log session extraction for debugging
+    if (d && d.MediaContainer && d.MediaContainer.Metadata) {
+      d.MediaContainer.Metadata.forEach(m => {
+        console.log('Session:', m.title, 'Type:', m.type, 'Thumb:', m.thumb);
+      });
+      // Debug: log poster URLs for all sessions
+      d.MediaContainer.Metadata.forEach(m => {
+        if (m.type === 'live') {
+          console.log('Live TV session:', m.title, 'Poster:', m.thumb);
+        }
+      });
+    }
     if (!d) return {};
-      if (d.MediaContainer) {
-        const sessions = (d.MediaContainer.Metadata || []).map(m => {
-          // Live TV poster extraction
-          let posterUrl;
-          if (m.type === 'live' && m.thumb && resp.config && resp.config.serverConfig) {
-            posterUrl = `${resp.config.serverConfig.baseUrl}${m.thumb}?X-Plex-Token=${encodeURIComponent(resp.config.serverConfig.token)}`;
-          } else if (m.thumb && resp.config && resp.config.serverConfig) {
-            posterUrl = `${resp.config.serverConfig.baseUrl}${m.thumb}?X-Plex-Token=${encodeURIComponent(resp.config.serverConfig.token)}`;
-          }
-          return {
-            user: m.User?.title || 'Unknown',
-            title: m.title || m.grandparentTitle || 'Unknown',
-            episode: m.grandparentTitle ? m.title : undefined,
-            year: m.year,
-            platform: m.Player?.platform || m.Player?.product || '',
-            state: m.Player?.state || '',
-            poster: posterUrl,
-            duration: m.duration ? Math.round(m.duration / 1000) : 0,
-            viewOffset: m.viewOffset || 0,
-            progress: m.duration ? Math.round((m.viewOffset || 0) / m.duration * 100) : 0
-          };
-        });
-        return { type: 'plex', sessions, count: sessions.length };
-      }
+    if (d.MediaContainer) {
+      const sessions = (d.MediaContainer.Metadata || []).map(m => {
+        // Live TV poster extraction
+        let posterUrl;
+        if (m.type === 'live' && m.thumb && resp.config && resp.config.serverConfig) {
+          posterUrl = `${resp.config.serverConfig.baseUrl}${m.thumb}?X-Plex-Token=${encodeURIComponent(resp.config.serverConfig.token)}`;
+        } else if (m.thumb && resp.config && resp.config.serverConfig) {
+          posterUrl = `${resp.config.serverConfig.baseUrl}${m.thumb}?X-Plex-Token=${encodeURIComponent(resp.config.serverConfig.token)}`;
+        }
+        return {
+          user: m.User?.title || 'Unknown',
+          title: m.title || m.grandparentTitle || 'Unknown',
+          episode: m.grandparentTitle ? m.title : undefined,
+          year: m.year,
+          platform: m.Player?.platform || m.Player?.product || '',
+          state: m.Player?.state || '',
+          poster: posterUrl,
+          duration: m.duration ? Math.round(m.duration / 1000) : 0,
+          viewOffset: m.viewOffset || 0,
+          progress: m.duration ? Math.round((m.viewOffset || 0) / m.duration * 100) : 0
+        };
+      });
+      return { type: 'plex', sessions, count: sessions.length };
+    }
     if (Array.isArray(d) && d.length > 0 && d[0].NowPlayingItem) {
       // Jellyfin/Emby sessions
       const sessions = d.map(s => {
@@ -100,6 +98,7 @@ function summaryFromResponse(resp) {
     if (typeof d === 'object') return { keys: Object.keys(d).slice(0, 6) };
     return { type: typeof d };
   } catch (e) {
+    console.error('Session extraction error:', e);
     return {};
   }
 }
