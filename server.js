@@ -66,59 +66,56 @@ function summaryFromResponse(resp) {
         } else if (m.thumb && resp.config && resp.config.serverConfig) {
           posterUrl = `${resp.config.serverConfig.baseUrl}${m.thumb}?X-Plex-Token=${encodeURIComponent(resp.config.serverConfig.token)}`;
         }
-        // Extract rich session info
-        // Detect stream type for Plex
-        let streamType = '';
-        if (typeof m.transcodeDecision === 'string') {
-          streamType = m.transcodeDecision;
-        } else if (m.Video && m.Video[0] && m.Video[0].decision) {
-          streamType = m.Video[0].decision;
-        } else if (m.Audio && m.Audio[0] && m.Audio[0].decision) {
-          streamType = m.Audio[0].decision;
-        } else if (m.Player && m.Player.state) {
-          streamType = m.Player.state;
+        // Use 'transcoding' boolean if present
+        let transcoding = false;
+        if (typeof m.transcoding === 'boolean') {
+          transcoding = m.transcoding;
+        } else if (typeof m.transcodeDecision === 'string') {
+          transcoding = m.transcodeDecision.toLowerCase().includes('transcode');
         }
-        // Bandwidth as number
+        // Bandwidth as number (parse from string like '0.0 Mbps')
         let bandwidth = 0;
         if (typeof m.bandwidth === 'number') bandwidth = m.bandwidth;
-        else if (typeof m.bandwidth === 'string') bandwidth = parseFloat(m.bandwidth) || 0;
+        else if (typeof m.bandwidth === 'string') {
+          const match = m.bandwidth.match(/([\d.]+)/);
+          if (match) bandwidth = parseFloat(match[1]);
+        }
         return {
-          user: m.User?.title || 'Unknown',
-          title: m.title || m.grandparentTitle || 'Unknown',
-          episode: m.grandparentTitle ? m.title : undefined,
+          user: m.user || m.User?.title || 'Unknown',
+          title: m.media_title || m.title || m.grandparentTitle || 'Unknown',
+          episode: m.episode || (m.grandparentTitle ? m.title : undefined),
           year: m.year,
-          platform: m.Player?.platform || m.Player?.product || '',
-          state: m.Player?.state || '',
-          poster: posterUrl,
+          platform: m.platform || m.Player?.platform || m.Player?.product || '',
+          state: m.state || m.Player?.state || '',
+          poster: m.poster || posterUrl,
           duration: m.duration ? Math.round(m.duration / 1000) : 0,
           viewOffset: m.viewOffset || 0,
-          progress: m.duration ? Math.round((m.viewOffset || 0) / m.duration * 100) : 0,
-          product: m.Player?.product || '',
-          player: m.Player?.title || '',
+          progress: m.progress || (m.duration ? Math.round((m.viewOffset || 0) / m.duration * 100) : 0),
+          product: m.product || m.Player?.product || '',
+          player: m.player || m.Player?.title || '',
           quality: m.quality || '',
-          stream: streamType,
+          stream: m.stream || m.transcodeDecision || '',
           container: m.container || '',
-          video: m.Video && m.Video[0] ? `${m.Video[0].decision || ''} (${m.Video[0].codec || ''} ${m.Video[0].resolution || ''})` : '',
-          audio: m.Audio && m.Audio[0] ? `${m.Audio[0].decision || ''} (${m.Audio[0].language || ''} ${m.Audio[0].codec || ''} ${m.Audio[0].channels || ''})` : '',
-          subtitle: m.Subtitle && m.Subtitle[0] ? `${m.Subtitle[0].language || ''}` : 'None',
-          location: m.Player?.local ? 'LAN' : 'WAN',
+          video: m.video || (m.Video && m.Video[0] ? `${m.Video[0].decision || ''} (${m.Video[0].codec || ''} ${m.Video[0].resolution || ''})` : ''),
+          audio: m.audio || (m.Audio && m.Audio[0] ? `${m.Audio[0].decision || ''} (${m.Audio[0].language || ''} ${m.Audio[0].codec || ''} ${m.Audio[0].channels || ''})` : ''),
+          subtitle: m.subtitle || (m.Subtitle && m.Subtitle[0] ? `${m.Subtitle[0].language || ''}` : 'None'),
+          location: m.location || (m.Player?.local ? 'LAN' : 'WAN'),
           ip: m.Player?.address || '',
           bandwidth,
           channel: m.channelTitle || '',
           episodeTitle: m.episodeTitle || '',
-          userName: m.User?.title || '',
+          userName: m.user || m.User?.title || '',
+          transcoding
         };
       });
       // Session summary
       let directPlays = 0, transcodes = 0, totalBandwidth = 0, lanBandwidth = 0, wanBandwidth = 0;
       sessions.forEach(sess => {
-        // Robust detection for Plex
-        const stream = (sess.stream || '').toLowerCase();
-        if (stream.includes('direct')) directPlays++;
-        else if (stream.includes('transcode')) transcodes++;
+        if (sess.transcoding) transcodes++;
+        else directPlays++;
         if (sess.bandwidth) totalBandwidth += Number(sess.bandwidth);
-        if (sess.location === 'LAN' && sess.bandwidth) lanBandwidth += Number(sess.bandwidth);
-        if (sess.location === 'WAN' && sess.bandwidth) wanBandwidth += Number(sess.bandwidth);
+        if (sess.location && sess.location.toUpperCase().includes('LAN') && sess.bandwidth) lanBandwidth += Number(sess.bandwidth);
+        if (sess.location && sess.location.toUpperCase().includes('WAN') && sess.bandwidth) wanBandwidth += Number(sess.bandwidth);
       });
       return {
         type: 'plex',
