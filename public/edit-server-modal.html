@@ -1,0 +1,15 @@
+<!-- Modal for editing server info, injected into admin.html -->
+<div id="editModal" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;background:#000a;z-index:1000;align-items:center;justify-content:center;">
+  <div style="background:#232837;padding:32px 28px;border-radius:14px;min-width:320px;max-width:90vw;box-shadow:0 2px 18px #00bfff44;border:3px solid #00bfff;">
+    <h2 style="margin-top:0">Edit Server</h2>
+    <form id="editServerForm">
+      <label>Name: <input type="text" id="editName" required></label><br><br>
+      <label>Base URL: <input type="text" id="editBaseUrl" required></label><br><br>
+      <label>Type: <select id="editType"><option value="plex">Plex</option><option value="jellyfin">Jellyfin</option><option value="emby">Emby</option></select></label><br><br>
+      <label>Token: <input type="text" id="editToken" required></label><br><br>
+      <input type="hidden" id="editId">
+      <button type="submit">Save</button>
+      <button type="button" id="cancelEditBtn">Cancel</button>
+    </form>
+  </div>
+</div>

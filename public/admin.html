@@ -48,6 +48,14 @@
         card.appendChild(info);
         const actions = document.createElement('div');
         actions.className = 'server-actions';
+        // Edit button
+        const editBtn = document.createElement('button');
+        editBtn.textContent = 'Edit';
+        editBtn.onclick = () => {
+          showEditModal(s);
+        };
+        actions.appendChild(editBtn);
+        // Enable/disable
         const enableBtn = document.createElement('button');
         enableBtn.textContent = s.disabled ? 'Enable' : 'Disable';
         enableBtn.onclick = async () => {
@@ -55,6 +63,7 @@
           updateServerList();
         };
         actions.appendChild(enableBtn);
+        // Remove
         const removeBtn = document.createElement('button');
         removeBtn.textContent = 'Remove';
         removeBtn.onclick = async () => {
@@ -85,6 +94,36 @@
     document.getElementById('returnBtn').onclick = () => {
       window.location.href = '/index.html';
     };
+    // Modal logic
+    let editModal;
+    fetch('/edit-server-modal.html').then(r=>r.text()).then(html=>{
+      document.body.insertAdjacentHTML('beforeend', html);
+      editModal = document.getElementById('editModal');
+      document.getElementById('cancelEditBtn').onclick = () => { editModal.style.display = 'none'; };
+      document.getElementById('editServerForm').onsubmit = async (e) => {
+        e.preventDefault();
+        const id = document.getElementById('editId').value;
+        const name = document.getElementById('editName').value;
+        const baseUrl = document.getElementById('editBaseUrl').value;
+        const type = document.getElementById('editType').value;
+        const token = document.getElementById('editToken').value;
+        await fetch('/api/servers/' + encodeURIComponent(id), {
+          method: 'PUT',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({name, baseUrl, type, token})
+        });
+        editModal.style.display = 'none';
+        updateServerList();
+      };
+    });
+    window.showEditModal = function(s) {
+      document.getElementById('editId').value = s.id;
+      document.getElementById('editName').value = s.name || '';
+      document.getElementById('editBaseUrl').value = s.baseUrl || '';
+      document.getElementById('editType').value = s.type || 'plex';
+      document.getElementById('editToken').value = s.token || '';
+      editModal.style.display = 'flex';
+    }
     updateServerList();
   </script>
 </body>
