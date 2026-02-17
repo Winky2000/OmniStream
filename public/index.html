@@ -37,6 +37,8 @@
 
     function render(data) {
       const { servers = [], statuses = {} } = data;
+      const grid = document.getElementById('grid');
+      grid.innerHTML = '';
       servers.forEach(s => {
         const st = statuses && statuses[s.id] ? statuses[s.id] : { online: false };
         const card = document.createElement('div');
