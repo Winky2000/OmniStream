@@ -104,24 +104,24 @@
           card.style.maxWidth = '520px';
           card.style.width = '100%';
         }
-        
+
         const title = document.createElement('div'); title.className = 'title';
         title.textContent = s.name || s.baseUrl;
-        
+
         const meta = document.createElement('div'); meta.className = 'meta';
         meta.textContent = `${s.type || 'generic'} \u2022 ${st.online ? 'Online' : 'Offline'}`;
-        
+
         const small = document.createElement('div'); small.className = 'small';
         small.innerHTML = `Latency: ${st.latency ?? '-'}ms<br/>Last: ${st.lastChecked ? new Date(st.lastChecked).toLocaleTimeString() : '-'}`;
-        
+
         card.appendChild(title); 
         card.appendChild(meta); 
         card.appendChild(small);
-        // Session summary
+        // Session summary with totals
         if (st.online && st.summary) {
           const summaryDiv = document.createElement('div');
           summaryDiv.className = 'meta';
-          summaryDiv.innerHTML = `Sessions: ${st.count} streams (${st.summary.directPlays} direct plays, ${st.summary.transcodes} transcodes) | Bandwidth: ${st.summary.totalBandwidth.toFixed(1)} Mbps (LAN: ${st.summary.lanBandwidth.toFixed(1)} Mbps, WAN: ${st.summary.wanBandwidth.toFixed(1)} Mbps)`;
+          summaryDiv.innerHTML = `Total Streams: <b>${st.count}</b> &nbsp;|&nbsp; Direct Play: <b>${st.summary.directPlays}</b> &nbsp;|&nbsp; Transcoding: <b>${st.summary.transcodes}</b><br>Bandwidth: ${st.summary.totalBandwidth.toFixed(1)} Mbps (LAN: ${st.summary.lanBandwidth.toFixed(1)} Mbps, WAN: ${st.summary.wanBandwidth.toFixed(1)} Mbps)`;
           card.appendChild(summaryDiv);
         }
         // Sessions
@@ -145,6 +145,21 @@
             const title = document.createElement('div'); 
             title.className = 'session-user';
             title.textContent = sess.user || sess.userName || 'Unknown';
+            // Direct Play/Transcoding label
+            const streamType = document.createElement('span');
+            streamType.style = 'margin-left:8px;font-size:11px;padding:2px 8px;border-radius:6px;';
+            if (sess.stream && sess.stream.toLowerCase().includes('direct')) {
+              streamType.textContent = 'Direct Play';
+              streamType.style.background = '#0ff2';
+              streamType.style.color = '#00bfff';
+              streamType.style.border = '1px solid #00bfff';
+            } else if (sess.stream && sess.stream.toLowerCase().includes('transcode')) {
+              streamType.textContent = 'Transcoding';
+              streamType.style.background = '#0af2';
+              streamType.style.color = '#fff';
+              streamType.style.border = '1px solid #0af';
+            }
+            title.appendChild(streamType);
             const sub = document.createElement('div'); 
             sub.className = 'session-title';
             sub.textContent = sess.title || sess.channel || 'Idle';
