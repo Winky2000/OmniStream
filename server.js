@@ -33,40 +33,54 @@ function summaryFromResponse(resp) {
     const d = resp.data;
     if (!d) return {};
       if (d.MediaContainer) {
-        const sessions = (d.MediaContainer.Metadata || []).map(m => ({
-          user: m.User?.title || 'Unknown',
-          title: m.title || m.grandparentTitle || 'Unknown',
-          episode: m.grandparentTitle ? m.title : undefined,
-          year: m.year,
-          platform: m.Player?.platform || m.Player?.product || '',
-          state: m.Player?.state || '',
-          poster: m.thumb && resp.config && resp.config.serverConfig
-            ? `${resp.config.serverConfig.baseUrl}${m.thumb}?X-Plex-Token=${encodeURIComponent(resp.config.serverConfig.token)}`
-            : undefined,
-          duration: m.duration ? Math.round(m.duration / 1000) : 0,
-          viewOffset: m.viewOffset || 0,
-          progress: m.duration ? Math.round((m.viewOffset || 0) / m.duration * 100) : 0
-        }));
+        const sessions = (d.MediaContainer.Metadata || []).map(m => {
+          // Live TV poster extraction
+          let posterUrl;
+          if (m.type === 'live' && m.thumb && resp.config && resp.config.serverConfig) {
+            posterUrl = `${resp.config.serverConfig.baseUrl}${m.thumb}?X-Plex-Token=${encodeURIComponent(resp.config.serverConfig.token)}`;
+          } else if (m.thumb && resp.config && resp.config.serverConfig) {
+            posterUrl = `${resp.config.serverConfig.baseUrl}${m.thumb}?X-Plex-Token=${encodeURIComponent(resp.config.serverConfig.token)}`;
+          }
+          return {
+            user: m.User?.title || 'Unknown',
+            title: m.title || m.grandparentTitle || 'Unknown',
+            episode: m.grandparentTitle ? m.title : undefined,
+            year: m.year,
+            platform: m.Player?.platform || m.Player?.product || '',
+            state: m.Player?.state || '',
+            poster: posterUrl,
+            duration: m.duration ? Math.round(m.duration / 1000) : 0,
+            viewOffset: m.viewOffset || 0,
+            progress: m.duration ? Math.round((m.viewOffset || 0) / m.duration * 100) : 0
+          };
+        });
         return { type: 'plex', sessions, count: sessions.length };
       }
     if (Array.isArray(d) && d.length > 0 && d[0].NowPlayingItem) {
       // Jellyfin/Emby sessions
-      const sessions = d.map(s => ({
-        user: s.UserName || 'Unknown',
-        title: s.NowPlayingItem?.Name || 'Idle',
-        episode: s.NowPlayingItem?.EpisodeTitle,
-        year: s.NowPlayingItem?.ProductionYear,
-        platform: s.Client || s.DeviceName || '',
-        state: s.PlayState?.PlayMethod || '',
-        poster: s.NowPlayingItem?.ImageTags?.Primary
-          ? `/proxy/jellyfin/poster?user=${encodeURIComponent(s.UserId)}&item=${encodeURIComponent(s.NowPlayingItem.Id)}`
-          : undefined,
-        duration: s.NowPlayingItem?.RunTimeTicks ? Math.round(s.NowPlayingItem.RunTimeTicks / 10000 / 1000) : 0,
-        viewOffset: s.PlayState?.PositionTicks ? Math.round(s.PlayState.PositionTicks / 10000 / 1000) : 0,
-        progress: (s.PlayState?.PositionTicks && s.NowPlayingItem?.RunTimeTicks) 
-          ? Math.round(s.PlayState.PositionTicks / s.NowPlayingItem.RunTimeTicks * 100) 
-          : 0
-      }));
+      const sessions = d.map(s => {
+        let posterUrl;
+        // Live TV poster extraction for Jellyfin/Emby
+        if (s.NowPlayingItem?.Type === 'LiveTv' && s.NowPlayingItem?.ImageTags?.Primary && resp.config && resp.config.serverConfig) {
+          posterUrl = `${resp.config.serverConfig.baseUrl}/Items/${s.NowPlayingItem.Id}/Images/Primary?api_key=${encodeURIComponent(resp.config.serverConfig.token)}`;
+        } else if (s.NowPlayingItem?.ImageTags?.Primary && resp.config && resp.config.serverConfig) {
+          posterUrl = `${resp.config.serverConfig.baseUrl}/Items/${s.NowPlayingItem.Id}/Images/Primary?api_key=${encodeURIComponent(resp.config.serverConfig.token)}`;
+        }
+        return {
+          user: s.UserName || 'Unknown',
+          title: s.NowPlayingItem?.Name || 'Idle',
+          episode: s.NowPlayingItem?.EpisodeTitle,
+          year: s.NowPlayingItem?.ProductionYear,
+          platform: s.Client || s.DeviceName || '',
+          state: s.PlayState?.PlayMethod || '',
+          poster: posterUrl,
+          duration: s.NowPlayingItem?.RunTimeTicks ? Math.round(s.NowPlayingItem.RunTimeTicks / 10000 / 1000) : 0,
+          viewOffset: s.PlayState?.PositionTicks ? Math.round(s.PlayState.PositionTicks / 10000 / 1000) : 0,
+          progress: (s.PlayState?.PositionTicks && s.NowPlayingItem?.RunTimeTicks) 
+            ? Math.round(s.PlayState.PositionTicks / s.NowPlayingItem.RunTimeTicks * 100) 
+            : 0
+        };
+      });
       return { type: 'jellyfin/emby', sessions, count: sessions.length };
     }
     if (typeof d === 'object') return { keys: Object.keys(d).slice(0, 6) };
