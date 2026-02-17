@@ -11,9 +11,11 @@
     .logo-img{height:135px;max-width:180px;object-fit:contain;box-shadow:0 2px 8px #0003;border-radius:8px;}
     #grid.grid-layout {
       display: flex;
-      flex-direction: column;
+      flex-direction: row;
+      flex-wrap: wrap;
       gap: 28px;
-      align-items: center;
+      align-items: flex-start;
+      justify-content: flex-start;
     }
     #grid.flex-layout {
       display: flex;
