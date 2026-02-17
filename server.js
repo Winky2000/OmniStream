@@ -261,7 +261,8 @@ async function pollServer(s) {
     let summaryObj = summary.summary;
     if (!summaryObj && Array.isArray(sessions)) {
       let directPlays = 0, transcodes = 0, totalBandwidth = 0, lanBandwidth = 0, wanBandwidth = 0;
-      sessions.forEach(sess => {
+      console.log(`\n[OmniStream] Calculating totals for server: ${s.name || s.baseUrl}`);
+      sessions.forEach((sess, idx) => {
         // Robust transcoding detection
         let isTranscoding = false;
         if (typeof sess.transcoding === 'boolean') {
@@ -276,7 +277,10 @@ async function pollServer(s) {
         if (sess.bandwidth) totalBandwidth += Number(sess.bandwidth);
         if (sess.location && sess.location.toUpperCase().includes('LAN') && sess.bandwidth) lanBandwidth += Number(sess.bandwidth);
         if (sess.location && sess.location.toUpperCase().includes('WAN') && sess.bandwidth) wanBandwidth += Number(sess.bandwidth);
+        // Log session classification
+        console.log(`[Session ${idx+1}] user: ${sess.user || sess.userName}, transcoding: ${sess.transcoding}, stream: ${sess.stream}, state: ${sess.state}, classified as: ${isTranscoding ? 'Transcoding' : 'Direct Play'}`);
       });
+      console.log(`[OmniStream] Totals for ${s.name || s.baseUrl}: directPlays=${directPlays}, transcodes=${transcodes}, totalStreams=${count}`);
       summaryObj = { directPlays, transcodes, totalStreams: count, totalBandwidth, lanBandwidth, wanBandwidth };
     }
     statuses[s.id] = {
