@@ -80,13 +80,15 @@ function summaryFromResponse(resp) {
             }
           }
         }
-        // Bandwidth as number (parse from string like '0.0 Mbps')
+        // Bandwidth as number (parse from Plex bandwidth field, e.g. '20280')
         let bandwidth = 0;
         if (typeof m.bandwidth === 'number') bandwidth = m.bandwidth;
         else if (typeof m.bandwidth === 'string') {
           const match = m.bandwidth.match(/([\d.]+)/);
           if (match) bandwidth = parseFloat(match[1]);
         }
+        // If bandwidth is > 1000, treat as kbps and convert to Mbps
+        if (bandwidth > 1000) bandwidth = bandwidth / 1000;
         return {
           user: m.user || m.User?.title || 'Unknown',
           title: m.media_title || m.title || m.grandparentTitle || 'Unknown',
