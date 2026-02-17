@@ -1,4 +1,6 @@
-// Edit server info
+// ...existing code...
+
+// Edit server info (must be after app is defined)
 app.put('/api/servers/:id', (req, res) => {
   const idx = servers.findIndex(s => s.id == req.params.id);
   if (idx === -1) return res.status(404).json({error:'Not found'});
