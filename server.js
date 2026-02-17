@@ -369,7 +369,14 @@ pollAll();
 setInterval(pollAll, 15 * 1000);
 
 app.get('/api/status', (req, res) => {
-  res.json({ servers, statuses });
+  // Only include enabled servers
+  const enabledServers = servers.filter(s => !s.disabled);
+  // Only include statuses for enabled servers
+  const enabledStatuses = {};
+  for (const s of enabledServers) {
+    if (statuses[s.id]) enabledStatuses[s.id] = statuses[s.id];
+  }
+  res.json({ servers: enabledServers, statuses: enabledStatuses });
 });
 
 

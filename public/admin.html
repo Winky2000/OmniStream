@@ -21,6 +21,7 @@
 </head>
 <body>
   <h1>OmniStream Admin</h1>
+  <button class="toggle-btn" id="returnBtn" style="margin-bottom:18px;">Return to Main</button>
   <form class="add-form" id="addServerForm">
     <label>Name: <input type="text" id="name" required></label>
     <label>Base URL: <input type="text" id="baseUrl" required placeholder="http://..."></label>
@@ -80,6 +81,9 @@
       });
       e.target.reset();
       updateServerList();
+    };
+    document.getElementById('returnBtn').onclick = () => {
+      window.location.href = '/index.html';
     };
     updateServerList();
   </script>
