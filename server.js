@@ -1,5 +1,3 @@
-// ...existing code...
-
 // Edit server info (must be after app is defined)
 app.put('/api/servers/:id', (req, res) => {
   const idx = servers.findIndex(s => s.id == req.params.id);
@@ -12,6 +10,7 @@ app.put('/api/servers/:id', (req, res) => {
   try { fs.writeFileSync(SERVERS_FILE, JSON.stringify(servers, null, 2)); } catch(e) {}
   res.json(servers[idx]);
 });
+// ...existing code...
 const express = require('express');
 const axios = require('axios');
 const fs = require('fs');
