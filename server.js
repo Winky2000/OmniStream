@@ -43,7 +43,21 @@ function summaryFromResponse(resp) {
         }
       });
     }
-    if (!d) return {};
+    if (!d) {
+      // Always return a summary object, even if no data
+      return {
+        type: 'unknown',
+        sessions: [],
+        count: 0,
+        summary: {
+          directPlays: 0,
+          transcodes: 0,
+          totalBandwidth: 0,
+          lanBandwidth: 0,
+          wanBandwidth: 0
+        }
+      };
+    }
     if (d.MediaContainer) {
       const sessions = (d.MediaContainer.Metadata || []).map(m => {
         let posterUrl;
@@ -127,10 +141,54 @@ function summaryFromResponse(resp) {
             : 0
         };
       });
-      return { type: 'jellyfin/emby', sessions, count: sessions.length };
+      // Calculate summary for Jellyfin/Emby
+      let directPlays = 0, transcodes = 0, totalBandwidth = 0, lanBandwidth = 0, wanBandwidth = 0;
+      sessions.forEach(sess => {
+        if (sess.state && sess.state.toLowerCase().includes('direct')) directPlays++;
+        else if (sess.state && sess.state.toLowerCase().includes('transcode')) transcodes++;
+        if (sess.bandwidth) totalBandwidth += Number(sess.bandwidth);
+        if (sess.location === 'LAN' && sess.bandwidth) lanBandwidth += Number(sess.bandwidth);
+        if (sess.location === 'WAN' && sess.bandwidth) wanBandwidth += Number(sess.bandwidth);
+      });
+      return {
+        type: 'jellyfin/emby',
+        sessions,
+        count: sessions.length,
+        summary: {
+          directPlays,
+          transcodes,
+          totalBandwidth,
+          lanBandwidth,
+          wanBandwidth
+        }
+      };
     }
-    if (typeof d === 'object') return { keys: Object.keys(d).slice(0, 6) };
-    return { type: typeof d };
+    if (typeof d === 'object') {
+      return {
+        type: typeof d,
+        sessions: [],
+        count: 0,
+        summary: {
+          directPlays: 0,
+          transcodes: 0,
+          totalBandwidth: 0,
+          lanBandwidth: 0,
+          wanBandwidth: 0
+        }
+      };
+    }
+    return {
+      type: typeof d,
+      sessions: [],
+      count: 0,
+      summary: {
+        directPlays: 0,
+        transcodes: 0,
+        totalBandwidth: 0,
+        lanBandwidth: 0,
+        wanBandwidth: 0
+      }
+    };
   } catch (e) {
     console.error('Session extraction error:', e);
     return {};
