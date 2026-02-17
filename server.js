@@ -1,15 +1,3 @@
-// Edit server info (must be after app is defined)
-app.put('/api/servers/:id', (req, res) => {
-  const idx = servers.findIndex(s => s.id == req.params.id);
-  if (idx === -1) return res.status(404).json({error:'Not found'});
-  const { name, baseUrl, type, token } = req.body;
-  if (name) servers[idx].name = name;
-  if (baseUrl) servers[idx].baseUrl = baseUrl;
-  if (type) servers[idx].type = type;
-  if (token) servers[idx].token = token;
-  try { fs.writeFileSync(SERVERS_FILE, JSON.stringify(servers, null, 2)); } catch(e) {}
-  res.json(servers[idx]);
-});
 // ...existing code...
 const express = require('express');
 const axios = require('axios');
