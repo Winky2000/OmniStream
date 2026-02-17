@@ -29,6 +29,12 @@ const defaultPathForType = (t) => {
 };
 
 function summaryFromResponse(resp) {
+              // Log session extraction for debugging
+              if (d.MediaContainer && d.MediaContainer.Metadata) {
+                d.MediaContainer.Metadata.forEach(m => {
+                  console.log('Session:', m.title, 'Type:', m.type, 'Thumb:', m.thumb);
+                });
+              }
         // Debug: log poster URLs for all sessions
         if (d.MediaContainer && d.MediaContainer.Metadata) {
           d.MediaContainer.Metadata.forEach(m => {

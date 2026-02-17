@@ -75,6 +75,7 @@
               img.className = 'session-poster';
               img.src = sess.poster;
               img.alt = 'Poster';
+              img.onerror = function() { this.style.display = 'none'; };
               session.appendChild(img);
             }
             // User and title
