@@ -372,7 +372,27 @@ app.get('/api/status', (req, res) => {
   res.json({ servers, statuses });
 });
 
+
+// List servers
 app.get('/api/servers', (req, res) => res.json(servers));
+
+// Enable/disable server
+app.post('/api/servers/:id/toggle', (req, res) => {
+  const idx = servers.findIndex(s => s.id == req.params.id);
+  if (idx === -1) return res.status(404).json({error:'Not found'});
+  servers[idx].disabled = !servers[idx].disabled;
+  try { fs.writeFileSync(SERVERS_FILE, JSON.stringify(servers, null, 2)); } catch(e) {}
+  res.json(servers[idx]);
+});
+
+// Remove server
+app.delete('/api/servers/:id', (req, res) => {
+  const idx = servers.findIndex(s => s.id == req.params.id);
+  if (idx === -1) return res.status(404).json({error:'Not found'});
+  const removed = servers.splice(idx, 1);
+  try { fs.writeFileSync(SERVERS_FILE, JSON.stringify(servers, null, 2)); } catch(e) {}
+  res.json({removed: removed[0]});
+});
 
 app.post('/api/servers', (req, res) => {
   const s = req.body;

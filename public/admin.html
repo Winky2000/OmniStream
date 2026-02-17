@@ -1,0 +1,87 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>OmniStream Admin</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    body{font-family:Segoe UI,Arial;background:#181c24;color:#e0e3e8;margin:0;padding:20px}
+    h1{margin:0 0 18px 0;color:#fff;letter-spacing:1px;font-size:2em}
+    .server-list{margin-bottom:24px;}
+    .server-card{background:#232837;border-radius:12px;padding:18px 24px;margin-bottom:14px;box-shadow:0 2px 12px #00bfff44;border:3px solid #00bfff;display:flex;align-items:center;gap:18px;}
+    .server-card.disabled{opacity:0.5;border:3px solid #888;}
+    .server-info{flex:1;}
+    .server-actions button{margin-left:8px;}
+    .add-form{background:#232837;padding:18px 24px;border-radius:12px;box-shadow:0 2px 12px #00bfff22;margin-bottom:24px;}
+    .add-form input,.add-form select{margin:0 8px 0 0;padding:6px 10px;border-radius:6px;border:1px solid #444;background:#181c24;color:#e0e3e8;}
+    .add-form label{margin-right:8px;}
+    .add-form button{padding:6px 18px;border-radius:6px;background:#00bfff;color:#fff;border:none;cursor:pointer;}
+    .add-form button:hover{background:#0099cc;}
+  </style>
+</head>
+<body>
+  <h1>OmniStream Admin</h1>
+  <form class="add-form" id="addServerForm">
+    <label>Name: <input type="text" id="name" required></label>
+    <label>Base URL: <input type="text" id="baseUrl" required placeholder="http://..."></label>
+    <label>Type: <select id="type"><option value="plex">Plex</option><option value="jellyfin">Jellyfin</option><option value="emby">Emby</option></select></label>
+    <label>Token: <input type="text" id="token" required></label>
+    <button type="submit">Add Server</button>
+  </form>
+  <div class="server-list" id="serverList"></div>
+  <script>
+    async function fetchServers() {
+      const r = await fetch('/api/servers');
+      return await r.json();
+    }
+    async function updateServerList() {
+      const servers = await fetchServers();
+      const list = document.getElementById('serverList');
+      list.innerHTML = '';
+      servers.forEach((s, idx) => {
+        const card = document.createElement('div');
+        card.className = 'server-card' + (s.disabled ? ' disabled' : '');
+        const info = document.createElement('div');
+        info.className = 'server-info';
+        info.innerHTML = `<b>${s.name || s.baseUrl}</b><br>Type: ${s.type} <br>Base URL: ${s.baseUrl}`;
+        card.appendChild(info);
+        const actions = document.createElement('div');
+        actions.className = 'server-actions';
+        const enableBtn = document.createElement('button');
+        enableBtn.textContent = s.disabled ? 'Enable' : 'Disable';
+        enableBtn.onclick = async () => {
+          await fetch('/api/servers/' + encodeURIComponent(s.id) + '/toggle', {method:'POST'});
+          updateServerList();
+        };
+        actions.appendChild(enableBtn);
+        const removeBtn = document.createElement('button');
+        removeBtn.textContent = 'Remove';
+        removeBtn.onclick = async () => {
+          if (confirm('Remove this server?')) {
+            await fetch('/api/servers/' + encodeURIComponent(s.id), {method:'DELETE'});
+            updateServerList();
+          }
+        };
+        actions.appendChild(removeBtn);
+        card.appendChild(actions);
+        list.appendChild(card);
+      });
+    }
+    document.getElementById('addServerForm').onsubmit = async (e) => {
+      e.preventDefault();
+      const name = document.getElementById('name').value;
+      const baseUrl = document.getElementById('baseUrl').value;
+      const type = document.getElementById('type').value;
+      const token = document.getElementById('token').value;
+      await fetch('/api/servers', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({name, baseUrl, type, token})
+      });
+      e.target.reset();
+      updateServerList();
+    };
+    updateServerList();
+  </script>
+</body>
+</html>
