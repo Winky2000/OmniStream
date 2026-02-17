@@ -1,3 +1,17 @@
+// Edit/update server info
+app.put('/api/servers/:id', (req, res) => {
+  const idx = servers.findIndex(s => s.id == req.params.id);
+  if (idx === -1) return res.status(404).json({error:'Not found'});
+  // Merge new data into existing server object
+  servers[idx] = { ...servers[idx], ...req.body, id: servers[idx].id };
+  try {
+    fs.writeFileSync(SERVERS_FILE, JSON.stringify(servers, null, 2));
+  } catch (e) {
+    console.error('Failed to write servers.json', e.message);
+    return res.status(500).json({error:'Failed to save'});
+  }
+  res.json(servers[idx]);
+});
 // ...existing code...
 const express = require('express');
 const axios = require('axios');
