@@ -140,47 +140,82 @@ function summaryFromResponse(resp) {
       };
     }
     if (Array.isArray(d) && d.length > 0) {
-      // Jellyfin/Emby sessions: only include active playback (NowPlayingItem exists and PlayState.Playing is true)
-      const sessions = d.filter(s => s.NowPlayingItem && s.PlayState && s.PlayState.Playing === true).map(s => {
-        let posterUrl;
-        // Live TV poster extraction for Jellyfin/Emby
-        if (s.NowPlayingItem?.Type === 'LiveTv' && s.NowPlayingItem?.ImageTags?.Primary && resp.config && resp.config.serverConfig) {
-          posterUrl = `${resp.config.serverConfig.baseUrl}/Items/${s.NowPlayingItem.Id}/Images/Primary?api_key=${encodeURIComponent(resp.config.serverConfig.token)}`;
-        } else if (s.NowPlayingItem?.ImageTags?.Primary && resp.config && resp.config.serverConfig) {
-          posterUrl = `${resp.config.serverConfig.baseUrl}/Items/${s.NowPlayingItem.Id}/Images/Primary?api_key=${encodeURIComponent(resp.config.serverConfig.token)}`;
+      // Support both Jellyfin/Emby API and flat session format
+      const sessions = d.map(s => {
+        // Flat format (custom API): must have state=playing
+        if (s.state && s.state.toLowerCase() === 'playing' && s.media_title) {
+          // Parse bandwidth as number (Mbps)
+          let bandwidth = 0;
+          if (typeof s.bandwidth === 'number') bandwidth = s.bandwidth;
+          else if (typeof s.bandwidth === 'string') {
+            const match = s.bandwidth.match(/([\d.]+)/);
+            if (match) bandwidth = parseFloat(match[1]);
+          }
+          return {
+            user: s.user || s.UserName || 'Unknown',
+            title: s.media_title || s.title || 'Idle',
+            episode: s.episode,
+            year: s.year,
+            platform: s.platform || s.Client || s.DeviceName || '',
+            state: s.state,
+            poster: s.poster,
+            duration: s.duration || 0,
+            viewOffset: s.viewOffset || 0,
+            progress: typeof s.progress === 'number' ? Math.round(s.progress * 100) : 0,
+            product: s.product,
+            player: s.player,
+            quality: s.quality,
+            stream: s.stream,
+            container: s.container,
+            video: s.video,
+            audio: s.audio,
+            subtitle: s.subtitle,
+            location: s.location,
+            ip: s.location,
+            bandwidth,
+            transcoding: s.transcoding,
+          };
         }
-        // Detect stream type for Jellyfin/Emby
-        let streamType = '';
-        if (s.PlayState?.PlayMethod) {
-          streamType = s.PlayState.PlayMethod;
-        } else if (s.TranscodingInfo && s.TranscodingInfo.IsVideoDirect === false) {
-          streamType = 'Transcode';
-        } else if (s.TranscodingInfo && s.TranscodingInfo.IsVideoDirect === true) {
-          streamType = 'DirectPlay';
-        } else if (s.state) {
-          streamType = s.state;
+        // Standard Jellyfin/Emby API: only include active playback (NowPlayingItem exists and PlayState.Playing is true)
+        if (s.NowPlayingItem && s.PlayState && s.PlayState.Playing === true) {
+          let posterUrl;
+          if (s.NowPlayingItem?.Type === 'LiveTv' && s.NowPlayingItem?.ImageTags?.Primary && resp.config && resp.config.serverConfig) {
+            posterUrl = `${resp.config.serverConfig.baseUrl}/Items/${s.NowPlayingItem.Id}/Images/Primary?api_key=${encodeURIComponent(resp.config.serverConfig.token)}`;
+          } else if (s.NowPlayingItem?.ImageTags?.Primary && resp.config && resp.config.serverConfig) {
+            posterUrl = `${resp.config.serverConfig.baseUrl}/Items/${s.NowPlayingItem.Id}/Images/Primary?api_key=${encodeURIComponent(resp.config.serverConfig.token)}`;
+          }
+          let streamType = '';
+          if (s.PlayState?.PlayMethod) {
+            streamType = s.PlayState.PlayMethod;
+          } else if (s.TranscodingInfo && s.TranscodingInfo.IsVideoDirect === false) {
+            streamType = 'Transcode';
+          } else if (s.TranscodingInfo && s.TranscodingInfo.IsVideoDirect === true) {
+            streamType = 'DirectPlay';
+          } else if (s.state) {
+            streamType = s.state;
+          }
+          let bandwidth = 0;
+          if (typeof s.bandwidth === 'number') bandwidth = s.bandwidth;
+          else if (typeof s.bandwidth === 'string') bandwidth = parseFloat(s.bandwidth) || 0;
+          return {
+            user: s.UserName || 'Unknown',
+            title: s.NowPlayingItem?.Name || 'Idle',
+            episode: s.NowPlayingItem?.EpisodeTitle,
+            year: s.NowPlayingItem?.ProductionYear,
+            platform: s.Client || s.DeviceName || '',
+            state: s.PlayState?.PlayMethod || '',
+            poster: posterUrl,
+            duration: s.NowPlayingItem?.RunTimeTicks ? Math.round(s.NowPlayingItem.RunTimeTicks / 10000 / 1000) : 0,
+            viewOffset: s.PlayState?.PositionTicks ? Math.round(s.PlayState.PositionTicks / 10000 / 1000) : 0,
+            progress: (s.PlayState?.PositionTicks && s.NowPlayingItem?.RunTimeTicks) 
+              ? Math.round(s.PlayState.PositionTicks / s.NowPlayingItem.RunTimeTicks * 100) 
+              : 0,
+            stream: streamType,
+            bandwidth,
+          };
         }
-        // Bandwidth as number (if available)
-        let bandwidth = 0;
-        if (typeof s.bandwidth === 'number') bandwidth = s.bandwidth;
-        else if (typeof s.bandwidth === 'string') bandwidth = parseFloat(s.bandwidth) || 0;
-        return {
-          user: s.UserName || 'Unknown',
-          title: s.NowPlayingItem?.Name || 'Idle',
-          episode: s.NowPlayingItem?.EpisodeTitle,
-          year: s.NowPlayingItem?.ProductionYear,
-          platform: s.Client || s.DeviceName || '',
-          state: s.PlayState?.PlayMethod || '',
-          poster: posterUrl,
-          duration: s.NowPlayingItem?.RunTimeTicks ? Math.round(s.NowPlayingItem.RunTimeTicks / 10000 / 1000) : 0,
-          viewOffset: s.PlayState?.PositionTicks ? Math.round(s.PlayState.PositionTicks / 10000 / 1000) : 0,
-          progress: (s.PlayState?.PositionTicks && s.NowPlayingItem?.RunTimeTicks) 
-            ? Math.round(s.PlayState.PositionTicks / s.NowPlayingItem.RunTimeTicks * 100) 
-            : 0,
-          stream: streamType,
-          bandwidth,
-        };
-      });
+        return null;
+      }).filter(Boolean);
       // Calculate summary for Jellyfin/Emby
       let directPlays = 0, transcodes = 0, totalBandwidth = 0, lanBandwidth = 0, wanBandwidth = 0;
       sessions.forEach(sess => {
