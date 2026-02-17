@@ -122,10 +122,22 @@
           const summary = st.summary || {};
           const directPlays = typeof summary.directPlays === 'number' ? summary.directPlays : 0;
           const transcodes = typeof summary.transcodes === 'number' ? summary.transcodes : 0;
-          const totalStreams = typeof summary.totalStreams === 'number' ? summary.totalStreams : (typeof st.count === 'number' ? st.count : 0);
-          const totalBandwidth = typeof summary.totalBandwidth === 'number' ? summary.totalBandwidth : 0;
-          const lanBandwidth = typeof summary.lanBandwidth === 'number' ? summary.lanBandwidth : 0;
-          const wanBandwidth = typeof summary.wanBandwidth === 'number' ? summary.wanBandwidth : 0;
+          // Always use st.sessions.length for totalStreams if available
+          const totalStreams = st.sessions && Array.isArray(st.sessions) ? st.sessions.length : (typeof summary.totalStreams === 'number' ? summary.totalStreams : 0);
+          // If summary.totalBandwidth is zero, sum from sessions
+          let totalBandwidth = typeof summary.totalBandwidth === 'number' ? summary.totalBandwidth : 0;
+          if (totalBandwidth === 0 && st.sessions && Array.isArray(st.sessions)) {
+            totalBandwidth = st.sessions.reduce((sum, sess) => sum + (typeof sess.bandwidth === 'number' ? sess.bandwidth : 0), 0);
+          }
+          let lanBandwidth = typeof summary.lanBandwidth === 'number' ? summary.lanBandwidth : 0;
+          let wanBandwidth = typeof summary.wanBandwidth === 'number' ? summary.wanBandwidth : 0;
+          // If LAN/WAN bandwidth is zero, sum from sessions
+          if (lanBandwidth === 0 && st.sessions && Array.isArray(st.sessions)) {
+            lanBandwidth = st.sessions.reduce((sum, sess) => sum + (sess.location && sess.location.toUpperCase().includes('LAN') && typeof sess.bandwidth === 'number' ? sess.bandwidth : 0), 0);
+          }
+          if (wanBandwidth === 0 && st.sessions && Array.isArray(st.sessions)) {
+            wanBandwidth = st.sessions.reduce((sum, sess) => sum + (sess.location && sess.location.toUpperCase().includes('WAN') && typeof sess.bandwidth === 'number' ? sess.bandwidth : 0), 0);
+          }
           const summaryDiv = document.createElement('div');
           summaryDiv.className = 'meta';
           summaryDiv.innerHTML = `Total Streams: <b>${totalStreams}</b> &nbsp;|&nbsp; Direct Play: <b>${directPlays}</b> &nbsp;|&nbsp; Transcoding: <b>${transcodes}</b><br>Bandwidth: ${totalBandwidth.toFixed(1)} Mbps (LAN: ${lanBandwidth.toFixed(1)} Mbps, WAN: ${wanBandwidth.toFixed(1)} Mbps)`;
