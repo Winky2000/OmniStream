@@ -36,6 +36,11 @@ function summaryFromResponse(resp) {
       const sessions = (d.MediaContainer.Metadata || []).map(m => ({
         user: m.User?.title || 'Unknown',
         title: m.title || m.grandparentTitle || 'Unknown',
+        episode: m.grandparentTitle ? m.title : undefined,
+        year: m.year,
+        platform: m.Player?.platform || m.Player?.product || '',
+        state: m.Player?.state || '',
+        poster: m.thumb ? `/proxy/plex/poster?url=${encodeURIComponent(m.thumb)}` : undefined,
         duration: m.duration ? Math.round(m.duration / 1000) : 0,
         viewOffset: m.viewOffset || 0,
         progress: m.duration ? Math.round((m.viewOffset || 0) / m.duration * 100) : 0
@@ -47,6 +52,13 @@ function summaryFromResponse(resp) {
       const sessions = d.map(s => ({
         user: s.UserName || 'Unknown',
         title: s.NowPlayingItem?.Name || 'Idle',
+        episode: s.NowPlayingItem?.EpisodeTitle,
+        year: s.NowPlayingItem?.ProductionYear,
+        platform: s.Client || s.DeviceName || '',
+        state: s.PlayState?.PlayMethod || '',
+        poster: s.NowPlayingItem?.ImageTags?.Primary
+          ? `/proxy/jellyfin/poster?user=${encodeURIComponent(s.UserId)}&item=${encodeURIComponent(s.NowPlayingItem.Id)}`
+          : undefined,
         duration: s.NowPlayingItem?.RunTimeTicks ? Math.round(s.NowPlayingItem.RunTimeTicks / 10000 / 1000) : 0,
         viewOffset: s.PlayState?.PositionTicks ? Math.round(s.PlayState.PositionTicks / 10000 / 1000) : 0,
         progress: (s.PlayState?.PositionTicks && s.NowPlayingItem?.RunTimeTicks) 

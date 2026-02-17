@@ -5,19 +5,21 @@
   <title>OmniStream</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <style>
-    body{font-family:Segoe UI,Arial;background:#f4f6f8;margin:0;padding:20px}
-    h1{margin:0 0 12px}
+    body{font-family:Segoe UI,Arial;background:#181c24;color:#e0e3e8;margin:0;padding:20px}
+    h1{margin:0 0 12px;color:#fff;letter-spacing:1px}
     #grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
-    .card{background:white;border-radius:8px;padding:12px;box-shadow:0 1px 4px rgba(0,0,0,0.08)}
-    .offline{opacity:0.6}
-    .title{font-weight:600;margin-bottom:6px}
-    .meta{font-size:13px;color:#555;margin-bottom:8px}
-    .small{font-size:12px;color:#777;margin-bottom:8px}
-    .sessions{font-size:11px;border-top:1px solid #eee;padding-top:8px;margin-top:8px}
-    .session{background:#f9f9f9;padding:6px;border-radius:4px;margin-bottom:4px;line-height:1.4}
-    .session-user{font-weight:600;color:#333}
-    .session-title{color:#666;font-size:11px}
-    .progress-bar{background:#e0e0e0;height:4px;border-radius:2px;margin-top:2px;overflow:hidden}
+    .card{background:#232837;border-radius:8px;padding:12px;box-shadow:0 1px 8px #0004}
+    .offline{opacity:0.5}
+    .title{font-weight:600;margin-bottom:6px;color:#fff}
+    .meta{font-size:13px;color:#a0a4b0;margin-bottom:8px}
+    .small{font-size:12px;color:#888;margin-bottom:8px}
+    .sessions{font-size:11px;border-top:1px solid #222;padding-top:8px;margin-top:8px}
+    .session{background:#232837;padding:6px;border-radius:4px;margin-bottom:4px;line-height:1.4;box-shadow:0 1px 2px #0002}
+    .session-user{font-weight:600;color:#f7c873}
+    .session-title{color:#e0e3e8;font-size:11px}
+    .session-meta{font-size:10px;color:#b0b3b8;margin-bottom:2px}
+    .session-poster{float:left;width:38px;height:56px;object-fit:cover;margin-right:8px;border-radius:3px;box-shadow:0 1px 2px #0003}
+    .progress-bar{background:#2a2e39;height:4px;border-radius:2px;margin-top:2px;overflow:hidden}
     .progress-fill{background:#4CAF50;height:100%;transition:width 0.3s}
   </style>
 </head>
@@ -67,12 +69,30 @@
           st.sessions.forEach(sess => {
             const session = document.createElement('div'); 
             session.className = 'session';
+            // Poster
+            if (sess.poster) {
+              const img = document.createElement('img');
+              img.className = 'session-poster';
+              img.src = sess.poster;
+              img.alt = 'Poster';
+              session.appendChild(img);
+            }
+            // User and title
             const title = document.createElement('div'); 
             title.className = 'session-user';
             title.textContent = sess.user || 'Unknown';
             const sub = document.createElement('div'); 
             sub.className = 'session-title';
             sub.textContent = sess.title || 'Idle';
+            // Meta info
+            const meta = document.createElement('div');
+            meta.className = 'session-meta';
+            meta.innerHTML =
+              (sess.episode ? `<b>Ep:</b> ${sess.episode} ` : '') +
+              (sess.year ? `<b>Year:</b> ${sess.year} ` : '') +
+              (sess.platform ? `<b>Platform:</b> ${sess.platform} ` : '') +
+              (sess.state ? `<b>State:</b> ${sess.state} ` : '');
+            // Progress bar
             const bar = document.createElement('div'); 
             bar.className = 'progress-bar';
             const fill = document.createElement('div'); 
@@ -80,7 +100,8 @@
             fill.style.width = (sess.progress || 0) + '%';
             bar.appendChild(fill);
             session.appendChild(title); 
-            session.appendChild(sub); 
+            session.appendChild(sub);
+            session.appendChild(meta);
             session.appendChild(bar);
             sessionsDiv.appendChild(session);
           });
