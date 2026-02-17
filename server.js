@@ -67,6 +67,21 @@ function summaryFromResponse(resp) {
           posterUrl = `${resp.config.serverConfig.baseUrl}${m.thumb}?X-Plex-Token=${encodeURIComponent(resp.config.serverConfig.token)}`;
         }
         // Extract rich session info
+        // Detect stream type for Plex
+        let streamType = '';
+        if (typeof m.transcodeDecision === 'string') {
+          streamType = m.transcodeDecision;
+        } else if (m.Video && m.Video[0] && m.Video[0].decision) {
+          streamType = m.Video[0].decision;
+        } else if (m.Audio && m.Audio[0] && m.Audio[0].decision) {
+          streamType = m.Audio[0].decision;
+        } else if (m.Player && m.Player.state) {
+          streamType = m.Player.state;
+        }
+        // Bandwidth as number
+        let bandwidth = 0;
+        if (typeof m.bandwidth === 'number') bandwidth = m.bandwidth;
+        else if (typeof m.bandwidth === 'string') bandwidth = parseFloat(m.bandwidth) || 0;
         return {
           user: m.User?.title || 'Unknown',
           title: m.title || m.grandparentTitle || 'Unknown',
@@ -81,14 +96,14 @@ function summaryFromResponse(resp) {
           product: m.Player?.product || '',
           player: m.Player?.title || '',
           quality: m.quality || '',
-          stream: m.transcodeDecision || '',
+          stream: streamType,
           container: m.container || '',
           video: m.Video && m.Video[0] ? `${m.Video[0].decision || ''} (${m.Video[0].codec || ''} ${m.Video[0].resolution || ''})` : '',
           audio: m.Audio && m.Audio[0] ? `${m.Audio[0].decision || ''} (${m.Audio[0].language || ''} ${m.Audio[0].codec || ''} ${m.Audio[0].channels || ''})` : '',
           subtitle: m.Subtitle && m.Subtitle[0] ? `${m.Subtitle[0].language || ''}` : 'None',
           location: m.Player?.local ? 'LAN' : 'WAN',
           ip: m.Player?.address || '',
-          bandwidth: m.bandwidth || '',
+          bandwidth,
           channel: m.channelTitle || '',
           episodeTitle: m.episodeTitle || '',
           userName: m.User?.title || '',
@@ -97,8 +112,10 @@ function summaryFromResponse(resp) {
       // Session summary
       let directPlays = 0, transcodes = 0, totalBandwidth = 0, lanBandwidth = 0, wanBandwidth = 0;
       sessions.forEach(sess => {
-        if (sess.stream && sess.stream.toLowerCase().includes('direct')) directPlays++;
-        else if (sess.stream && sess.stream.toLowerCase().includes('transcode')) transcodes++;
+        // Robust detection for Plex
+        const stream = (sess.stream || '').toLowerCase();
+        if (stream.includes('direct')) directPlays++;
+        else if (stream.includes('transcode')) transcodes++;
         if (sess.bandwidth) totalBandwidth += Number(sess.bandwidth);
         if (sess.location === 'LAN' && sess.bandwidth) lanBandwidth += Number(sess.bandwidth);
         if (sess.location === 'WAN' && sess.bandwidth) wanBandwidth += Number(sess.bandwidth);
@@ -126,6 +143,21 @@ function summaryFromResponse(resp) {
         } else if (s.NowPlayingItem?.ImageTags?.Primary && resp.config && resp.config.serverConfig) {
           posterUrl = `${resp.config.serverConfig.baseUrl}/Items/${s.NowPlayingItem.Id}/Images/Primary?api_key=${encodeURIComponent(resp.config.serverConfig.token)}`;
         }
+        // Detect stream type for Jellyfin/Emby
+        let streamType = '';
+        if (s.PlayState?.PlayMethod) {
+          streamType = s.PlayState.PlayMethod;
+        } else if (s.TranscodingInfo && s.TranscodingInfo.IsVideoDirect === false) {
+          streamType = 'Transcode';
+        } else if (s.TranscodingInfo && s.TranscodingInfo.IsVideoDirect === true) {
+          streamType = 'DirectPlay';
+        } else if (s.state) {
+          streamType = s.state;
+        }
+        // Bandwidth as number (if available)
+        let bandwidth = 0;
+        if (typeof s.bandwidth === 'number') bandwidth = s.bandwidth;
+        else if (typeof s.bandwidth === 'string') bandwidth = parseFloat(s.bandwidth) || 0;
         return {
           user: s.UserName || 'Unknown',
           title: s.NowPlayingItem?.Name || 'Idle',
@@ -138,17 +170,20 @@ function summaryFromResponse(resp) {
           viewOffset: s.PlayState?.PositionTicks ? Math.round(s.PlayState.PositionTicks / 10000 / 1000) : 0,
           progress: (s.PlayState?.PositionTicks && s.NowPlayingItem?.RunTimeTicks) 
             ? Math.round(s.PlayState.PositionTicks / s.NowPlayingItem.RunTimeTicks * 100) 
-            : 0
+            : 0,
+          stream: streamType,
+          bandwidth,
         };
       });
       // Calculate summary for Jellyfin/Emby
       let directPlays = 0, transcodes = 0, totalBandwidth = 0, lanBandwidth = 0, wanBandwidth = 0;
       sessions.forEach(sess => {
-        if (sess.state && sess.state.toLowerCase().includes('direct')) directPlays++;
-        else if (sess.state && sess.state.toLowerCase().includes('transcode')) transcodes++;
+        // Robust detection for Jellyfin/Emby
+        const stream = (sess.stream || '').toLowerCase();
+        if (stream.includes('direct')) directPlays++;
+        else if (stream.includes('transcode')) transcodes++;
         if (sess.bandwidth) totalBandwidth += Number(sess.bandwidth);
-        if (sess.location === 'LAN' && sess.bandwidth) lanBandwidth += Number(sess.bandwidth);
-        if (sess.location === 'WAN' && sess.bandwidth) wanBandwidth += Number(sess.bandwidth);
+        // LAN/WAN detection for Jellyfin/Emby is not always available, so skip for now
       });
       return {
         type: 'jellyfin/emby',
