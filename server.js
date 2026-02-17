@@ -292,6 +292,8 @@ async function pollServer(s) {
       });
       console.log(`[OmniStream] Totals for ${s.name || s.baseUrl}: directPlays=${directPlays}, transcodes=${transcodes}, totalStreams=${count}`);
       summaryObj = { directPlays, transcodes, totalStreams: count, totalBandwidth, lanBandwidth, wanBandwidth };
+      // Ensure totalStreams is always set for frontend
+      if (typeof summaryObj.totalStreams !== 'number') summaryObj.totalStreams = count;
     }
     statuses[s.id] = {
       id: s.id,
