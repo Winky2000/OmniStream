@@ -17,13 +17,9 @@
     }
     #grid.flex-layout {
       display: flex;
-      flex-direction: row;
-      flex-wrap: nowrap;
+      flex-direction: column;
       gap: 28px;
-      overflow-x: auto;
-      scrollbar-color: #00bfff #232837;
-      scrollbar-width: thin;
-      align-items: flex-start;
+      align-items: center;
     }
     .card.flex-full {
       min-width: 100%;
@@ -188,7 +184,6 @@
         if (st.online && st.sessions && st.sessions.length > 0) {
           const sessionsDiv = document.createElement('div');
           sessionsDiv.className = 'sessions' + (layoutMode === 'flex' ? ' horizontal-grid' : '');
-          sessionsDiv.innerHTML = `<strong>${st.sessions.length} active</strong>`;
           st.sessions.forEach(sess => {
             const session = document.createElement('div');
             session.className = 'session';
