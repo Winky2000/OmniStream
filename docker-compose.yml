@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  omnistream:
+    build: .
+    container_name: omnistream
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./servers.json:/usr/src/app/servers.json
+      - ./public:/usr/src/app/public
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production

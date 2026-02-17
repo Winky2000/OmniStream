@@ -1,0 +1,29 @@
+[
+  {
+    "id": "plex-1",
+    "name": "My Plex",
+    "type": "plex",
+    "baseUrl": "http://PLEX_HOST:32400",
+    "token": "YOUR_PLEX_TOKEN",
+    "tokenLocation": "query",
+    "apiPath": "/status/sessions"
+  },
+  {
+    "id": "jelly-1",
+    "name": "My Jellyfin",
+    "type": "jellyfin",
+    "baseUrl": "http://JELLYFIN_HOST:8096",
+    "token": "YOUR_JELLYFIN_TOKEN",
+    "tokenLocation": "header",
+    "apiPath": "/System/Info"
+  },
+  {
+    "id": "emby-1",
+    "name": "My Emby",
+    "type": "emby",
+    "baseUrl": "http://EMBY_HOST:8096",
+    "token": "YOUR_EMBY_TOKEN",
+    "tokenLocation": "header",
+    "apiPath": "/System/Info"
+  }
+]

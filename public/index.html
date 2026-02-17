@@ -1,0 +1,62 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>OmniStream</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    body{font-family:Segoe UI,Arial;background:#f4f6f8;margin:0;padding:20px}
+    h1{margin:0 0 12px}
+    #grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+    .card{background:white;border-radius:8px;padding:12px;box-shadow:0 1px 4px rgba(0,0,0,0.08)}
+    .offline{opacity:0.6}
+    .title{font-weight:600;margin-bottom:6px}
+    .meta{font-size:13px;color:#555}
+    .small{font-size:12px;color:#777}
+  </style>
+</head>
+<body>
+  <h1>OmniStream</h1>
+  <div id="grid"></div>
+
+  <script>
+    async function fetchStatus() {
+      try {
+        const r = await fetch('/api/status');
+        return await r.json();
+      } catch (e) { console.error(e); return {servers: [], statuses: {}} }
+    }
+
+    function render(data) {
+      const {servers, statuses} = data;
+      const grid = document.getElementById('grid');
+      grid.innerHTML = '';
+      if (!servers || servers.length === 0) {
+        grid.innerHTML = '<div class="card">No servers configured. Copy servers.json.example to servers.json and edit.</div>';
+        return;
+      }
+      servers.forEach(s => {
+        const st = statuses && statuses[s.id] ? statuses[s.id] : { online: false };
+        const card = document.createElement('div');
+        card.className = 'card ' + (st.online ? '' : 'offline');
+        const title = document.createElement('div'); title.className = 'title';
+        title.textContent = s.name || s.baseUrl;
+        const meta = document.createElement('div'); meta.className = 'meta';
+        meta.textContent = `${s.type || 'generic'} • ${st.online ? 'Online' : 'Offline'}`;
+        const small = document.createElement('div'); small.className = 'small';
+        small.innerHTML = `Latency: ${st.latency ?? '-'}ms<br/>Last: ${st.lastChecked ?? '-'}<br/>${st.online ? 'Status: ' + (st.statusCode||'') : 'Error: ' + (st.error||'')}`;
+        card.appendChild(title); card.appendChild(meta); card.appendChild(small);
+        grid.appendChild(card);
+      });
+    }
+
+    async function loop() {
+      const data = await fetchStatus();
+      render(data);
+    }
+
+    loop();
+    setInterval(loop, 5000);
+  </script>
+</body>
+</html>
