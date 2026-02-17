@@ -83,6 +83,7 @@
   <div class="header-flex">
     <img src="omnistream_logo.png" alt="OmniStream Logo" class="logo-img" />
     <h1>OmniStream</h1>
+    <button class="toggle-btn" id="adminBtn" style="margin-left:24px;">Admin</button>
   </div>
   <button class="toggle-btn" id="layoutToggle">Switch Layout</button>
   <div id="grid" class="grid-layout"></div>
@@ -99,11 +100,15 @@
     let layoutMode = 'grid';
     document.addEventListener('DOMContentLoaded', () => {
       const toggleBtn = document.getElementById('layoutToggle');
+      const adminBtn = document.getElementById('adminBtn');
       const grid = document.getElementById('grid');
       toggleBtn.addEventListener('click', () => {
         layoutMode = layoutMode === 'grid' ? 'flex' : 'grid';
         grid.className = layoutMode === 'grid' ? 'grid-layout' : 'flex-layout';
         loop();
+      });
+      adminBtn.addEventListener('click', () => {
+        window.location.href = '/admin.html';
       });
       // Set initial layout
       grid.className = 'grid-layout';
