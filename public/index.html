@@ -9,8 +9,12 @@
     h1{margin:0;color:#fff;letter-spacing:1px;display:inline-block;vertical-align:middle;font-size:2.2em}
     .header-flex{display:flex;align-items:center;gap:18px;margin-bottom:24px;}
     .logo-img{height:90px;max-width:120px;object-fit:contain;box-shadow:0 2px 8px #0003;border-radius:8px;}
-    #grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:18px}
-    .card{background:#232837;border-radius:12px;padding:20px;box-shadow:0 2px 12px #0004}
+    #grid.grid-layout{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:18px}
+    #grid.flex-layout{display:flex;flex-wrap:wrap;gap:18px;justify-content:flex-start;}
+    .card{background:#232837;border-radius:12px;padding:20px;box-shadow:0 2px 12px #0004;border:3px solid #00bfff;box-shadow:0 0 12px #00bfff44, 0 2px 12px #0004;transition:border-color 0.3s, box-shadow 0.3s;}
+    .card.offline{border-color:#444;box-shadow:0 0 8px #444, 0 2px 12px #0004;}
+    .toggle-btn{background:#181c24;color:#00bfff;border:2px solid #00bfff;border-radius:8px;padding:8px 18px;font-size:1em;cursor:pointer;margin-bottom:18px;transition:background 0.2s, color 0.2s;}
+    .toggle-btn:hover{background:#232837;color:#fff;}
     .offline{opacity:0.5}
     .title{font-weight:600;margin-bottom:6px;color:#fff}
     .meta{font-size:13px;color:#a0a4b0;margin-bottom:8px}
@@ -30,6 +34,8 @@
     <img src="omnistream_logo.png" alt="OmniStream Logo" class="logo-img" />
     <h1>OmniStream</h1>
   </div>
+  <button class="toggle-btn" id="layoutToggle">Switch Layout</button>
+  <div id="grid" class="grid-layout"></div>
   <div id="grid"></div>
 
   <script>
@@ -40,6 +46,17 @@
       } catch (e) { console.error(e); return {servers: [], statuses: {}} }
     }
 
+    let layoutMode = 'grid';
+    document.addEventListener('DOMContentLoaded', () => {
+      const toggleBtn = document.getElementById('layoutToggle');
+      const grid = document.getElementById('grid');
+      toggleBtn.addEventListener('click', () => {
+        layoutMode = layoutMode === 'grid' ? 'flex' : 'grid';
+        grid.className = layoutMode === 'grid' ? 'grid-layout' : 'flex-layout';
+        loop();
+      });
+    });
+
     function render(data) {
       const { servers = [], statuses = {} } = data;
       const grid = document.getElementById('grid');
@@ -48,6 +65,7 @@
         const st = statuses && statuses[s.id] ? statuses[s.id] : { online: false };
         const card = document.createElement('div');
         card.className = 'card ' + (st.online ? '' : 'offline');
+        card.style.flex = layoutMode === 'flex' ? '0 0 420px' : '';
         
         const title = document.createElement('div'); title.className = 'title';
         title.textContent = s.name || s.baseUrl;
