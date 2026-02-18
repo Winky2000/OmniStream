@@ -33,6 +33,14 @@
   <div id="notifList" class="notif-list"></div>
   <button class="back-btn" onclick="window.location.href='admin.html'">Back to Overview</button>
   <script>
+    // Apply saved theme
+    (function() {
+      const savedTheme = localStorage.getItem('omnistreamTheme') || 'default';
+      if (savedTheme && savedTheme !== 'default') {
+        document.documentElement.setAttribute('data-theme', savedTheme);
+      }
+    })();
+
     async function fetchNotifications() {
       try {
         const r = await fetch('/api/notifications');
