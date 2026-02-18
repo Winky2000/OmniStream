@@ -5,6 +5,14 @@ const fs = require('fs');
 const path = require('path');
 const cors = require('cors');
 const sqlite3 = require('sqlite3').verbose();
+const https = require('https');
+let nodemailer = null;
+try {
+  // Optional dependency for email notifications; if not installed, email will be disabled gracefully
+  nodemailer = require('nodemailer');
+} catch (e) {
+  console.log('[OmniStream] Email notifications disabled (nodemailer not installed).');
+}
 // ...existing code...
 
 const app = express();
@@ -13,6 +21,19 @@ app.use(express.json());
 app.use(express.static('public'));
 
 const SERVERS_FILE = path.join(__dirname, 'servers.json');
+const CONFIG_FILE = path.join(__dirname, 'config.json');
+
+let appConfig = {};
+try {
+  if (fs.existsSync(CONFIG_FILE)) {
+    const rawCfg = fs.readFileSync(CONFIG_FILE, 'utf8');
+    appConfig = rawCfg ? JSON.parse(rawCfg) : {};
+    console.log('[OmniStream] Loaded config from', CONFIG_FILE);
+  }
+} catch (e) {
+  console.error('[OmniStream] Failed to load config.json:', e.message);
+  appConfig = {};
+}
 let servers = [];
 try {
   if (fs.existsSync(SERVERS_FILE)) {
@@ -55,6 +76,97 @@ app.put('/api/servers/:id', (req, res) => {
 
 const statuses = {}; // keyed by server.id
 const MAX_HISTORY = 500;
+
+// Track last derived notifications so we only fire notifiers on changes
+let lastNotificationIds = new Set();
+
+function triggerNotifiers() {
+  try {
+    const notifications = buildNotificationsSnapshot();
+    const currentIds = new Set(notifications.map(n => n.id));
+    // Only notify on newly-appearing notifications compared to previous poll
+    const newlyActive = notifications.filter(n => !lastNotificationIds.has(n.id));
+    if (!newlyActive.length) {
+      lastNotificationIds = currentIds;
+      return;
+    }
+    newlyActive.forEach(n => {
+      sendDiscordNotification(n);
+      sendEmailNotification(n);
+    });
+    lastNotificationIds = currentIds;
+  } catch (e) {
+    console.error('[OmniStream] triggerNotifiers failed:', e.message);
+  }
+}
+
+function sendDiscordNotification(notification) {
+  const discordCfg = appConfig?.notifiers?.discord;
+  if (!discordCfg || !discordCfg.webhookUrl) return;
+  try {
+    const url = new URL(discordCfg.webhookUrl);
+    const body = JSON.stringify({
+      content: formatDiscordMessage(notification)
+    });
+    const options = {
+      method: 'POST',
+      hostname: url.hostname,
+      path: url.pathname + url.search,
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body)
+      }
+    };
+    const req = https.request(options, res => {
+      // Drain response to avoid socket hangup
+      res.on('data', () => {});
+    });
+    req.on('error', err => {
+      console.error('[OmniStream] Discord notifier error:', err.message);
+    });
+    req.write(body);
+    req.end();
+  } catch (e) {
+    console.error('[OmniStream] Discord notifier failure:', e.message);
+  }
+}
+
+function formatDiscordMessage(n) {
+  const level = (n.level || 'info').toLowerCase();
+  const prefix = level === 'error' ? '❌' : level === 'warn' ? '⚠️' : 'ℹ️';
+  const server = n.serverName || 'Server';
+  const when = n.time ? new Date(n.time).toLocaleString() : '';
+  return `${prefix} [${server}] ${n.message}${when ? ` (${when})` : ''}`;
+}
+
+function sendEmailNotification(notification) {
+  const emailCfg = appConfig?.notifiers?.email;
+  if (!emailCfg || emailCfg.enabled === false || !nodemailer) return;
+  try {
+    const transport = nodemailer.createTransport(emailCfg.smtp || {});
+    const level = (notification.level || 'info').toUpperCase();
+    const subject = `[OmniStream] ${level}: ${notification.message}`;
+    const textLines = [
+      `Server: ${notification.serverName || 'Server'}`,
+      `Time: ${notification.time || new Date().toISOString()}`,
+      '',
+      notification.message
+    ];
+    const mailOptions = {
+      from: emailCfg.from,
+      to: emailCfg.to,
+      subject,
+      text: textLines.join('\n')
+    };
+    transport.sendMail(mailOptions, (err) => {
+      if (err) {
+        console.error('[OmniStream] Email notifier error:', err.message);
+      }
+    });
+  } catch (e) {
+    console.error('[OmniStream] Email notifier failure:', e.message);
+  }
+}
 
 // SQLite-backed history
 const HISTORY_DB_FILE = path.join(__dirname, 'history.db');
@@ -691,6 +803,8 @@ async function pollAll() {
       );
     });
   }
+  // After updating statuses and history, evaluate and send any outbound notifications
+  triggerNotifiers();
 }
 
 pollAll();
@@ -827,7 +941,7 @@ app.post('/api/import-history', async (req, res) => {
 });
 
 // Derived notifications based on current statuses
-app.get('/api/notifications', (req, res) => {
+function buildNotificationsSnapshot() {
   const notifications = [];
   const now = new Date().toISOString();
   Object.values(statuses).forEach(st => {
@@ -876,6 +990,11 @@ app.get('/api/notifications', (req, res) => {
       });
     }
   });
+  return notifications;
+}
+
+app.get('/api/notifications', (req, res) => {
+  const notifications = buildNotificationsSnapshot();
   res.json({ notifications });
 });
 
