@@ -303,7 +303,9 @@
         if (st.online && st.sessions && st.sessions.length > 0) {
           const sessionsDiv = document.createElement('div');
           sessionsDiv.className = 'sessions' + (layoutMode === 'flex' ? ' horizontal-grid' : '');
-          st.sessions.forEach(sess => {
+          // Filter out any completely empty session objects so we don't render blank cards
+          const visibleSessions = st.sessions.filter(sess => sess && (sess.poster || sess.title || sess.user || sess.userName));
+          visibleSessions.forEach(sess => {
             const session = document.createElement('div');
             // Classify direct play vs transcode for border color
             let isTranscoding = false;
@@ -399,9 +401,8 @@
             }
             info.appendChild(infoList);
             row.appendChild(info);
-            if (layoutMode === 'flex') session.appendChild(row);
-            // For vertical, stack poster and info
-            if (layoutMode !== 'flex' && sess.poster) session.appendChild(info);
+            // Append the combined row for both layouts so sessions never appear empty
+            session.appendChild(row);
             // Progress bar
             const bar = document.createElement('div');
             bar.className = 'progress-bar';
@@ -412,7 +413,9 @@
             session.appendChild(bar);
             sessionsDiv.appendChild(session);
           });
-          card.appendChild(sessionsDiv);
+          if (visibleSessions.length > 0) {
+            card.appendChild(sessionsDiv);
+          }
         }
         grid.appendChild(card);
       });
