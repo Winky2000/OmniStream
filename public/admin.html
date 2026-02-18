@@ -14,6 +14,8 @@
     .top-bar{display:flex;align-items:center;gap:12px;margin-bottom:10px;}
     .top-bar button{padding:6px 14px;border-radius:8px;border:1px solid var(--btn-border);background:var(--btn-bg);color:var(--btn-text);cursor:pointer;}
     .top-bar button:hover{background:var(--btn-bg-hover);color:var(--btn-text-hover);}
+    .theme-select{margin-left:auto;padding:6px 10px;border-radius:8px;border:1px solid var(--btn-border);background:var(--btn-bg);color:var(--btn-text);font-size:13px;}
+    .theme-select:focus{outline:none;border-color:var(--btn-text-hover);}
     .status-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;margin-top:20px;}
     .status-card{background:var(--card-bg);border-radius:14px;padding:16px 18px;box-shadow:0 2px 10px #0006;border:2px solid #00bfff;}
     .status-card.offline{opacity:0.6;border-color:var(--border-offline);}
@@ -38,14 +40,38 @@
   <div class="top-bar">
     <button id="returnBtn">Return to Main</button>
     <button id="manageServersBtn">Manage Servers</button>
+    <select id="themeSelect" class="theme-select">
+      <option value="default">Neon</option>
+      <option value="minimal">Minimal</option>
+      <option value="high-contrast">High contrast</option>
+      <option value="light">Light</option>
+      <option value="light-borderless">Light (borderless)</option>
+      <option value="ocean">Ocean</option>
+      <option value="forest">Forest</option>
+    </select>
   </div>
   <div class="status-grid" id="statusGrid"></div>
   <script>
-    // Apply saved theme
+    // Apply saved theme and wire admin theme selector
     (function() {
+      const select = document.getElementById('themeSelect');
       const savedTheme = localStorage.getItem('omnistreamTheme') || 'default';
       if (savedTheme && savedTheme !== 'default') {
         document.documentElement.setAttribute('data-theme', savedTheme);
+      } else {
+        document.documentElement.removeAttribute('data-theme');
+      }
+      if (select) {
+        select.value = savedTheme;
+        select.addEventListener('change', () => {
+          const v = select.value;
+          if (v === 'default') {
+            document.documentElement.removeAttribute('data-theme');
+          } else {
+            document.documentElement.setAttribute('data-theme', v);
+          }
+          localStorage.setItem('omnistreamTheme', v);
+        });
       }
     })();
 
