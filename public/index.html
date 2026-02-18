@@ -141,12 +141,11 @@
     .session-user a:hover{text-decoration:underline;}
     .session-title{color:var(--text-main);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
     .session-meta{font-size:11px;color:var(--text-muted);margin-bottom:2px}
-    .session-poster{width:80px;object-fit:cover;margin-right:10px;border-radius:3px;box-shadow:0 1px 2px #0003;align-self:stretch}
+    .session-poster{width:120px;object-fit:cover;margin-right:10px;border-radius:3px;box-shadow:0 1px 2px #0003;align-self:stretch}
     .progress-bar{background:#2a2e39;height:4px;border-radius:2px;margin-top:2px;overflow:hidden}
     .progress-fill{background:var(--progress-fill);height:100%;transition:width 0.3s}
     .badge-row{margin-top:4px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;}
-    .badge{font-size:10px;padding:1px 6px;border-radius:999px;border:1px solid rgba(255,255,255,0.16);background:rgba(0,0,0,0.3);color:var(--text-main);white-space:nowrap;display:inline-flex;align-items:center;gap:4px;}
-    .badge-icon{font-size:11px;}
+    .badge{font-size:10px;padding:1px 6px;border-radius:999px;border:1px solid rgba(255,255,255,0.16);background:rgba(0,0,0,0.3);color:var(--text-main);white-space:nowrap;}
     .badge-wan{border-color:#ff7043;color:#ffab91;}
     .badge-hdr{border-color:#ffca28;color:#ffecb3;}
     .badge-uhd{border-color:#29b6f6;color:#b3e5fc;}
@@ -387,7 +386,7 @@
               seLine.textContent = parts.join(' • ');
               info.appendChild(seLine);
             }
-            // Badge row: client icon + WAN / HDR / 4K / codec
+            // Badge row: WAN / HDR / 4K / codec / product
             const badgeRow = document.createElement('div');
             badgeRow.className = 'badge-row';
             function addBadge(text, extraClass, titleText) {
@@ -397,34 +396,6 @@
               b.textContent = text;
               if (titleText) b.title = titleText;
               badgeRow.appendChild(b);
-            }
-            // Player/client icon badge (what the user is using to play)
-            function getProductIcon(name) {
-              if (!name) return '🎬';
-              const n = name.toLowerCase();
-              if (n.includes('web') || n.includes('browser') || n.includes('chrome') || n.includes('edge') || n.includes('firefox') || n.includes('safari')) return '🌐';
-              if (n.includes('roku')) return '📺';
-              if (n.includes('appletv') || n.includes('apple tv')) return '📺';
-              if (n.includes('shield') || n.includes('android tv') || n.includes('fire tv') || n.includes('firetv')) return '📺';
-              if (n.includes('iphone') || n.includes('ipad') || n.includes('ios')) return '📱';
-              if (n.includes('android')) return '📱';
-              if (n.includes('playstation') || n.includes('ps4') || n.includes('ps5') || n.includes('xbox')) return '🎮';
-              if (n.includes('samsung') || n.includes('lg')) return '📺';
-              return '🎬';
-            }
-            if (sess.product || sess.player || sess.platform) {
-              const name = sess.product || sess.player || sess.platform;
-              const iconSpan = document.createElement('span');
-              iconSpan.className = 'badge badge-product';
-              const emoji = document.createElement('span');
-              emoji.className = 'badge-icon';
-              emoji.textContent = getProductIcon(name);
-              const label = document.createElement('span');
-              label.textContent = name;
-              iconSpan.title = 'Client: ' + name;
-              iconSpan.appendChild(emoji);
-              iconSpan.appendChild(label);
-              badgeRow.appendChild(iconSpan);
             }
             const isWan = sess.location && sess.location.toUpperCase().includes('WAN');
             if (isWan) addBadge('WAN', 'badge-wan', 'WAN session');
@@ -439,6 +410,9 @@
               if (codecMatch && codecMatch[1]) {
                 addBadge(codecMatch[1].toUpperCase(), 'badge-codec', sess.video);
               }
+            }
+            if (sess.product) {
+              addBadge(sess.product, 'badge-product', 'Client: ' + sess.product);
             }
             if (badgeRow.childNodes.length > 0) {
               info.appendChild(badgeRow);
