@@ -93,6 +93,12 @@ function triggerNotifiers() {
     newlyActive.forEach(n => {
       sendDiscordNotification(n);
       sendEmailNotification(n);
+      sendGenericWebhookNotification(n);
+      sendSlackNotification(n);
+      sendTelegramNotification(n);
+      sendTwilioSmsNotification(n);
+      sendPushoverNotification(n);
+      sendGotifyNotification(n);
     });
     lastNotificationIds = currentIds;
   } catch (e) {
@@ -165,6 +171,192 @@ function sendEmailNotification(notification) {
     });
   } catch (e) {
     console.error('[OmniStream] Email notifier failure:', e.message);
+  }
+}
+
+function sendGenericWebhookNotification(notification) {
+  const cfg = appConfig?.notifiers?.webhook;
+  if (!cfg || !cfg.url) return;
+  try {
+    const url = new URL(cfg.url);
+    const body = JSON.stringify({
+      id: notification.id,
+      level: notification.level,
+      serverId: notification.serverId,
+      serverName: notification.serverName,
+      time: notification.time,
+      message: notification.message
+    });
+    const options = {
+      method: 'POST',
+      hostname: url.hostname,
+      path: url.pathname + url.search,
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body)
+      }
+    };
+    const req = https.request(options, res => {
+      res.on('data', () => {});
+    });
+    req.on('error', err => {
+      console.error('[OmniStream] Webhook notifier error:', err.message);
+    });
+    req.write(body);
+    req.end();
+  } catch (e) {
+    console.error('[OmniStream] Webhook notifier failure:', e.message);
+  }
+}
+
+function sendSlackNotification(notification) {
+  const cfg = appConfig?.notifiers?.slack;
+  if (!cfg || !cfg.webhookUrl) return;
+  try {
+    const url = new URL(cfg.webhookUrl);
+    const text = formatDiscordMessage(notification); // Reuse same human text
+    const body = JSON.stringify({ text });
+    const options = {
+      method: 'POST',
+      hostname: url.hostname,
+      path: url.pathname + url.search,
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body)
+      }
+    };
+    const req = https.request(options, res => {
+      res.on('data', () => {});
+    });
+    req.on('error', err => {
+      console.error('[OmniStream] Slack notifier error:', err.message);
+    });
+    req.write(body);
+    req.end();
+  } catch (e) {
+    console.error('[OmniStream] Slack notifier failure:', e.message);
+  }
+}
+
+function sendTelegramNotification(notification) {
+  const cfg = appConfig?.notifiers?.telegram;
+  if (!cfg || !cfg.botToken || !cfg.chatId) return;
+  try {
+    const text = formatDiscordMessage(notification);
+    const path = `/bot${encodeURIComponent(cfg.botToken)}/sendMessage?chat_id=${encodeURIComponent(cfg.chatId)}&text=${encodeURIComponent(text)}`;
+    const options = {
+      method: 'GET',
+      hostname: 'api.telegram.org',
+      path
+    };
+    const req = https.request(options, res => {
+      res.on('data', () => {});
+    });
+    req.on('error', err => {
+      console.error('[OmniStream] Telegram notifier error:', err.message);
+    });
+    req.end();
+  } catch (e) {
+    console.error('[OmniStream] Telegram notifier failure:', e.message);
+  }
+}
+
+function sendTwilioSmsNotification(notification) {
+  const cfg = appConfig?.notifiers?.twilio;
+  if (!cfg || !cfg.accountSid || !cfg.authToken || !cfg.from || !cfg.to) return;
+  try {
+    const payload = new URLSearchParams({
+      From: cfg.from,
+      To: cfg.to,
+      Body: formatDiscordMessage(notification)
+    }).toString();
+    const path = `/2010-04-01/Accounts/${encodeURIComponent(cfg.accountSid)}/Messages.json`;
+    const options = {
+      method: 'POST',
+      hostname: 'api.twilio.com',
+      path,
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Length': Buffer.byteLength(payload),
+        'Authorization': 'Basic ' + Buffer.from(`${cfg.accountSid}:${cfg.authToken}`).toString('base64')
+      }
+    };
+    const req = https.request(options, res => {
+      res.on('data', () => {});
+    });
+    req.on('error', err => {
+      console.error('[OmniStream] Twilio notifier error:', err.message);
+    });
+    req.write(payload);
+    req.end();
+  } catch (e) {
+    console.error('[OmniStream] Twilio notifier failure:', e.message);
+  }
+}
+
+function sendPushoverNotification(notification) {
+  const cfg = appConfig?.notifiers?.pushover;
+  if (!cfg || !cfg.user || !cfg.token) return;
+  try {
+    const payload = new URLSearchParams({
+      token: cfg.token,
+      user: cfg.user,
+      message: notification.message,
+      title: notification.serverName || 'OmniStream',
+      priority: String(cfg.priority ?? 0)
+    }).toString();
+    const options = {
+      method: 'POST',
+      hostname: 'api.pushover.net',
+      path: '/1/messages.json',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Length': Buffer.byteLength(payload)
+      }
+    };
+    const req = https.request(options, res => {
+      res.on('data', () => {});
+    });
+    req.on('error', err => {
+      console.error('[OmniStream] Pushover notifier error:', err.message);
+    });
+    req.write(payload);
+    req.end();
+  } catch (e) {
+    console.error('[OmniStream] Pushover notifier failure:', e.message);
+  }
+}
+
+function sendGotifyNotification(notification) {
+  const cfg = appConfig?.notifiers?.gotify;
+  if (!cfg || !cfg.serverUrl || !cfg.token) return;
+  try {
+    const baseUrl = new URL(cfg.serverUrl);
+    const body = JSON.stringify({
+      title: notification.serverName || 'OmniStream',
+      message: notification.message,
+      priority: cfg.priority ?? 5
+    });
+    const options = {
+      method: 'POST',
+      hostname: baseUrl.hostname,
+      path: (baseUrl.pathname.replace(/\/$/, '') || '') + '/message',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body),
+        'X-Gotify-Key': cfg.token
+      }
+    };
+    const req = https.request(options, res => {
+      res.on('data', () => {});
+    });
+    req.on('error', err => {
+      console.error('[OmniStream] Gotify notifier error:', err.message);
+    });
+    req.write(body);
+    req.end();
+  } catch (e) {
+    console.error('[OmniStream] Gotify notifier failure:', e.message);
   }
 }
 

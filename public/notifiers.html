@@ -44,6 +44,90 @@
   </div>
 
   <div class="section">
+    <h2>Generic Webhook</h2>
+    <label>
+      Webhook URL
+      <input type="text" id="webhookUrl" placeholder="https://your-service.example.com/webhook">
+    </label>
+    <div class="hint">Useful for Home Assistant, custom bots, or any service that accepts a simple JSON POST.</div>
+  </div>
+
+  <div class="section">
+    <h2>Slack</h2>
+    <label>
+      Incoming Webhook URL
+      <input type="text" id="slackWebhook" placeholder="https://hooks.slack.com/services/...">
+    </label>
+    <div class="hint">Use a Slack Incoming Webhook to post alerts into a channel.</div>
+  </div>
+
+  <div class="section">
+    <h2>Telegram</h2>
+    <label>
+      Bot token
+      <input type="text" id="telegramToken" placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11">
+    </label>
+    <label>
+      Chat ID
+      <input type="text" id="telegramChat" placeholder="@your_channel or numeric chat id">
+    </label>
+    <div class="hint">Create a bot with @BotFather, then paste its token and the chat/channel ID where you want alerts.</div>
+  </div>
+
+  <div class="section">
+    <h2>SMS (Twilio)</h2>
+    <label>
+      Account SID
+      <input type="text" id="twilioSid" placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+    </label>
+    <label>
+      Auth token
+      <input type="password" id="twilioToken" placeholder="your_auth_token">
+    </label>
+    <label>
+      From number
+      <input type="text" id="twilioFrom" placeholder="+1234567890">
+    </label>
+    <label>
+      To number
+      <input type="text" id="twilioTo" placeholder="+1234567890">
+    </label>
+    <div class="hint">Twilio credentials and numbers are stored in config.json. Use for critical alerts only.</div>
+  </div>
+
+  <div class="section">
+    <h2>Pushover</h2>
+    <label>
+      User key
+      <input type="text" id="pushoverUser" placeholder="your Pushover user key">
+    </label>
+    <label>
+      App token
+      <input type="text" id="pushoverToken" placeholder="your Pushover API token/ key">
+    </label>
+    <label>
+      Priority (default 0)
+      <input type="number" id="pushoverPriority" value="0" style="max-width:120px;">
+    </label>
+  </div>
+
+  <div class="section">
+    <h2>Gotify</h2>
+    <label>
+      Server URL
+      <input type="text" id="gotifyServer" placeholder="https://gotify.example.com">
+    </label>
+    <label>
+      App token
+      <input type="text" id="gotifyToken" placeholder="Gotify application token">
+    </label>
+    <label>
+      Priority (default 5)
+      <input type="number" id="gotifyPriority" value="5" style="max-width:120px;">
+    </label>
+  </div>
+
+  <div class="section">
     <h2>Email</h2>
     <label class="inline">
       <input type="checkbox" id="emailEnabled"> Enable email notifications
@@ -111,6 +195,26 @@
         const auth = smtp.auth || {};
         document.getElementById('smtpUser').value = auth.user || '';
         document.getElementById('smtpPass').value = auth.pass || '';
+        const webhook = n.webhook || {};
+        document.getElementById('webhookUrl').value = webhook.url || '';
+        const slack = n.slack || {};
+        document.getElementById('slackWebhook').value = slack.webhookUrl || '';
+        const telegram = n.telegram || {};
+        document.getElementById('telegramToken').value = telegram.botToken || '';
+        document.getElementById('telegramChat').value = telegram.chatId || '';
+        const twilio = n.twilio || {};
+        document.getElementById('twilioSid').value = twilio.accountSid || '';
+        document.getElementById('twilioToken').value = twilio.authToken || '';
+        document.getElementById('twilioFrom').value = twilio.from || '';
+        document.getElementById('twilioTo').value = twilio.to || '';
+        const pushover = n.pushover || {};
+        document.getElementById('pushoverUser').value = pushover.user || '';
+        document.getElementById('pushoverToken').value = pushover.token || '';
+        document.getElementById('pushoverPriority').value = pushover.priority != null ? pushover.priority : 0;
+        const gotify = n.gotify || {};
+        document.getElementById('gotifyServer').value = gotify.serverUrl || '';
+        document.getElementById('gotifyToken').value = gotify.token || '';
+        document.getElementById('gotifyPriority').value = gotify.priority != null ? gotify.priority : 5;
       } catch (e) {
         console.error(e);
       }
@@ -137,6 +241,32 @@
                 pass: document.getElementById('smtpPass').value || undefined
               }
             }
+          },
+          webhook: {
+            url: document.getElementById('webhookUrl').value.trim() || undefined
+          },
+          slack: {
+            webhookUrl: document.getElementById('slackWebhook').value.trim() || undefined
+          },
+          telegram: {
+            botToken: document.getElementById('telegramToken').value.trim() || undefined,
+            chatId: document.getElementById('telegramChat').value.trim() || undefined
+          },
+          twilio: {
+            accountSid: document.getElementById('twilioSid').value.trim() || undefined,
+            authToken: document.getElementById('twilioToken').value || undefined,
+            from: document.getElementById('twilioFrom').value.trim() || undefined,
+            to: document.getElementById('twilioTo').value.trim() || undefined
+          },
+          pushover: {
+            user: document.getElementById('pushoverUser').value.trim() || undefined,
+            token: document.getElementById('pushoverToken').value.trim() || undefined,
+            priority: Number(document.getElementById('pushoverPriority').value)
+          },
+          gotify: {
+            serverUrl: document.getElementById('gotifyServer').value.trim() || undefined,
+            token: document.getElementById('gotifyToken').value.trim() || undefined,
+            priority: Number(document.getElementById('gotifyPriority').value)
           }
         };
         const resp = await fetch('/api/config/notifiers', {
