@@ -361,6 +361,10 @@ function summaryFromResponse(resp) {
 async function pollServer(s) {
   const base = (s.baseUrl || '').replace(/\/$/, '');
   let pathSuffix = s.apiPath || defaultPathForType(s.type) || '/';
+  // For Jellyfin/Emby, override legacy /System/Info path to use /Sessions so we actually get active sessions
+  if ((s.type === 'jellyfin' || s.type === 'emby') && (!s.apiPath || s.apiPath === '/System/Info')) {
+    pathSuffix = defaultPathForType(s.type);
+  }
   let finalUrl = base + pathSuffix;
   const start = Date.now();
   const headers = {};
