@@ -203,13 +203,15 @@ function summaryFromResponse(resp) {
           const base = resp.config.serverConfig.baseUrl;
           const token = encodeURIComponent(resp.config.serverConfig.token);
           if (m.type === 'live') {
-            // Live TV: prefer the live item thumb, but fall back to parent/series art
+            // Live TV: prefer the live item thumb, but fall back to parent/series art or background art
             if (m.thumb) {
               posterUrl = `${base}${m.thumb}?X-Plex-Token=${token}`;
             } else if (m.grandparentThumb) {
               posterUrl = `${base}${m.grandparentThumb}?X-Plex-Token=${token}`;
             } else if (m.parentThumb) {
               posterUrl = `${base}${m.parentThumb}?X-Plex-Token=${token}`;
+            } else if (m.art) {
+              posterUrl = `${base}${m.art}?X-Plex-Token=${token}`;
             }
           } else {
             // Prefer series/parent artwork for TV episodes when available
@@ -219,9 +221,13 @@ function summaryFromResponse(resp) {
               posterUrl = `${base}${m.parentThumb}?X-Plex-Token=${token}`;
             } else if (m.thumb) {
               posterUrl = `${base}${m.thumb}?X-Plex-Token=${token}`;
+            } else if (m.art) {
+              posterUrl = `${base}${m.art}?X-Plex-Token=${token}`;
             }
           }
         }
+        // Fallback placeholder for live TV if no artwork is available
+        const normalizedPoster = posterUrl || (m.type === 'live' ? '/live_tv_placeholder.svg' : undefined);
         // Robust transcoding detection for Plex
         let transcoding = false;
         if (m.Media && Array.isArray(m.Media)) {
@@ -262,7 +268,7 @@ function summaryFromResponse(resp) {
           year: m.year,
           platform: m.platform || m.Player?.platform || m.Player?.product || '',
           state: m.state || m.Player?.state || '',
-          poster: m.poster || posterUrl,
+          poster: m.poster || normalizedPoster,
           duration: m.duration ? Math.round(m.duration / 1000) : 0,
           viewOffset: m.viewOffset || 0,
           progress: m.progress || (m.duration ? Math.round((m.viewOffset || 0) / m.duration * 100) : 0),
@@ -358,7 +364,7 @@ function summaryFromResponse(resp) {
           if (resp.config && resp.config.serverConfig) {
             const base = resp.config.serverConfig.baseUrl;
             const token = encodeURIComponent(resp.config.serverConfig.token);
-            // Live TV uses the NowPlaying item artwork
+            // Live TV uses the NowPlaying item artwork when present
             if (s.NowPlayingItem?.Type === 'LiveTv' && s.NowPlayingItem?.ImageTags?.Primary) {
               posterUrl = `${base}/Items/${s.NowPlayingItem.Id}/Images/Primary?api_key=${token}`;
             } else if (s.NowPlayingItem?.ImageTags?.Primary) {
@@ -370,6 +376,10 @@ function summaryFromResponse(resp) {
                 posterUrl = `${base}/Items/${s.NowPlayingItem.Id}/Images/Primary?api_key=${token}`;
               }
             }
+          }
+          // Fallback placeholder for LiveTv sessions without artwork
+          if (!posterUrl && s.NowPlayingItem?.Type === 'LiveTv') {
+            posterUrl = '/live_tv_placeholder.svg';
           }
           let streamType = '';
           if (s.PlayState?.PlayMethod) {

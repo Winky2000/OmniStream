@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="240" viewBox="0 0 160 240">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ff6a00"/>
+      <stop offset="100%" stop-color="#ff2e63"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="160" height="240" rx="12" ry="12" fill="url(#grad)"/>
+  <rect x="20" y="50" width="120" height="90" rx="10" ry="10" fill="rgba(0,0,0,0.35)" stroke="rgba(255,255,255,0.75)" stroke-width="3"/>
+  <polygon points="72,80 104,95 72,110" fill="#ffffff"/>
+  <text x="80" y="190" text-anchor="middle" font-family="Segoe UI, Arial" font-size="20" fill="#ffffff" font-weight="600">LIVE TV</text>
+</svg>
