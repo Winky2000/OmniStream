@@ -33,7 +33,11 @@ app.put('/api/servers/:id', (req, res) => {
     fs.writeFileSync(SERVERS_FILE, JSON.stringify(servers, null, 2));
   } catch (e) {
     console.error('Failed to write servers.json after edit:', e.message);
-    return res.status(500).json({error:'Failed to save servers.json'});
+    return res.status(500).json({
+      error: 'Failed to save servers.json',
+      detail: e.message,
+      code: e.code || null
+    });
   }
   res.json(servers[idx]);
 });
@@ -411,7 +415,11 @@ app.post('/api/servers/:id/toggle', (req, res) => {
     fs.writeFileSync(SERVERS_FILE, JSON.stringify(servers, null, 2));
   } catch(e) {
     console.error('Failed to write servers.json after toggle:', e.message);
-    return res.status(500).json({ error: 'Failed to save servers.json' });
+    return res.status(500).json({
+      error: 'Failed to save servers.json',
+      detail: e.message,
+      code: e.code || null
+    });
   }
   res.json(servers[idx]);
 });
@@ -425,7 +433,11 @@ app.delete('/api/servers/:id', (req, res) => {
     fs.writeFileSync(SERVERS_FILE, JSON.stringify(servers, null, 2));
   } catch(e) {
     console.error('Failed to write servers.json after remove:', e.message);
-    return res.status(500).json({ error: 'Failed to save servers.json' });
+    return res.status(500).json({
+      error: 'Failed to save servers.json',
+      detail: e.message,
+      code: e.code || null
+    });
   }
   res.json({removed: removed[0]});
 });
@@ -441,7 +453,11 @@ app.post('/api/servers', (req, res) => {
     console.error('Failed to write servers.json after add:', e.message);
     // Roll back in-memory change so state matches disk
     servers.pop();
-    return res.status(500).json({ error: 'Failed to save servers.json' });
+    return res.status(500).json({
+      error: 'Failed to save servers.json',
+      detail: e.message,
+      code: e.code || null
+    });
   }
   res.json(s);
 });
