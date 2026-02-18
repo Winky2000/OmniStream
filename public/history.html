@@ -25,8 +25,63 @@
     <a href="history.html" class="tab-link active">History</a>
   </div>
   <div class="placeholder">
-    Playback and activity history will appear here.
+    Recent sessions (most recent first):
   </div>
+  <table id="historyTable" style="width:100%;margin-top:12px;border-collapse:collapse;font-size:12px;">
+    <thead>
+      <tr style="text-align:left;border-bottom:1px solid #444;">
+        <th style="padding:4px 6px;">Time</th>
+        <th style="padding:4px 6px;">Server</th>
+        <th style="padding:4px 6px;">User</th>
+        <th style="padding:4px 6px;">Title</th>
+        <th style="padding:4px 6px;">Type</th>
+        <th style="padding:4px 6px;">Stream</th>
+        <th style="padding:4px 6px;">Location</th>
+        <th style="padding:4px 6px;">Bandwidth</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
   <button class="back-btn" onclick="window.location.href='admin.html'">Back to Overview</button>
+
+  <script>
+    async function fetchHistory() {
+      const r = await fetch('/api/history');
+      return await r.json();
+    }
+    async function renderHistory() {
+      try {
+        const { history = [] } = await fetchHistory();
+        const tbody = document.querySelector('#historyTable tbody');
+        tbody.innerHTML = '';
+        // Most recent first
+        const rows = [...history].reverse();
+        rows.forEach(h => {
+          const tr = document.createElement('tr');
+          tr.style.borderBottom = '1px solid #222';
+          function cell(text) {
+            const td = document.createElement('td');
+            td.style.padding = '4px 6px';
+            td.textContent = text;
+            return td;
+          }
+          const timeStr = h.time ? new Date(h.time).toLocaleTimeString() : '';
+          tr.appendChild(cell(timeStr));
+          tr.appendChild(cell(h.serverName || h.serverId || ''));
+          tr.appendChild(cell(h.user || ''));
+          tr.appendChild(cell(h.title || ''));
+          tr.appendChild(cell(h.type || ''));
+          tr.appendChild(cell(h.stream || ''));
+          tr.appendChild(cell(h.location || ''));
+          tr.appendChild(cell(typeof h.bandwidth === 'number' && h.bandwidth > 0 ? h.bandwidth.toFixed(1) + ' Mbps' : ''));
+          tbody.appendChild(tr);
+        });
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    renderHistory();
+    setInterval(renderHistory, 10000);
+  </script>
 </body>
 </html>

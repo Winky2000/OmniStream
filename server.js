@@ -43,6 +43,8 @@ app.put('/api/servers/:id', (req, res) => {
 });
 
 const statuses = {}; // keyed by server.id
+const history = []; // recent session history
+const MAX_HISTORY = 500;
 
 const defaultPathForType = (t) => {
   if (t === 'plex') return '/status/sessions';
@@ -462,6 +464,28 @@ async function pollServer(s) {
 async function pollAll() {
   if (!servers || servers.length === 0) return;
   await Promise.all(servers.map((s) => pollServer(s)));
+  // After polling all servers, snapshot current sessions into history
+  const timestamp = new Date().toISOString();
+  Object.values(statuses).forEach(st => {
+    if (!st.online || !Array.isArray(st.sessions)) return;
+    st.sessions.forEach(sess => {
+      history.push({
+        time: timestamp,
+        serverId: st.id,
+        serverName: st.name,
+        type: st.type,
+        user: sess.user || sess.userName || 'Unknown',
+        title: sess.grandparentTitle || sess.title || sess.channel || 'Idle',
+        stream: sess.stream || '',
+        transcoding: typeof sess.transcoding === 'boolean' ? sess.transcoding : undefined,
+        location: sess.location || '',
+        bandwidth: typeof sess.bandwidth === 'number' ? sess.bandwidth : 0
+      });
+    });
+  });
+  if (history.length > MAX_HISTORY) {
+    history.splice(0, history.length - MAX_HISTORY);
+  }
 }
 
 pollAll();
@@ -476,6 +500,11 @@ app.get('/api/status', (req, res) => {
     if (statuses[s.id]) enabledStatuses[s.id] = statuses[s.id];
   }
   res.json({ servers: enabledServers, statuses: enabledStatuses });
+});
+
+// Simple history API
+app.get('/api/history', (req, res) => {
+  res.json({ history });
 });
 
 

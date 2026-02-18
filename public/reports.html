@@ -24,9 +24,63 @@
     <a href="notifications.html" class="tab-link">Notifications</a>
     <a href="history.html" class="tab-link">History</a>
   </div>
-  <div class="placeholder">
-    Detailed usage and performance reports will appear here.
+  <div id="summary" class="placeholder">
+    Loading summary...
   </div>
   <button class="back-btn" onclick="window.location.href='admin.html'">Back to Overview</button>
+
+  <script>
+    async function fetchStatus() {
+      const r = await fetch('/api/status');
+      return await r.json();
+    }
+    async function fetchHistory() {
+      const r = await fetch('/api/history');
+      return await r.json();
+    }
+    async function renderReports() {
+      try {
+        const [statusData, historyData] = await Promise.all([fetchStatus(), fetchHistory()]);
+        const { servers = [], statuses = {} } = statusData;
+        const { history = [] } = historyData;
+        const summaryDiv = document.getElementById('summary');
+
+        const totalCurrentStreams = Object.values(statuses).reduce((sum, st) => sum + (Array.isArray(st.sessions) ? st.sessions.length : 0), 0);
+        const totalHistoryEntries = history.length;
+
+        const users = new Set();
+        const titles = new Map();
+        history.forEach(h => {
+          if (h.user) users.add(h.user);
+          if (h.title) {
+            titles.set(h.title, (titles.get(h.title) || 0) + 1);
+          }
+        });
+
+        const topTitles = Array.from(titles.entries())
+          .sort((a,b) => b[1]-a[1])
+          .slice(0,5);
+
+        let html = '';
+        html += `<div><b>Current streams:</b> ${totalCurrentStreams}</div>`;
+        html += `<div><b>History entries (recent):</b> ${totalHistoryEntries}</div>`;
+        html += `<div><b>Unique users seen:</b> ${users.size}</div>`;
+
+        if (topTitles.length) {
+          html += '<div style="margin-top:10px;"><b>Top titles (recent):</b><br>';
+          topTitles.forEach(([title,count]) => {
+            html += `${title} &times; ${count}<br>`;
+          });
+          html += '</div>';
+        }
+
+        summaryDiv.innerHTML = html;
+      } catch (e) {
+        console.error(e);
+        document.getElementById('summary').textContent = 'Failed to load reports.';
+      }
+    }
+    renderReports();
+  </script>
 </body>
 </html>
