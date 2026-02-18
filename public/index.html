@@ -341,11 +341,18 @@
             title.appendChild(streamType);
             info.appendChild(title);
             // TV show: show grandparentTitle as main title, and season/episode line
-            let showTitle = sess.grandparentTitle || sess.title || sess.channel || 'Idle';
+            let displayTitle;
+            if (sess.grandparentTitle) {
+              const showName = sess.grandparentTitle;
+              const episodeName = sess.title || sess.channel || 'Episode';
+              displayTitle = `${showName} - ${episodeName}`;
+            } else {
+              displayTitle = sess.title || sess.channel || 'Idle';
+            }
             const sub = document.createElement('div');
             sub.className = 'session-title';
-            sub.textContent = showTitle;
-            sub.title = showTitle;
+            sub.textContent = displayTitle;
+            sub.title = displayTitle;
             info.appendChild(sub);
             // If TV show, add season/episode line
             if (sess.grandparentTitle && (sess.parentIndex || sess.index)) {
