@@ -465,22 +465,26 @@
             progressMeta.className = 'progress-meta';
             const durationSec = typeof sess.duration === 'number' ? sess.duration : 0;
             const offsetSec = typeof sess.viewOffset === 'number' ? sess.viewOffset : 0;
-            function fmtTime(sec) {
+            function fmtHM(sec) {
               if (!sec || sec <= 0 || !isFinite(sec)) return '0:00';
-              const m = Math.floor(sec / 60);
-              const s = Math.floor(sec % 60).toString().padStart(2, '0');
-              return m + ':' + s;
+              const h = Math.floor(sec / 3600);
+              const m = Math.floor((sec % 3600) / 60).toString().padStart(2, '0');
+              return h + ':' + m;
             }
-            const playedStr = durationSec > 0 ? fmtTime(offsetSec) : '--:--';
-            const totalStr = durationSec > 0 ? fmtTime(durationSec) : '--:--';
+            const playedStr = durationSec > 0 ? fmtHM(offsetSec) : '--:--';
+            const totalStr = durationSec > 0 ? fmtHM(durationSec) : '--:--';
             const remainingSec = durationSec > 0 && offsetSec >= 0 && offsetSec < durationSec
               ? (durationSec - offsetSec)
               : 0;
-            const etaStr = remainingSec > 0 ? fmtTime(remainingSec) : '';
+            let endTimeStr = '';
+            if (remainingSec > 0) {
+              const endDate = new Date(Date.now() + remainingSec * 1000);
+              endTimeStr = endDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+            }
             const leftLabel = `▶ Playing`;
             let rightLabel = `${playedStr} / ${totalStr}`;
-            if (etaStr) {
-              rightLabel += ` · ETA ${etaStr}`;
+            if (endTimeStr) {
+              rightLabel += ` · Ends at ${endTimeStr}`;
             }
             const leftSpan = document.createElement('span');
             leftSpan.textContent = leftLabel;
