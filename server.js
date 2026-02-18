@@ -679,6 +679,81 @@ app.get('/api/history', (req, res) => {
   );
 });
 
+// Queryable history API with basic filters and sorting
+app.get('/api/history/query', (req, res) => {
+  if (!historyDb) return res.json({ history: [] });
+  const {
+    serverId,
+    user,
+    q,
+    from,
+    to,
+    sort = 'time',
+    order = 'desc',
+    limit
+  } = req.query;
+
+  const where = [];
+  const params = [];
+  if (serverId) {
+    where.push('serverId = ?');
+    params.push(serverId);
+  }
+  if (user) {
+    where.push('LOWER(user) LIKE ?');
+    params.push(`%${String(user).toLowerCase()}%`);
+  }
+  if (q) {
+    const needle = `%${String(q).toLowerCase()}%`;
+    where.push('(LOWER(title) LIKE ? OR LOWER(stream) LIKE ? OR LOWER(user) LIKE ? OR LOWER(serverName) LIKE ?)');
+    params.push(needle, needle, needle, needle);
+  }
+  if (from) {
+    where.push('time >= ?');
+    params.push(from);
+  }
+  if (to) {
+    where.push('time <= ?');
+    params.push(to);
+  }
+
+  let orderBy = 'time DESC';
+  const dir = String(order).toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+  if (sort === 'bandwidth') {
+    orderBy = `bandwidth ${dir}`;
+  } else {
+    orderBy = `time ${dir}`;
+  }
+
+  const max = Math.min(Number(limit) || MAX_HISTORY, MAX_HISTORY);
+  const sql = `SELECT time, serverId, serverName, type, user, title, stream, transcoding, location, bandwidth
+               FROM history
+               ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+               ORDER BY ${orderBy}
+               LIMIT ?`;
+  params.push(max);
+
+  historyDb.all(sql, params, (err, rows) => {
+    if (err) {
+      console.error('Failed to query history database:', err.message);
+      return res.status(500).json({ history: [] });
+    }
+    const history = rows.map(r => ({
+      time: r.time,
+      serverId: r.serverId,
+      serverName: r.serverName,
+      type: r.type,
+      user: r.user,
+      title: r.title,
+      stream: r.stream,
+      transcoding: typeof r.transcoding === 'number' ? !!r.transcoding : undefined,
+      location: r.location,
+      bandwidth: typeof r.bandwidth === 'number' ? r.bandwidth : 0
+    }));
+    res.json({ history });
+  });
+});
+
 // Import watch history from supported backends (currently Jellyfin only)
 app.post('/api/import-history', async (req, res) => {
   if (!historyDb) return res.status(500).json({ error: 'history DB not available' });

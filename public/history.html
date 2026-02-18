@@ -27,7 +27,17 @@
   <div class="placeholder">
     Recent sessions (most recent first):
   </div>
-  <button id="importBtn" class="back-btn" style="margin-bottom:10px;">Import History from Servers</button>
+  <div style="margin-top:10px;margin-bottom:8px;font-size:12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+    <input id="searchText" type="text" placeholder="Search user/title/server" style="padding:4px 8px;border-radius:6px;border:1px solid #444;background:#181c24;color:#e0e3e8;min-width:200px;">
+    <select id="sortSelect" style="padding:4px 8px;border-radius:6px;border:1px solid #444;background:#181c24;color:#e0e3e8;">
+      <option value="time_desc">Newest first</option>
+      <option value="time_asc">Oldest first</option>
+      <option value="bandwidth_desc">Highest bandwidth</option>
+      <option value="bandwidth_asc">Lowest bandwidth</option>
+    </select>
+    <button id="applyFilters" class="back-btn" style="margin-top:0;">Apply</button>
+    <button id="importBtn" class="back-btn" style="margin-top:0;">Import History from Servers</button>
+  </div>
   <table id="historyTable" style="width:100%;margin-top:12px;border-collapse:collapse;font-size:12px;">
     <thead>
       <tr style="text-align:left;border-bottom:1px solid #444;">
@@ -46,8 +56,20 @@
   <button class="back-btn" onclick="window.location.href='admin.html'">Back to Overview</button>
 
   <script>
+    let currentSearch = '';
+    let currentSort = 'time_desc';
+
     async function fetchHistory() {
-      const r = await fetch('/api/history');
+      const params = new URLSearchParams();
+      if (currentSearch) params.set('q', currentSearch);
+      if (currentSort.startsWith('bandwidth')) {
+        params.set('sort', 'bandwidth');
+        params.set('order', currentSort.endsWith('asc') ? 'asc' : 'desc');
+      } else {
+        params.set('sort', 'time');
+        params.set('order', currentSort.endsWith('asc') ? 'asc' : 'desc');
+      }
+      const r = await fetch('/api/history/query?' + params.toString());
       return await r.json();
     }
     async function renderHistory() {
@@ -55,9 +77,7 @@
         const { history = [] } = await fetchHistory();
         const tbody = document.querySelector('#historyTable tbody');
         tbody.innerHTML = '';
-        // Most recent first
-        const rows = [...history].reverse();
-        rows.forEach(h => {
+        history.forEach(h => {
           const tr = document.createElement('tr');
           tr.style.borderBottom = '1px solid #222';
           function cell(text) {
@@ -81,6 +101,12 @@
         console.error(e);
       }
     }
+    document.getElementById('applyFilters').onclick = async () => {
+      currentSearch = document.getElementById('searchText').value.trim();
+      currentSort = document.getElementById('sortSelect').value;
+      await renderHistory();
+    };
+
     document.getElementById('importBtn').onclick = async () => {
       try {
         const resp = await fetch('/api/import-history', { method: 'POST' });
