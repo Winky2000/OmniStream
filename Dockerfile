@@ -13,18 +13,11 @@ COPY . .
 FROM node:18-alpine
 WORKDIR /usr/src/app
 
-# Create non-root user
-RUN addgroup -S omnigroup && adduser -S omniuser -G omnigroup
-
 # Install curl for healthcheck
 RUN apk add --no-cache curl
 
 # Copy app from builder
 COPY --from=builder /usr/src/app /usr/src/app
-
-# Ensure correct ownership
-RUN chown -R omniuser:omnigroup /usr/src/app
-USER omniuser
 
 ENV NODE_ENV=production
 ENV PORT=3000
