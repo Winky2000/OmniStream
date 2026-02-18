@@ -315,9 +315,9 @@
             session.className = 'session ' + (isTranscoding ? 'transcode' : 'direct');
             // Layout: poster left, info right (horizontal) or stacked (vertical)
             const row = document.createElement('div');
-            row.style.display = layoutMode === 'flex' ? 'flex' : 'block';
-            // In horizontal (flex) layout, stretch children so poster matches text height
-            row.style.alignItems = layoutMode === 'flex' ? 'stretch' : 'flex-start';
+            // Always use a flex row for session content so poster and text line up
+            row.style.display = 'flex';
+            row.style.alignItems = 'stretch';
             // Poster
             if (sess.poster) {
               const img = document.createElement('img');
@@ -325,8 +325,7 @@
               img.src = sess.poster;
               img.alt = 'Poster';
               img.onerror = function() { this.style.display = 'none'; };
-              if (layoutMode === 'flex') row.appendChild(img);
-              else session.appendChild(img);
+              row.appendChild(img);
             }
             // Info block
             const info = document.createElement('div');
