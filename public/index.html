@@ -137,11 +137,20 @@
     .session.direct{border:2px solid var(--session-direct);box-shadow:0 0 12px 2px var(--session-direct),0 1px 2px #0002}
     .session.transcode{border:2px solid var(--session-transcode);box-shadow:0 0 12px 2px var(--session-transcode),0 1px 2px #0002}
     .session-user{font-weight:600;color:#f7c873;font-size:14px}
+    .session-user a{color:#f7c873;text-decoration:none;}
+    .session-user a:hover{text-decoration:underline;}
     .session-title{color:var(--text-main);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
     .session-meta{font-size:11px;color:var(--text-muted);margin-bottom:2px}
     .session-poster{width:80px;object-fit:cover;margin-right:10px;border-radius:3px;box-shadow:0 1px 2px #0003;align-self:stretch}
     .progress-bar{background:#2a2e39;height:4px;border-radius:2px;margin-top:2px;overflow:hidden}
     .progress-fill{background:var(--progress-fill);height:100%;transition:width 0.3s}
+    .badge-row{margin-top:4px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;}
+    .badge{font-size:10px;padding:1px 6px;border-radius:999px;border:1px solid rgba(255,255,255,0.16);background:rgba(0,0,0,0.3);color:var(--text-main);white-space:nowrap;}
+    .badge-wan{border-color:#ff7043;color:#ffab91;}
+    .badge-hdr{border-color:#ffca28;color:#ffecb3;}
+    .badge-uhd{border-color:#29b6f6;color:#b3e5fc;}
+    .badge-codec{border-color:#81c784;color:#c8e6c9;}
+    .badge-product{border-color:#b39ddb;color:#e1bee7;}
   </style>
 </head>
 <body>
@@ -329,7 +338,15 @@
             // User and title
             const title = document.createElement('div');
             title.className = 'session-user';
-            title.textContent = sess.user || sess.userName || 'Unknown';
+            const userName = sess.user || sess.userName || 'Unknown';
+            if (userName) {
+              const userLink = document.createElement('a');
+              userLink.href = 'user.html?user=' + encodeURIComponent(userName);
+              userLink.textContent = userName;
+              title.appendChild(userLink);
+            } else {
+              title.textContent = userName;
+            }
             // Direct Play/Transcoding label
             const streamType = document.createElement('span');
             streamType.style = 'margin-left:8px;font-size:11px;padding:2px 8px;border-radius:6px;font-weight:600;display:inline-block;';
@@ -368,6 +385,37 @@
               if (typeof sess.episodeNumber === 'number') parts.push('Episode ' + sess.episodeNumber);
               seLine.textContent = parts.join(' • ');
               info.appendChild(seLine);
+            }
+            // Badge row: WAN / HDR / 4K / codec / product
+            const badgeRow = document.createElement('div');
+            badgeRow.className = 'badge-row';
+            function addBadge(text, extraClass, titleText) {
+              if (!text) return;
+              const b = document.createElement('span');
+              b.className = 'badge' + (extraClass ? ' ' + extraClass : '');
+              b.textContent = text;
+              if (titleText) b.title = titleText;
+              badgeRow.appendChild(b);
+            }
+            const isWan = sess.location && sess.location.toUpperCase().includes('WAN');
+            if (isWan) addBadge('WAN', 'badge-wan', 'WAN session');
+            const qualityStr = (sess.quality || sess.video || '').toString().toUpperCase();
+            const is4K = qualityStr.includes('4K') || qualityStr.includes('2160');
+            if (is4K) addBadge('4K', 'badge-uhd', 'Ultra HD');
+            const videoInfo = (sess.video || '').toString().toUpperCase();
+            const isHdr = videoInfo.includes('HDR') || videoInfo.includes('DOLBY VISION') || videoInfo.includes('HLG');
+            if (isHdr) addBadge('HDR', 'badge-hdr', 'High Dynamic Range');
+            if (sess.video) {
+              const codecMatch = sess.video.match(/([A-Za-z0-9]+)(?:\s|\/|$)/);
+              if (codecMatch && codecMatch[1]) {
+                addBadge(codecMatch[1].toUpperCase(), 'badge-codec', sess.video);
+              }
+            }
+            if (sess.product) {
+              addBadge(sess.product, 'badge-product', 'Client: ' + sess.product);
+            }
+            if (badgeRow.childNodes.length > 0) {
+              info.appendChild(badgeRow);
             }
             // Info list
             const infoList = document.createElement('div');
