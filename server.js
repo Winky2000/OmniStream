@@ -217,9 +217,64 @@ function summaryFromResponse(resp) {
           } else if (s.state) {
             streamType = s.state;
           }
+          // Try to derive more detailed media info
+          const mediaStreams = s.NowPlayingItem?.MediaStreams || [];
+          const videoStream = mediaStreams.find(ms => ms.Type === 'Video');
+          const audioStream = mediaStreams.find(ms => ms.Type === 'Audio');
+          const subtitleStream = mediaStreams.find(ms => ms.Type === 'Subtitle' || ms.Type === 'Subtitles');
+
+          let container = s.NowPlayingItem?.Container || s.TranscodingInfo?.Container || '';
+          let quality = '';
+          if (videoStream && (videoStream.Width || videoStream.Height)) {
+            const w = videoStream.Width || '';
+            const h = videoStream.Height || '';
+            if (w && h) quality = `${w}x${h}`;
+          } else if (s.TranscodingInfo && s.TranscodingInfo.Height && s.TranscodingInfo.Width) {
+            quality = `${s.TranscodingInfo.Width}x${s.TranscodingInfo.Height}`;
+          }
+
+          let video = '';
+          if (videoStream) {
+            const codec = videoStream.Codec || videoStream.codec || '';
+            const w = videoStream.Width || videoStream.width || '';
+            const h = videoStream.Height || videoStream.height || '';
+            video = `${codec}${w && h ? ` ${w}x${h}` : ''}`.trim();
+          }
+
+          let audio = '';
+          if (audioStream) {
+            const acodec = audioStream.Codec || audioStream.codec || '';
+            const lang = audioStream.Language || audioStream.language || '';
+            const ch = audioStream.Channels || audioStream.channels || '';
+            audio = `${acodec}${lang ? ` ${lang}` : ''}${ch ? ` ${ch}ch` : ''}`.trim();
+          }
+
+          let subtitle = 'None';
+          if (subtitleStream) {
+            const slang = subtitleStream.Language || subtitleStream.language || '';
+            subtitle = slang || 'Subtitle';
+          }
+
+          // Location / WAN detection
+          let location = '';
+          if (typeof s.IsInLocalNetwork === 'boolean') {
+            location = s.IsInLocalNetwork ? 'LAN' : 'WAN';
+          }
+          let ip = '';
+          if (s.RemoteEndPoint) {
+            ip = s.RemoteEndPoint;
+            if (!location) location = 'WAN';
+          }
+
+          // Bandwidth in Mbps if possible
           let bandwidth = 0;
           if (typeof s.bandwidth === 'number') bandwidth = s.bandwidth;
           else if (typeof s.bandwidth === 'string') bandwidth = parseFloat(s.bandwidth) || 0;
+          else if (s.TranscodingInfo && s.TranscodingInfo.Bitrate) {
+            bandwidth = Number(s.TranscodingInfo.Bitrate) / 1000000; // bits/s -> Mbps
+          } else if (videoStream && videoStream.Bitrate) {
+            bandwidth = Number(videoStream.Bitrate) / 1000000;
+          }
           return {
             user: s.UserName || 'Unknown',
             title: s.NowPlayingItem?.Name || 'Idle',
@@ -233,7 +288,16 @@ function summaryFromResponse(resp) {
             progress: (s.PlayState?.PositionTicks && s.NowPlayingItem?.RunTimeTicks) 
               ? Math.round(s.PlayState.PositionTicks / s.NowPlayingItem.RunTimeTicks * 100) 
               : 0,
+            product: s.Client || s.DeviceName || '',
+            player: s.DeviceName || s.Client || '',
+            quality,
             stream: streamType,
+            container,
+            video,
+            audio,
+            subtitle,
+            location,
+            ip,
             bandwidth,
           };
         }
