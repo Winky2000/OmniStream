@@ -58,6 +58,27 @@
   --progress-fill: #00ff00;
 }
 
+/* Purple theme */
+:root[data-theme="purple"] {
+  --bg: #110018;
+  --text-main: #f5e9ff;
+  --text-muted: #c6a4ff;
+  --text-faint: #8d6bcf;
+  --card-bg: #1c0730;
+  --border-offline: #4a2f6f;
+  --btn-bg: #1c0730;
+  --btn-border: #ba68c8;
+  --btn-text: #e1bee7;
+  --btn-bg-hover: #260a42;
+  --btn-text-hover: #ffffff;
+  --plex-color: #ce93d8;
+  --jellyfin-color: #7e57c2;
+  --emby-color: #ab47bc;
+  --session-direct: #81c784;
+  --session-transcode: #ff5370;
+  --progress-fill: #ba68c8;
+}
+
 /* Ocean theme */
 :root[data-theme="ocean"] {
   --bg: #02131f;
@@ -79,6 +100,27 @@
   --progress-fill: #29b6f6;
 }
 
+/* Yellow theme */
+:root[data-theme="yellow"] {
+  --bg: #1f1900;
+  --text-main: #fff9c4;
+  --text-muted: #ffe082;
+  --text-faint: #c8a600;
+  --card-bg: #302300;
+  --border-offline: #5d4a00;
+  --btn-bg: #302300;
+  --btn-border: #ffd54f;
+  --btn-text: #ffe082;
+  --btn-bg-hover: #3c2c00;
+  --btn-text-hover: #ffffff;
+  --plex-color: #ffd54f;
+  --jellyfin-color: #ffb74d;
+  --emby-color: #ffca28;
+  --session-direct: #aeea00;
+  --session-transcode: #ff7043;
+  --progress-fill: #ffd54f;
+}
+
 /* Forest theme */
 :root[data-theme="forest"] {
   --bg: #04120a;
@@ -98,6 +140,27 @@
   --session-direct: #00e676;
   --session-transcode: #ff7043;
   --progress-fill: #66bb6a;
+}
+
+/* Orange theme */
+:root[data-theme="orange"] {
+  --bg: #1a0900;
+  --text-main: #fff3e0;
+  --text-muted: #ffcc80;
+  --text-faint: #ef6c00;
+  --card-bg: #2a1200;
+  --border-offline: #5d3412;
+  --btn-bg: #2a1200;
+  --btn-border: #ff9800;
+  --btn-text: #ffcc80;
+  --btn-bg-hover: #341702;
+  --btn-text-hover: #ffffff;
+  --plex-color: #ff9800;
+  --jellyfin-color: #ffb74d;
+  --emby-color: #ff7043;
+  --session-direct: #a5d6a7;
+  --session-transcode: #ff5722;
+  --progress-fill: #ff9800;
 }
 
 /* Light theme with subtle borders */
