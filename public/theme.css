@@ -100,6 +100,27 @@
   --progress-fill: #29b6f6;
 }
 
+/* Winter theme */
+:root[data-theme="winter"] {
+  --bg: #0b1620;
+  --text-main: #e8f5ff;
+  --text-muted: #b3cde8;
+  --text-faint: #7f8fa3;
+  --card-bg: #122330;
+  --border-offline: #3b4c5c;
+  --btn-bg: #122330;
+  --btn-border: #90caf9;
+  --btn-text: #e3f2fd;
+  --btn-bg-hover: #183044;
+  --btn-text-hover: #ffffff;
+  --plex-color: #90caf9;
+  --jellyfin-color: #80deea;
+  --emby-color: #b3e5fc;
+  --session-direct: #a5d6a7;
+  --session-transcode: #ef9a9a;
+  --progress-fill: #90caf9;
+}
+
 /* Yellow theme */
 :root[data-theme="yellow"] {
   --bg: #1f1900;
