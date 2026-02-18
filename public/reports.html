@@ -5,14 +5,119 @@
   <title>OmniStream Reports</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <style>
-    body{font-family:Segoe UI,Arial;background:#181c24;color:#e0e3e8;margin:0;padding:20px}
-    h1{margin:0 0 8px 0;color:#fff;letter-spacing:1px;font-size:2em}
+    :root {
+      --bg: #181c24;
+      --text-main: #e0e3e8;
+      --text-muted: #a0a4b0;
+      --text-faint: #888;
+      --card-bg: #232837;
+      --border-offline: #444;
+      --btn-bg: #181c24;
+      --btn-border: #00bfff;
+      --btn-text: #00bfff;
+      --btn-bg-hover: #232837;
+      --btn-text-hover: #ffffff;
+    }
+
+    :root[data-theme="minimal"] {
+      --bg: #0f1115;
+      --text-main: #f5f5f5;
+      --text-muted: #b0b3b8;
+      --text-faint: #7a7d86;
+      --card-bg: #171a22;
+      --border-offline: #3a3d45;
+      --btn-bg: #171a22;
+      --btn-border: #888;
+      --btn-text: #f5f5f5;
+      --btn-bg-hover: #20232b;
+      --btn-text-hover: #ffffff;
+    }
+
+    :root[data-theme="high-contrast"] {
+      --bg: #000000;
+      --text-main: #ffffff;
+      --text-muted: #e0e0e0;
+      --text-faint: #bbbbbb;
+      --card-bg: #101010;
+      --border-offline: #555555;
+      --btn-bg: #000000;
+      --btn-border: #ffffff;
+      --btn-text: #ffffff;
+      --btn-bg-hover: #202020;
+      --btn-text-hover: #ffffff;
+    }
+
+    :root[data-theme="light"] {
+      --bg: #f4f5f7;
+      --text-main: #111111;
+      --text-muted: #555555;
+      --text-faint: #888888;
+      --card-bg: #ffffff;
+      --border-offline: #cccccc;
+      --btn-bg: #ffffff;
+      --btn-border: #cccccc;
+      --btn-text: #333333;
+      --btn-bg-hover: #f0f0f0;
+      --btn-text-hover: #111111;
+    }
+
+    :root[data-theme="light-borderless"] {
+      --bg: #f8f9fb;
+      --text-main: #111111;
+      --text-muted: #555555;
+      --text-faint: #888888;
+      --card-bg: #ffffff;
+      --border-offline: #e0e0e0;
+      --btn-bg: #ffffff;
+      --btn-border: #dddddd;
+      --btn-text: #333333;
+      --btn-bg-hover: #f2f3f6;
+      --btn-text-hover: #111111;
+    }
+
+    :root[data-theme="ocean"] {
+      --bg: #02131f;
+      --text-main: #e3f2fd;
+      --text-muted: #90caf9;
+      --text-faint: #5f7990;
+      --card-bg: #031d2c;
+      --border-offline: #345269;
+      --btn-bg: #031d2c;
+      --btn-border: #4fc3f7;
+      --btn-text: #4fc3f7;
+      --btn-bg-hover: #042639;
+      --btn-text-hover: #ffffff;
+    }
+
+    :root[data-theme="forest"] {
+      --bg: #04120a;
+      --text-main: #e8f5e9;
+      --text-muted: #a5d6a7;
+      --text-faint: #78957f;
+      --card-bg: #062015;
+      --border-offline: #2e4738;
+      --btn-bg: #062015;
+      --btn-border: #66bb6a;
+      --btn-text: #a5d6a7;
+      --btn-bg-hover: #08301f;
+      --btn-text-hover: #ffffff;
+    }
+
+    body{font-family:Segoe UI,Arial;background:var(--bg);color:var(--text-main);margin:0;padding:20px}
+    h1{margin:0 0 12px 0;color:var(--text-main);letter-spacing:1px;font-size:2em}
     .tabs{display:flex;gap:10px;margin-bottom:20px;border-bottom:1px solid #333;padding-bottom:8px;}
     .tab-link{padding:6px 14px;border-radius:999px;border:1px solid #444;background:#232837;color:#e0e3e8;text-decoration:none;font-size:13px;cursor:pointer;}
     .tab-link.active{border-color:#00bfff;background:#00bfff;color:#000;}
-    .placeholder{margin-top:24px;font-size:14px;color:#b0b3b8;}
-    .back-btn{margin-top:12px;padding:6px 14px;border-radius:8px;border:1px solid #555;background:#232837;color:#e0e3e8;cursor:pointer;}
+    .placeholder{margin-top:16px;font-size:14px;color:#b0b3b8;}
+    .back-btn{margin-top:16px;padding:6px 14px;border-radius:8px;border:1px solid #555;background:#232837;color:#e0e3e8;cursor:pointer;}
     .back-btn:hover{background:#2b3040;}
+    .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px;margin-top:18px;}
+    .card{background:var(--card-bg);border-radius:14px;padding:16px 18px;box-shadow:0 2px 10px #0006;border:1px solid #2f3a52;}
+    .card h2{margin:0 0 8px 0;font-size:15px;color:#fff;}
+    .metric{font-size:13px;margin:3px 0;}
+    .list-item{font-size:13px;margin:2px 0;}
+    .user-link{color:#4fc3f7;text-decoration:none;}
+    .user-link:hover{text-decoration:underline;}
   </style>
 </head>
 <body>
@@ -24,9 +129,7 @@
     <a href="notifications.html" class="tab-link">Notifications</a>
     <a href="history.html" class="tab-link">History</a>
   </div>
-  <div id="summary" class="placeholder">
-    Loading summary...
-  </div>
+  <div id="summary" class="placeholder">Loading summary...</div>
   <button class="back-btn" onclick="window.location.href='admin.html'">Back to Overview</button>
 
   <script>
@@ -67,26 +170,38 @@
           .sort((a,b) => b[1]-a[1])
           .slice(0,5);
 
-        let html = '';
-        html += `<div><b>Current streams:</b> ${totalCurrentStreams}</div>`;
-        html += `<div><b>History entries (recent):</b> ${totalHistoryEntries}</div>`;
-        html += `<div><b>Unique users seen:</b> ${users.size}</div>`;
+        let html = '<div class="cards">';
+        html += '<div class="card">';
+        html += '<h2>Overview</h2>';
+        html += `<div class="metric"><b>Current streams:</b> ${totalCurrentStreams}</div>`;
+        html += `<div class="metric"><b>History entries (recent):</b> ${totalHistoryEntries}</div>`;
+        html += `<div class="metric"><b>Unique users seen:</b> ${users.size}</div>`;
+        html += '</div>';
 
+        html += '<div class="card">';
+        html += '<h2>Top titles (recent)</h2>';
         if (topTitles.length) {
-          html += '<div style="margin-top:10px;"><b>Top titles (recent):</b><br>';
           topTitles.forEach(([title,count]) => {
-            html += `${title} &times; ${count}<br>`;
+            html += `<div class="list-item">${title} &times; ${count}</div>`;
           });
-          html += '</div>';
+        } else {
+          html += '<div class="list-item">No history yet.</div>';
         }
+        html += '</div>';
 
+        html += '<div class="card">';
+        html += '<h2>Top users (recent)</h2>';
         if (topUsers.length) {
-          html += '<div style="margin-top:10px;"><b>Top users (by plays, recent):</b><br>';
           topUsers.forEach(([user,count]) => {
-            html += `${user} × ${count}<br>`;
+            const href = 'user.html?user=' + encodeURIComponent(user);
+            html += `<div class="list-item"><a class="user-link" href="${href}">${user}</a> &times; ${count}</div>`;
           });
-          html += '</div>';
+        } else {
+          html += '<div class="list-item">No users yet.</div>';
         }
+        html += '</div>';
+
+        html += '</div>';
 
         summaryDiv.innerHTML = html;
       } catch (e) {
@@ -95,6 +210,13 @@
       }
     }
     renderReports();
+    // Apply saved theme
+    (function() {
+      const savedTheme = localStorage.getItem('omnistreamTheme') || 'default';
+      if (savedTheme && savedTheme !== 'default') {
+        document.documentElement.setAttribute('data-theme', savedTheme);
+      }
+    })();
   </script>
 </body>
 </html>
