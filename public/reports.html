@@ -21,9 +21,7 @@
     .list-item{font-size:13px;margin:2px 0;}
     .user-link{color:#4fc3f7;text-decoration:none;}
     .user-link:hover{text-decoration:underline;}
-    canvas{max-width:100%;}
   </style>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
   <h1>Reports</h1>
@@ -76,89 +74,6 @@
           .sort((a,b) => b[1]-a[1])
           .slice(0,5);
 
-        // Analytics aggregations
-        const perServer = new Map();
-        const perUserBandwidth = new Map();
-
-        function isWan(location) {
-          return typeof location === 'string' && location.toLowerCase().includes('wan');
-        }
-
-        function isTranscodeFlag(transcoding) {
-          if (typeof transcoding === 'boolean') return transcoding;
-          if (typeof transcoding === 'string') {
-            const v = transcoding.toLowerCase();
-            return v === 'transcode' || v === 'transcoded' || v === 'transcoding';
-          }
-          return false;
-        }
-
-        history.forEach(h => {
-          const serverKey = h.serverName || h.serverId || 'Unknown';
-          const locIsWan = isWan(h.location);
-          const bw = typeof h.bandwidth === 'number' ? h.bandwidth : 0;
-          const transcode = isTranscodeFlag(h.transcoding);
-
-          let s = perServer.get(serverKey);
-          if (!s) {
-            s = { plays: 0, totalBandwidth: 0, wanPlays: 0, wanBandwidth: 0, wanTranscodePlays: 0 };
-            perServer.set(serverKey, s);
-          }
-          s.plays += 1;
-          s.totalBandwidth += bw;
-          if (locIsWan) {
-            s.wanPlays += 1;
-            s.wanBandwidth += bw;
-            if (transcode) s.wanTranscodePlays += 1;
-          }
-
-          if (h.user) {
-            let u = perUserBandwidth.get(h.user);
-            if (!u) {
-              u = { plays: 0, totalBandwidth: 0, wanBandwidth: 0, wanTranscodePlays: 0 };
-              perUserBandwidth.set(h.user, u);
-            }
-            u.plays += 1;
-            u.totalBandwidth += bw;
-            if (locIsWan) {
-              u.wanBandwidth += bw;
-              if (transcode) u.wanTranscodePlays += 1;
-            }
-          }
-        });
-
-        const perServerEntries = Array.from(perServer.entries());
-        const perUserByBandwidth = Array.from(perUserBandwidth.entries())
-          .sort((a,b) => (b[1].totalBandwidth || 0) - (a[1].totalBandwidth || 0))
-          .slice(0,10);
-
-        const topWanTranscoders = Array.from(perUserBandwidth.entries())
-          .filter(([_, u]) => u.wanTranscodePlays > 0)
-          .sort((a,b) => b[1].wanTranscodePlays - a[1].wanTranscodePlays)
-          .slice(0,5);
-
-        // Sessions over time (by hour)
-        const sessionsByHour = new Map();
-        history.forEach(h => {
-          if (!h.time) return;
-          const d = new Date(h.time);
-          if (isNaN(d)) return;
-          const key = d.getFullYear() + '-' +
-            String(d.getMonth() + 1).padStart(2, '0') + '-' +
-            String(d.getDate()).padStart(2, '0') + ' ' +
-            String(d.getHours()).padStart(2, '0') + ':00';
-          sessionsByHour.set(key, (sessionsByHour.get(key) || 0) + 1);
-        });
-
-        let sessionsSeries = Array.from(sessionsByHour.entries())
-          .sort((a,b) => a[0].localeCompare(b[0]));
-        const maxPoints = 48;
-        if (sessionsSeries.length > maxPoints) {
-          sessionsSeries = sessionsSeries.slice(sessionsSeries.length - maxPoints);
-        }
-        const sessionLabels = sessionsSeries.map(([k]) => k);
-        const sessionCounts = sessionsSeries.map(([_, v]) => v);
-
         let html = '<div class="cards">';
         html += '<div class="card">';
         html += '<h2>Overview</h2>';
@@ -190,85 +105,9 @@
         }
         html += '</div>';
 
-        if (perServerEntries.length) {
-          html += '<div class="card">';
-          html += '<h2>Per-server bandwidth (recent)</h2>';
-          perServerEntries.forEach(([name, s]) => {
-            html += `<div class="list-item"><b>${name}</b>: plays ${s.plays}, total ${s.totalBandwidth.toFixed(1)} Mbps, WAN ${s.wanBandwidth.toFixed(1)} Mbps, WAN transcodes ${s.wanTranscodePlays}</div>`;
-          });
-          html += '</div>';
-        }
-
-        if (perUserByBandwidth.length) {
-          html += '<div class="card">';
-          html += '<h2>Per-user bandwidth (recent)</h2>';
-          perUserByBandwidth.forEach(([user, u]) => {
-            const href = 'user.html?user=' + encodeURIComponent(user);
-            html += `<div class="list-item"><a class="user-link" href="${href}">${user}</a>: total ${u.totalBandwidth.toFixed(1)} Mbps, WAN ${u.wanBandwidth.toFixed(1)} Mbps</div>`;
-          });
-          html += '</div>';
-        }
-
-        if (topWanTranscoders.length) {
-          html += '<div class="card">';
-          html += '<h2>Top WAN transcoders</h2>';
-          topWanTranscoders.forEach(([user, u]) => {
-            const href = 'user.html?user=' + encodeURIComponent(user);
-            html += `<div class="list-item"><a class="user-link" href="${href}">${user}</a>: ${u.wanTranscodePlays} WAN transcode plays</div>`;
-          });
-          html += '</div>';
-        }
-
-        if (sessionLabels.length) {
-          html += '<div class="card">';
-          html += '<h2>Sessions over time</h2>';
-          html += '<canvas id="sessionsOverTimeChart" height="140"></canvas>';
-          html += '</div>';
-        }
-
         html += '</div>';
 
         summaryDiv.innerHTML = html;
-
-        // Render chart if available
-        if (sessionLabels.length && typeof Chart !== 'undefined') {
-          const canvas = document.getElementById('sessionsOverTimeChart');
-          if (canvas) {
-            const ctx = canvas.getContext('2d');
-            new Chart(ctx, {
-              type: 'line',
-              data: {
-                labels: sessionLabels,
-                datasets: [{
-                  label: 'Sessions',
-                  data: sessionCounts,
-                  borderColor: '#4fc3f7',
-                  backgroundColor: 'rgba(79,195,247,0.2)',
-                  tension: 0.2,
-                  fill: true,
-                  pointRadius: 0
-                }]
-              },
-              options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: { display: false }
-                },
-                scales: {
-                  x: {
-                    ticks: { maxTicksLimit: 6 },
-                    grid: { display: false }
-                  },
-                  y: {
-                    beginAtZero: true,
-                    grid: { color: 'rgba(255,255,255,0.05)' }
-                  }
-                }
-              }
-            });
-          }
-        }
       } catch (e) {
         console.error(e);
         document.getElementById('summary').textContent = 'Failed to load reports.';
