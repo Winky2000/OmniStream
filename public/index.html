@@ -39,19 +39,29 @@
       background: #232837;
       border-radius: 18px;
       padding: 32px 32px 28px 32px;
-      box-shadow: 0 2px 18px #0004, 0 0 24px 6px #00bfff, 0 0 18px #00bfff44;
+      box-shadow: 0 2px 18px #0004;
       border: 4px solid #00bfff;
       min-width: 420px;
       max-width: 520px;
       width: 100%;
       transition: border-color 0.3s, box-shadow 0.3s, min-width 0.3s, max-width 0.3s, padding 0.3s;
     }
+    .card.card-plex {
+      border-color: #00bfff;
+      box-shadow: 0 2px 18px #0004, 0 0 24px 6px #00bfff, 0 0 18px #00bfff66;
+    }
+    .card.card-jellyfin {
+      border-color: #00ffff;
+      box-shadow: 0 2px 18px #0004, 0 0 24px 6px #00ffff, 0 0 18px #00ffff66;
+    }
+    .card.card-emby {
+      border-color: #bf00ff;
+      box-shadow: 0 2px 18px #0004, 0 0 24px 6px #bf00ff, 0 0 18px #bf00ff66;
+    }
     .session {
       background: #232837;
       border-radius: 8px;
       margin-bottom: 10px;
-      border: 2px solid orange;
-      box-shadow: 0 0 12px 2px orange, 0 1px 2px #0002;
       padding: 7.2px 7.2px 7.2px 7.2px;
       line-height: 1.4;
       font-size: 13.2px;
@@ -82,6 +92,8 @@
     .sessions{font-size:11px;border-top:1px solid #222;padding-top:8px;margin-top:8px;display:flex;flex-direction:column;gap:8px;}
     .sessions.flex-sessions{flex-direction:row;flex-wrap:wrap;gap:18px;align-items:flex-start;}
     .session{background:#232837;padding:6px;border-radius:4px;margin-bottom:4px;line-height:1.4;box-shadow:0 1px 2px #0002}
+    .session.direct{border:2px solid #39ff14;box-shadow:0 0 12px 2px #39ff14,0 1px 2px #0002}
+    .session.transcode{border:2px solid #ff073a;box-shadow:0 0 12px 2px #ff073a,0 1px 2px #0002}
     .session-user{font-weight:600;color:#f7c873}
     .session-title{color:#e0e3e8;font-size:11px}
     .session-meta{font-size:10px;color:#b0b3b8;margin-bottom:2px}
@@ -132,7 +144,8 @@
       servers.forEach(s => {
         const st = statuses && statuses[s.id] ? statuses[s.id] : { online: false };
         const card = document.createElement('div');
-        card.className = 'card ' + (st.online ? '' : 'offline') + (layoutMode === 'flex' ? ' flex-full' : '');
+        const typeClass = s.type ? ('card-' + s.type.toLowerCase()) : '';
+        card.className = 'card ' + typeClass + ' ' + (st.online ? '' : 'offline') + (layoutMode === 'flex' ? ' flex-full' : '');
         // In flex (horizontal) mode, cards are 100% width; in grid (vertical), cards are full width
         if (layoutMode === 'flex') {
           card.style.minWidth = '100%';
@@ -188,7 +201,16 @@
           sessionsDiv.className = 'sessions' + (layoutMode === 'flex' ? ' horizontal-grid' : '');
           st.sessions.forEach(sess => {
             const session = document.createElement('div');
-            session.className = 'session';
+            // Classify direct play vs transcode for border color
+            let isTranscoding = false;
+            if (typeof sess.transcoding === 'boolean') {
+              isTranscoding = sess.transcoding;
+            } else if (sess.stream && typeof sess.stream === 'string' && sess.stream.toLowerCase().includes('transcode')) {
+              isTranscoding = true;
+            } else if (sess.state && typeof sess.state === 'string' && sess.state.toLowerCase().includes('transcode')) {
+              isTranscoding = true;
+            }
+            session.className = 'session ' + (isTranscoding ? 'transcode' : 'direct');
             // Layout: poster left, info right (horizontal) or stacked (vertical)
             const row = document.createElement('div');
             row.style.display = layoutMode === 'flex' ? 'flex' : 'block';
