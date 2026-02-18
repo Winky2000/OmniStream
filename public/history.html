@@ -27,6 +27,7 @@
   <div class="placeholder">
     Recent sessions (most recent first):
   </div>
+  <button id="importBtn" class="back-btn" style="margin-bottom:10px;">Import History from Servers</button>
   <table id="historyTable" style="width:100%;margin-top:12px;border-collapse:collapse;font-size:12px;">
     <thead>
       <tr style="text-align:left;border-bottom:1px solid #444;">
@@ -80,6 +81,20 @@
         console.error(e);
       }
     }
+    document.getElementById('importBtn').onclick = async () => {
+      try {
+        const resp = await fetch('/api/import-history', { method: 'POST' });
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => '');
+          alert('Import failed: ' + (text || resp.status + ' ' + resp.statusText));
+          return;
+        }
+        await renderHistory();
+      } catch (e) {
+        console.error(e);
+        alert('Import failed. Check server logs for details.');
+      }
+    };
     renderHistory();
     setInterval(renderHistory, 10000);
   </script>

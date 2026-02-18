@@ -92,6 +92,80 @@ const defaultPathForType = (t) => {
   return '/';
 };
 
+// Import watch history helpers (currently implemented for Jellyfin)
+async function importJellyfinHistory(server, { limitPerUser = 100 } = {}) {
+  if (!historyDb) return { serverId: server.id, type: server.type, imported: 0, error: 'history DB not available' };
+  const base = (server.baseUrl || '').replace(/\/$/, '');
+  if (!server.token) {
+    return { serverId: server.id, type: server.type, imported: 0, error: 'no token configured' };
+  }
+  const headers = { 'X-MediaBrowser-Token': server.token };
+  try {
+    // Get all visible users
+    const usersResp = await axios.get(base + '/Users', { headers, timeout: 15000 });
+    const users = Array.isArray(usersResp.data) ? usersResp.data : [];
+    let imported = 0;
+    // For each user, pull recently played movies/episodes
+    for (const u of users) {
+      if (!u || !u.Id) continue;
+      const itemsResp = await axios.get(base + `/Users/${encodeURIComponent(u.Id)}/Items`, {
+        headers,
+        timeout: 20000,
+        params: {
+          Filters: 'IsPlayed',
+          IncludeItemTypes: 'Movie,Episode',
+          SortBy: 'DatePlayed',
+          SortOrder: 'Descending',
+          Limit: limitPerUser
+        }
+      });
+      const items = itemsResp.data && itemsResp.data.Items ? itemsResp.data.Items : [];
+      if (!items.length) continue;
+      await new Promise((resolve) => {
+        historyDb.serialize(() => {
+          const stmt = historyDb.prepare(
+            'INSERT INTO history (time, serverId, serverName, type, user, title, stream, transcoding, location, bandwidth) VALUES (?,?,?,?,?,?,?,?,?,?)'
+          );
+          items.forEach(it => {
+            const time = (it.UserData && it.UserData.LastPlayedDate) || it.DatePlayed || new Date().toISOString();
+            const title = it.SeriesName ? `${it.SeriesName} - ${it.Name}` : it.Name || 'Unknown';
+            const mediaType = it.Type || it.MediaType || '';
+            stmt.run(
+              time,
+              server.id,
+              server.name || server.baseUrl,
+              server.type,
+              u.Name || u.Username || 'Unknown',
+              title,
+              mediaType,
+              null,
+              '',
+              0
+            );
+            imported++;
+          });
+          stmt.finalize(() => resolve());
+        });
+      });
+    }
+    // Trim DB after import
+    await new Promise((resolve) => {
+      historyDb.run(
+        'DELETE FROM history WHERE id NOT IN (SELECT id FROM history ORDER BY id DESC LIMIT ?)',
+        [MAX_HISTORY],
+        (err) => {
+          if (err) console.error('Failed to trim history database after import:', err.message);
+          resolve();
+        }
+      );
+    });
+    return { serverId: server.id, type: server.type, imported };
+  } catch (e) {
+    console.error(`Failed to import Jellyfin history for ${server.name || server.baseUrl}:`, e.message);
+    return { serverId: server.id, type: server.type, imported: 0, error: e.message };
+  }
+}
+
 function summaryFromResponse(resp) {
   try {
     const d = resp.data;
@@ -603,6 +677,18 @@ app.get('/api/history', (req, res) => {
       res.json({ history });
     }
   );
+});
+
+// Import watch history from supported backends (currently Jellyfin only)
+app.post('/api/import-history', async (req, res) => {
+  if (!historyDb) return res.status(500).json({ error: 'history DB not available' });
+  const enabledServers = servers.filter(s => !s.disabled && s.type === 'jellyfin');
+  const results = [];
+  for (const s of enabledServers) {
+    const r = await importJellyfinHistory(s, { limitPerUser: 100 });
+    results.push(r);
+  }
+  res.json({ results });
 });
 
 // Derived notifications based on current statuses
