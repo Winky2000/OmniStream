@@ -65,6 +65,48 @@
       --progress-fill: #00ff00;
     }
 
+    /* Light theme with subtle borders */
+    :root[data-theme="light"] {
+      --bg: #f4f5f7;
+      --text-main: #111111;
+      --text-muted: #555555;
+      --text-faint: #888888;
+      --card-bg: #ffffff;
+      --border-offline: #cccccc;
+      --btn-bg: #ffffff;
+      --btn-border: #cccccc;
+      --btn-text: #333333;
+      --btn-bg-hover: #f0f0f0;
+      --btn-text-hover: #111111;
+      --plex-color: #1976d2;
+      --jellyfin-color: #7b1fa2;
+      --emby-color: #388e3c;
+      --session-direct: #2e7d32;
+      --session-transcode: #c62828;
+      --progress-fill: #1976d2;
+    }
+
+    /* Almost borderless light theme */
+    :root[data-theme="light-borderless"] {
+      --bg: #f8f9fb;
+      --text-main: #111111;
+      --text-muted: #555555;
+      --text-faint: #888888;
+      --card-bg: #ffffff;
+      --border-offline: #e0e0e0;
+      --btn-bg: #ffffff;
+      --btn-border: #dddddd;
+      --btn-text: #333333;
+      --btn-bg-hover: #f2f3f6;
+      --btn-text-hover: #111111;
+      --plex-color: #1976d2;
+      --jellyfin-color: #7b1fa2;
+      --emby-color: #388e3c;
+      --session-direct: #2e7d32;
+      --session-transcode: #c62828;
+      --progress-fill: #1976d2;
+    }
+
     body{font-family:Segoe UI,Arial;background:var(--bg);color:var(--text-main);margin:0;padding:20px}
     h1{margin:0;color:var(--text-main);letter-spacing:1px;display:inline-block;vertical-align:middle;font-size:2.2em}
     .header-flex{display:flex;align-items:center;gap:18px;margin-bottom:24px;}
@@ -118,6 +160,47 @@
       border-color: var(--emby-color);
       box-shadow: 0 2px 18px #0004, 0 0 24px 6px var(--emby-color), 0 0 18px var(--emby-color);
     }
+
+    /* Softer cards in light themes */
+    :root[data-theme="light"] .card,
+    :root[data-theme="light-borderless"] .card {
+      border-radius: 14px;
+      border-width: 1px;
+      border-style: solid;
+      border-color: #dddddd;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+    :root[data-theme="light"] .card.card-plex,
+    :root[data-theme="light"] .card.card-jellyfin,
+    :root[data-theme="light"] .card.card-emby,
+    :root[data-theme="light-borderless"] .card.card-plex,
+    :root[data-theme="light-borderless"] .card.card-jellyfin,
+    :root[data-theme="light-borderless"] .card.card-emby {
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      border-color: #dddddd;
+    }
+    :root[data-theme="light-borderless"] .card {
+      border: none;
+      box-shadow: none;
+    }
+
+    /* Softer session borders in light themes */
+    :root[data-theme="light"] .session.direct,
+    :root[data-theme="light"] .session.transcode,
+    :root[data-theme="light-borderless"] .session.direct,
+    :root[data-theme="light-borderless"] .session.transcode {
+      box-shadow: none;
+    }
+    :root[data-theme="light"] .session.direct {
+      border: 1px solid var(--session-direct);
+    }
+    :root[data-theme="light"] .session.transcode {
+      border: 1px solid var(--session-transcode);
+    }
+    :root[data-theme="light-borderless"] .session.direct,
+    :root[data-theme="light-borderless"] .session.transcode {
+      border: none;
+    }
     .session {
       background: var(--card-bg);
       border-radius: 8px;
@@ -167,6 +250,8 @@
       <option value="default">Neon</option>
       <option value="minimal">Minimal</option>
       <option value="high-contrast">High contrast</option>
+      <option value="light">Light</option>
+      <option value="light-borderless">Light (borderless)</option>
     </select>
   </div>
   <button class="toggle-btn" id="layoutToggle">Switch Layout</button>
