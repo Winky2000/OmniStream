@@ -199,10 +199,22 @@ function summaryFromResponse(resp) {
     if (d.MediaContainer) {
       const sessions = (d.MediaContainer.Metadata || []).map(m => {
         let posterUrl;
-        if (m.type === 'live' && m.thumb && resp.config && resp.config.serverConfig) {
-          posterUrl = `${resp.config.serverConfig.baseUrl}${m.thumb}?X-Plex-Token=${encodeURIComponent(resp.config.serverConfig.token)}`;
-        } else if (m.thumb && resp.config && resp.config.serverConfig) {
-          posterUrl = `${resp.config.serverConfig.baseUrl}${m.thumb}?X-Plex-Token=${encodeURIComponent(resp.config.serverConfig.token)}`;
+        if (resp.config && resp.config.serverConfig) {
+          const base = resp.config.serverConfig.baseUrl;
+          const token = encodeURIComponent(resp.config.serverConfig.token);
+          // For live TV, keep using the item thumb
+          if (m.type === 'live' && m.thumb) {
+            posterUrl = `${base}${m.thumb}?X-Plex-Token=${token}`;
+          } else {
+            // Prefer series/parent artwork for TV episodes when available
+            if (m.grandparentThumb) {
+              posterUrl = `${base}${m.grandparentThumb}?X-Plex-Token=${token}`;
+            } else if (m.parentThumb) {
+              posterUrl = `${base}${m.parentThumb}?X-Plex-Token=${token}`;
+            } else if (m.thumb) {
+              posterUrl = `${base}${m.thumb}?X-Plex-Token=${token}`;
+            }
+          }
         }
         // Robust transcoding detection for Plex
         let transcoding = false;
@@ -238,6 +250,8 @@ function summaryFromResponse(resp) {
         return {
           user: m.user || m.User?.title || 'Unknown',
           title: m.media_title || m.title || m.grandparentTitle || 'Unknown',
+          // For TV episodes, Plex gives grandparentTitle as the series name
+          seriesTitle: m.grandparentTitle || undefined,
           episode: m.episode || (m.grandparentTitle ? m.title : undefined),
           year: m.year,
           platform: m.platform || m.Player?.platform || m.Player?.product || '',
@@ -303,6 +317,8 @@ function summaryFromResponse(resp) {
           return {
             user: s.user || s.UserName || 'Unknown',
             title: s.media_title || s.title || 'Idle',
+            // Some flat Jellyfin/Emby formats include series/season/episode info separately
+            seriesTitle: s.series || s.SeriesTitle || undefined,
             episode: s.episode,
             year: s.year,
             platform: s.platform || s.Client || s.DeviceName || '',
@@ -333,10 +349,21 @@ function summaryFromResponse(resp) {
         // Standard Jellyfin/Emby API: treat any session with NowPlayingItem and PlayState as active
         if (s.NowPlayingItem && s.PlayState) {
           let posterUrl;
-          if (s.NowPlayingItem?.Type === 'LiveTv' && s.NowPlayingItem?.ImageTags?.Primary && resp.config && resp.config.serverConfig) {
-            posterUrl = `${resp.config.serverConfig.baseUrl}/Items/${s.NowPlayingItem.Id}/Images/Primary?api_key=${encodeURIComponent(resp.config.serverConfig.token)}`;
-          } else if (s.NowPlayingItem?.ImageTags?.Primary && resp.config && resp.config.serverConfig) {
-            posterUrl = `${resp.config.serverConfig.baseUrl}/Items/${s.NowPlayingItem.Id}/Images/Primary?api_key=${encodeURIComponent(resp.config.serverConfig.token)}`;
+          if (resp.config && resp.config.serverConfig) {
+            const base = resp.config.serverConfig.baseUrl;
+            const token = encodeURIComponent(resp.config.serverConfig.token);
+            // Live TV uses the NowPlaying item artwork
+            if (s.NowPlayingItem?.Type === 'LiveTv' && s.NowPlayingItem?.ImageTags?.Primary) {
+              posterUrl = `${base}/Items/${s.NowPlayingItem.Id}/Images/Primary?api_key=${token}`;
+            } else if (s.NowPlayingItem?.ImageTags?.Primary) {
+              // Prefer series artwork for episodes when SeriesId is available
+              const seriesId = s.NowPlayingItem.SeriesId;
+              if (s.NowPlayingItem.Type === 'Episode' && seriesId) {
+                posterUrl = `${base}/Items/${seriesId}/Images/Primary?api_key=${token}`;
+              } else {
+                posterUrl = `${base}/Items/${s.NowPlayingItem.Id}/Images/Primary?api_key=${token}`;
+              }
+            }
           }
           let streamType = '';
           if (s.PlayState?.PlayMethod) {
@@ -409,6 +436,8 @@ function summaryFromResponse(resp) {
           return {
             user: s.UserName || 'Unknown',
             title: s.NowPlayingItem?.Name || 'Idle',
+            // Standard Jellyfin/Emby: SeriesName + EpisodeTitle
+            seriesTitle: s.NowPlayingItem?.SeriesName || undefined,
             episode: s.NowPlayingItem?.EpisodeTitle,
             year: s.NowPlayingItem?.ProductionYear,
             platform: s.Client || s.DeviceName || '',

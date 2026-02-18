@@ -340,12 +340,12 @@
             }
             title.appendChild(streamType);
             info.appendChild(title);
-            // TV episodes: use normalized episode fields when present
+            // TV episodes: use seriesTitle (series) + episode for display
             let displayTitle;
             const hasEpisode = !!(sess.episode || sess.episodeTitle);
             if (hasEpisode) {
-              const showName = sess.title || sess.channel || 'Unknown Show';
-              const episodeName = sess.episode || sess.episodeTitle || 'Episode';
+              const showName = sess.seriesTitle || sess.title || sess.channel || 'Unknown Show';
+              const episodeName = sess.episode || sess.episodeTitle || sess.title || 'Episode';
               displayTitle = `${showName} - ${episodeName}`;
             } else {
               displayTitle = sess.title || sess.channel || 'Idle';
