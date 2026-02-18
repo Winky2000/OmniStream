@@ -390,13 +390,26 @@ async function pollServer(s) {
   const headers = {};
 
   if (s.token) {
-    if (s.tokenLocation === 'header') {
-      if (s.type === 'plex') headers['X-Plex-Token'] = s.token;
-      else headers['X-Emby-Token'] = s.token;
+    // Choose sensible defaults: Plex uses query by default, Jellyfin/Emby use headers by default
+    const tokenLoc = s.tokenLocation || (s.type === 'plex' ? 'query' : 'header');
+    if (tokenLoc === 'header') {
+      if (s.type === 'plex') {
+        headers['X-Plex-Token'] = s.token;
+      } else if (s.type === 'jellyfin') {
+        headers['X-MediaBrowser-Token'] = s.token;
+      } else {
+        headers['X-Emby-Token'] = s.token;
+      }
     } else {
       const sep = finalUrl.includes('?') ? '&' : '?';
-      if (s.type === 'plex') finalUrl += `${sep}X-Plex-Token=${encodeURIComponent(s.token)}`;
-      else finalUrl += `${sep}X-Emby-Token=${encodeURIComponent(s.token)}`;
+      if (s.type === 'plex') {
+        finalUrl += `${sep}X-Plex-Token=${encodeURIComponent(s.token)}`;
+      } else if (s.type === 'jellyfin') {
+        // Jellyfin accepts api_key in query
+        finalUrl += `${sep}api_key=${encodeURIComponent(s.token)}`;
+      } else {
+        finalUrl += `${sep}X-Emby-Token=${encodeURIComponent(s.token)}`;
+      }
     }
   }
 
