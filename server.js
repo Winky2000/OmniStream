@@ -202,9 +202,15 @@ function summaryFromResponse(resp) {
         if (resp.config && resp.config.serverConfig) {
           const base = resp.config.serverConfig.baseUrl;
           const token = encodeURIComponent(resp.config.serverConfig.token);
-          // For live TV, keep using the item thumb
-          if (m.type === 'live' && m.thumb) {
-            posterUrl = `${base}${m.thumb}?X-Plex-Token=${token}`;
+          if (m.type === 'live') {
+            // Live TV: prefer the live item thumb, but fall back to parent/series art
+            if (m.thumb) {
+              posterUrl = `${base}${m.thumb}?X-Plex-Token=${token}`;
+            } else if (m.grandparentThumb) {
+              posterUrl = `${base}${m.grandparentThumb}?X-Plex-Token=${token}`;
+            } else if (m.parentThumb) {
+              posterUrl = `${base}${m.parentThumb}?X-Plex-Token=${token}`;
+            }
           } else {
             // Prefer series/parent artwork for TV episodes when available
             if (m.grandparentThumb) {
