@@ -21,6 +21,8 @@ try {
   console.error('Failed to read servers.json:', e.message);
 }
 
+console.log('[OmniStream] Using servers file at', SERVERS_FILE);
+
 // Edit/update server info (must be after app is defined)
 app.put('/api/servers/:id', (req, res) => {
   const idx = servers.findIndex(s => s.id == req.params.id);
@@ -405,7 +407,12 @@ app.post('/api/servers/:id/toggle', (req, res) => {
   const idx = servers.findIndex(s => s.id == req.params.id);
   if (idx === -1) return res.status(404).json({error:'Not found'});
   servers[idx].disabled = !servers[idx].disabled;
-  try { fs.writeFileSync(SERVERS_FILE, JSON.stringify(servers, null, 2)); } catch(e) {}
+  try {
+    fs.writeFileSync(SERVERS_FILE, JSON.stringify(servers, null, 2));
+  } catch(e) {
+    console.error('Failed to write servers.json after toggle:', e.message);
+    return res.status(500).json({ error: 'Failed to save servers.json' });
+  }
   res.json(servers[idx]);
 });
 
@@ -414,7 +421,12 @@ app.delete('/api/servers/:id', (req, res) => {
   const idx = servers.findIndex(s => s.id == req.params.id);
   if (idx === -1) return res.status(404).json({error:'Not found'});
   const removed = servers.splice(idx, 1);
-  try { fs.writeFileSync(SERVERS_FILE, JSON.stringify(servers, null, 2)); } catch(e) {}
+  try {
+    fs.writeFileSync(SERVERS_FILE, JSON.stringify(servers, null, 2));
+  } catch(e) {
+    console.error('Failed to write servers.json after remove:', e.message);
+    return res.status(500).json({ error: 'Failed to save servers.json' });
+  }
   res.json({removed: removed[0]});
 });
 
@@ -426,7 +438,10 @@ app.post('/api/servers', (req, res) => {
   try {
     fs.writeFileSync(SERVERS_FILE, JSON.stringify(servers, null, 2));
   } catch (e) {
-    console.error('Failed to write servers.json', e.message);
+    console.error('Failed to write servers.json after add:', e.message);
+    // Roll back in-memory change so state matches disk
+    servers.pop();
+    return res.status(500).json({ error: 'Failed to save servers.json' });
   }
   res.json(s);
 });
