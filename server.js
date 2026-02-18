@@ -15,10 +15,20 @@ const SERVERS_FILE = path.join(__dirname, 'servers.json');
 let servers = [];
 try {
   if (fs.existsSync(SERVERS_FILE)) {
-    servers = JSON.parse(fs.readFileSync(SERVERS_FILE));
+    const stat = fs.statSync(SERVERS_FILE);
+    if (stat.isDirectory()) {
+      console.error('[OmniStream] servers.json path is a directory, cannot use as config:', SERVERS_FILE);
+    } else {
+      const raw = fs.readFileSync(SERVERS_FILE, 'utf8');
+      servers = raw ? JSON.parse(raw) : [];
+    }
+  } else {
+    // Auto-create an empty servers.json file if it doesn't exist
+    fs.writeFileSync(SERVERS_FILE, '[]', { encoding: 'utf8' });
+    servers = [];
   }
 } catch (e) {
-  console.error('Failed to read servers.json:', e.message);
+  console.error('Failed to initialize servers.json:', e.message);
 }
 
 console.log('[OmniStream] Using servers file at', SERVERS_FILE);
