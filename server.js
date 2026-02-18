@@ -257,6 +257,9 @@ function summaryFromResponse(resp) {
           location: m.location || (m.Player?.local ? 'LAN' : 'WAN'),
           ip: m.Player?.address || '',
           bandwidth,
+          // Season / episode numbers when available (Plex)
+          seasonNumber: typeof m.parentIndex === 'number' ? m.parentIndex : undefined,
+          episodeNumber: typeof m.index === 'number' ? m.index : undefined,
           channel: m.channelTitle || '',
           episodeTitle: m.episodeTitle || '',
           userName: m.user || m.User?.title || '',
@@ -319,6 +322,11 @@ function summaryFromResponse(resp) {
             location: s.location,
             ip: s.location,
             bandwidth,
+            // Season / episode numbers for flat Jellyfin/Emby format when provided
+            seasonNumber: typeof s.season === 'number' ? s.season
+              : (typeof s.SeasonNumber === 'number' ? s.SeasonNumber : undefined),
+            episodeNumber: typeof s.episodeNumber === 'number' ? s.episodeNumber
+              : (typeof s.IndexNumber === 'number' ? s.IndexNumber : undefined),
             transcoding: s.transcoding,
           };
         }
@@ -422,6 +430,13 @@ function summaryFromResponse(resp) {
             location,
             ip,
             bandwidth,
+            // Season / episode numbers for Jellyfin/Emby standard API
+            seasonNumber: typeof s.NowPlayingItem?.ParentIndexNumber === 'number'
+              ? s.NowPlayingItem.ParentIndexNumber
+              : undefined,
+            episodeNumber: typeof s.NowPlayingItem?.IndexNumber === 'number'
+              ? s.NowPlayingItem.IndexNumber
+              : undefined,
           };
         }
         return null;

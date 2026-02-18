@@ -340,11 +340,12 @@
             }
             title.appendChild(streamType);
             info.appendChild(title);
-            // TV show: show grandparentTitle as main title, and season/episode line
+            // TV episodes: use normalized episode fields when present
             let displayTitle;
-            if (sess.grandparentTitle) {
-              const showName = sess.grandparentTitle;
-              const episodeName = sess.title || sess.channel || 'Episode';
+            const hasEpisode = !!(sess.episode || sess.episodeTitle);
+            if (hasEpisode) {
+              const showName = sess.title || sess.channel || 'Unknown Show';
+              const episodeName = sess.episode || sess.episodeTitle || 'Episode';
               displayTitle = `${showName} - ${episodeName}`;
             } else {
               displayTitle = sess.title || sess.channel || 'Idle';
@@ -354,14 +355,14 @@
             sub.textContent = displayTitle;
             sub.title = displayTitle;
             info.appendChild(sub);
-            // If TV show, add season/episode line
-            if (sess.grandparentTitle && (sess.parentIndex || sess.index)) {
+            // If we have season/episode numbers, show them under the title
+            if (typeof sess.seasonNumber === 'number' || typeof sess.episodeNumber === 'number') {
               const seLine = document.createElement('div');
               seLine.className = 'session-meta';
-              let seText = '';
-              if (sess.parentIndex) seText += 'Season ' + sess.parentIndex;
-              if (sess.index) seText += (seText ? ' • ' : '') + 'Episode ' + sess.index;
-              seLine.textContent = seText;
+              let parts = [];
+              if (typeof sess.seasonNumber === 'number') parts.push('Season ' + sess.seasonNumber);
+              if (typeof sess.episodeNumber === 'number') parts.push('Episode ' + sess.episodeNumber);
+              seLine.textContent = parts.join(' • ');
               info.appendChild(seLine);
             }
             // Info list
