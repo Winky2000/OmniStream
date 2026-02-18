@@ -48,16 +48,22 @@
         const totalCurrentStreams = Object.values(statuses).reduce((sum, st) => sum + (Array.isArray(st.sessions) ? st.sessions.length : 0), 0);
         const totalHistoryEntries = history.length;
 
-        const users = new Set();
+        const users = new Map();
         const titles = new Map();
         history.forEach(h => {
-          if (h.user) users.add(h.user);
+          if (h.user) {
+            users.set(h.user, (users.get(h.user) || 0) + 1);
+          }
           if (h.title) {
             titles.set(h.title, (titles.get(h.title) || 0) + 1);
           }
         });
 
         const topTitles = Array.from(titles.entries())
+          .sort((a,b) => b[1]-a[1])
+          .slice(0,5);
+
+        const topUsers = Array.from(users.entries())
           .sort((a,b) => b[1]-a[1])
           .slice(0,5);
 
@@ -70,6 +76,14 @@
           html += '<div style="margin-top:10px;"><b>Top titles (recent):</b><br>';
           topTitles.forEach(([title,count]) => {
             html += `${title} &times; ${count}<br>`;
+          });
+          html += '</div>';
+        }
+
+        if (topUsers.length) {
+          html += '<div style="margin-top:10px;"><b>Top users (by plays, recent):</b><br>';
+          topUsers.forEach(([user,count]) => {
+            html += `${user} × ${count}<br>`;
           });
           html += '</div>';
         }
