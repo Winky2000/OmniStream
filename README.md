@@ -3,6 +3,27 @@
 
 OmniStream is a dashboard to monitor multiple Plex, Jellyfin, and Emby servers on one screen. It shows active sessions, direct play vs transcoding, bandwidth usage, history, reports, and basic notifications.
 
+## Quick start
+
+- **Docker (recommended)**
+
+	```bash
+	# On your host
+	mkdir -p /home/youruser/omnistream
+	printf "[]\n" > /home/youruser/omnistream/servers.json
+
+	# Start OmniStream
+	docker compose up -d
+	```
+
+- **Local development (Node.js)**
+
+	```bash
+	npm install
+	printf "[]\n" > servers.json
+	node server.js
+	```
+
 ## Features
 
 - Monitor multiple media servers (Plex, Jellyfin, Emby)
@@ -51,7 +72,7 @@ services:
 Start it:
 
 ```bash
-
+docker compose up -d
 ```
 
 Then open:
@@ -161,4 +182,21 @@ You can edit servers via the Admin → Servers UI rather than hand-editing `serv
 	- Use a valid API key; OmniStream sends it using the expected Jellyfin headers/query.
 
 Once servers are online, the main dashboard shows live sessions, and the Admin tabs (Servers, Reports, Notifications, History) provide management and insights.
+
+---
+
+## TODO / ideas
+
+- **Reports**
+	- Per-user weekly/monthly watch time.
+	- Per-server bandwidth trend charts.
+- **Notifications**
+	- More granular rules (per-user, per-library, per-location).
+	- Built-in templates for Discord/email messages.
+- **UI/UX**
+	- Optional compact/mobile layout.
+	- Icon-based client badges for popular players.
+- **Technical**
+	- More tests around history import and notifiers.
+	- Configurable polling interval and history retention.
 
