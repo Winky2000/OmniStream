@@ -221,9 +221,30 @@
     });
 
     function render(data) {
-      const { servers = [], statuses = {} } = data;
+      const { servers = [], statuses = {}, setup = false } = data;
       const grid = document.getElementById('grid');
       grid.innerHTML = '';
+      // Setup mode: no servers configured yet
+      if (setup || !servers.length) {
+        const card = document.createElement('div');
+        card.className = 'card flex-full';
+        const title = document.createElement('div');
+        title.className = 'title';
+        title.textContent = 'Welcome to OmniStream';
+        const meta = document.createElement('div');
+        meta.className = 'meta';
+        meta.innerHTML = 'No servers are configured yet.<br>Add your Plex/Jellyfin/Emby servers to get started.';
+        const btn = document.createElement('button');
+        btn.className = 'toggle-btn';
+        btn.style.marginTop = '16px';
+        btn.textContent = 'Start Setup (Servers)';
+        btn.onclick = () => { window.location.href = '/servers.html'; };
+        card.appendChild(title);
+        card.appendChild(meta);
+        card.appendChild(btn);
+        grid.appendChild(card);
+        return;
+      }
       servers.forEach(s => {
         const st = statuses && statuses[s.id] ? statuses[s.id] : { online: false };
         const card = document.createElement('div');

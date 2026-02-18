@@ -499,7 +499,11 @@ app.get('/api/status', (req, res) => {
   for (const s of enabledServers) {
     if (statuses[s.id]) enabledStatuses[s.id] = statuses[s.id];
   }
-  res.json({ servers: enabledServers, statuses: enabledStatuses });
+  res.json({
+    servers: enabledServers,
+    statuses: enabledStatuses,
+    setup: enabledServers.length === 0
+  });
 });
 
 // Simple history API
