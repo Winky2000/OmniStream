@@ -199,8 +199,8 @@ function summaryFromResponse(resp) {
             transcoding: s.transcoding,
           };
         }
-        // Standard Jellyfin/Emby API: only include active playback (NowPlayingItem exists and PlayState.Playing is true)
-        if (s.NowPlayingItem && s.PlayState && s.PlayState.Playing === true) {
+        // Standard Jellyfin/Emby API: treat any session with NowPlayingItem and PlayState as active
+        if (s.NowPlayingItem && s.PlayState) {
           let posterUrl;
           if (s.NowPlayingItem?.Type === 'LiveTv' && s.NowPlayingItem?.ImageTags?.Primary && resp.config && resp.config.serverConfig) {
             posterUrl = `${resp.config.serverConfig.baseUrl}/Items/${s.NowPlayingItem.Id}/Images/Primary?api_key=${encodeURIComponent(resp.config.serverConfig.token)}`;
