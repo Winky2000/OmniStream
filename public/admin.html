@@ -83,11 +83,16 @@
       const baseUrl = document.getElementById('baseUrl').value;
       const type = document.getElementById('type').value;
       const token = document.getElementById('token').value;
-      await fetch('/api/servers', {
+      const resp = await fetch('/api/servers', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify({name, baseUrl, type, token})
       });
+      if (!resp.ok) {
+        const text = await resp.text().catch(()=> '');
+        alert('Failed to add server: ' + (text || resp.status + ' ' + resp.statusText));
+        return;
+      }
       e.target.reset();
       updateServerList();
     };
@@ -107,11 +112,16 @@
         const baseUrl = document.getElementById('editBaseUrl').value;
         const type = document.getElementById('editType').value;
         const token = document.getElementById('editToken').value;
-        await fetch('/api/servers/' + encodeURIComponent(id), {
+        const resp = await fetch('/api/servers/' + encodeURIComponent(id), {
           method: 'PUT',
           headers: {'Content-Type':'application/json'},
           body: JSON.stringify({name, baseUrl, type, token})
         });
+        if (!resp.ok) {
+          const text = await resp.text().catch(()=> '');
+          alert('Failed to save server: ' + (text || resp.status + ' ' + resp.statusText));
+          return;
+        }
         editModal.style.display = 'none';
         updateServerList();
       };

@@ -32,8 +32,8 @@ app.put('/api/servers/:id', (req, res) => {
   try {
     fs.writeFileSync(SERVERS_FILE, JSON.stringify(servers, null, 2));
   } catch (e) {
-    console.error('Failed to write servers.json', e.message);
-    return res.status(500).json({error:'Failed to save'});
+    console.error('Failed to write servers.json after edit:', e.message);
+    return res.status(500).json({error:'Failed to save servers.json'});
   }
   res.json(servers[idx]);
 });
