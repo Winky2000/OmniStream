@@ -319,17 +319,15 @@
             title.textContent = sess.user || sess.userName || 'Unknown';
             // Direct Play/Transcoding label
             const streamType = document.createElement('span');
-            streamType.style = 'margin-left:8px;font-size:11px;padding:2px 8px;border-radius:6px;';
-            if (sess.stream && sess.stream.toLowerCase().includes('direct')) {
-              streamType.textContent = 'Direct Play';
-              streamType.style.background = '#0ff2';
-              streamType.style.color = '#00bfff';
-              streamType.style.border = '1px solid #00bfff';
-            } else if (sess.stream && sess.stream.toLowerCase().includes('transcode')) {
+            streamType.style = 'margin-left:8px;font-size:11px;padding:2px 8px;border-radius:6px;font-weight:600;display:inline-block;';
+            if (isTranscoding) {
               streamType.textContent = 'Transcoding';
-              streamType.style.background = '#0af2';
-              streamType.style.color = '#fff';
-              streamType.style.border = '1px solid #0af';
+              streamType.style.background = 'var(--session-transcode)';
+              streamType.style.color = '#ffffff';
+            } else {
+              streamType.textContent = 'Direct Play';
+              streamType.style.background = 'var(--session-direct)';
+              streamType.style.color = '#000000';
             }
             title.appendChild(streamType);
             info.appendChild(title);
