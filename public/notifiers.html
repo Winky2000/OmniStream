@@ -1,0 +1,170 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>OmniStream Notifiers</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="theme.css">
+  <style>
+    body{font-family:Segoe UI,Arial;background:var(--bg);color:var(--text-main);margin:0;padding:20px}
+    h1{margin:0 0 8px 0;color:var(--text-main);letter-spacing:1px;font-size:2em}
+    .tabs{display:flex;gap:10px;margin-bottom:20px;border-bottom:1px solid #333;padding-bottom:8px;}
+    .tab-link{padding:6px 14px;border-radius:999px;border:1px solid #444;background:#232837;color:var(--text-main);text-decoration:none;font-size:13px;cursor:pointer;}
+    .tab-link.active{border-color:#00bfff;background:#00bfff;color:#000;}
+    .section{background:var(--card-bg);border-radius:14px;padding:16px 18px;box-shadow:0 2px 10px #0006;border:1px solid #2f3a52;margin-bottom:18px;max-width:640px;}
+    .section h2{margin:0 0 8px 0;font-size:15px;color:var(--text-main);}
+    label{display:block;font-size:13px;margin:6px 0;}
+    input[type="text"],input[type="email"],input[type="number"],input[type="password"]{width:100%;max-width:420px;padding:6px 10px;border-radius:6px;border:1px solid #444;background:var(--bg);color:var(--text-main);}
+    .inline{display:flex;gap:10px;align-items:center;}
+    .hint{font-size:12px;color:var(--text-muted);margin-top:4px;}
+    .btn{margin-top:12px;padding:6px 14px;border-radius:8px;border:1px solid var(--btn-border);background:var(--btn-bg);color:var(--btn-text);cursor:pointer;font-size:13px;}
+    .btn:hover{background:var(--btn-bg-hover);color:var(--btn-text-hover);}
+    .danger{border-color:#ff7043;color:#ffab91;}
+    .status{font-size:12px;margin-top:8px;}
+  </style>
+</head>
+<body>
+  <h1>Notifier Settings</h1>
+  <div class="tabs">
+    <a href="admin.html" class="tab-link">Overview</a>
+    <a href="servers.html" class="tab-link">Servers</a>
+    <a href="reports.html" class="tab-link">Reports</a>
+    <a href="notifications.html" class="tab-link">Notifications</a>
+    <a href="history.html" class="tab-link">History</a>
+    <a href="notifiers.html" class="tab-link active">Notifiers</a>
+  </div>
+
+  <div class="section">
+    <h2>Discord</h2>
+    <label>
+      Webhook URL
+      <input type="text" id="discordWebhook" placeholder="https://discord.com/api/webhooks/...">
+    </label>
+    <div class="hint">Paste a Discord Incoming Webhook URL to receive alerts (offline servers, WAN transcodes, high bandwidth).</div>
+  </div>
+
+  <div class="section">
+    <h2>Email</h2>
+    <label class="inline">
+      <input type="checkbox" id="emailEnabled"> Enable email notifications
+    </label>
+    <label>
+      From address
+      <input type="email" id="emailFrom" placeholder="omnistream@example.com">
+    </label>
+    <label>
+      To address
+      <input type="email" id="emailTo" placeholder="you@example.com">
+    </label>
+    <label>
+      SMTP host
+      <input type="text" id="smtpHost" placeholder="smtp.example.com">
+    </label>
+    <label class="inline">
+      <span style="flex:1;min-width:0;">
+        Port
+        <input type="number" id="smtpPort" value="587" style="max-width:120px;">
+      </span>
+      <span class="inline" style="gap:4px;">
+        <input type="checkbox" id="smtpSecure"> Use TLS (secure)
+      </span>
+    </label>
+    <label>
+      SMTP username
+      <input type="text" id="smtpUser" placeholder="smtp user">
+    </label>
+    <label>
+      SMTP password
+      <input type="password" id="smtpPass" placeholder="smtp password">
+    </label>
+    <div class="hint">Email credentials are stored in config.json on the server. Use a dedicated app password if possible.</div>
+  </div>
+
+  <button id="saveBtn" class="btn">Save Settings</button>
+  <span id="saveStatus" class="status"></span>
+  <button id="backBtn" class="btn" style="margin-left:8px;">Back to Overview</button>
+
+  <script>
+    // Apply saved theme
+    (function() {
+      const savedTheme = localStorage.getItem('omnistreamTheme') || 'default';
+      if (savedTheme && savedTheme !== 'default') {
+        document.documentElement.setAttribute('data-theme', savedTheme);
+      }
+    })();
+
+    async function loadConfig() {
+      try {
+        const r = await fetch('/api/config/notifiers');
+        const data = await r.json();
+        const n = data.notifiers || {};
+        const discord = n.discord || {};
+        const email = n.email || {};
+        document.getElementById('discordWebhook').value = discord.webhookUrl || '';
+        document.getElementById('emailEnabled').checked = email.enabled === true;
+        document.getElementById('emailFrom').value = email.from || '';
+        document.getElementById('emailTo').value = email.to || '';
+        const smtp = email.smtp || {};
+        document.getElementById('smtpHost').value = smtp.host || '';
+        document.getElementById('smtpPort').value = smtp.port || '';
+        document.getElementById('smtpSecure').checked = !!smtp.secure;
+        const auth = smtp.auth || {};
+        document.getElementById('smtpUser').value = auth.user || '';
+        document.getElementById('smtpPass').value = auth.pass || '';
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function saveConfig() {
+      const statusEl = document.getElementById('saveStatus');
+      statusEl.textContent = 'Saving...';
+      try {
+        const body = {
+          discord: {
+            webhookUrl: document.getElementById('discordWebhook').value.trim() || undefined
+          },
+          email: {
+            enabled: document.getElementById('emailEnabled').checked,
+            from: document.getElementById('emailFrom').value.trim() || undefined,
+            to: document.getElementById('emailTo').value.trim() || undefined,
+            smtp: {
+              host: document.getElementById('smtpHost').value.trim() || undefined,
+              port: Number(document.getElementById('smtpPort').value) || undefined,
+              secure: document.getElementById('smtpSecure').checked,
+              auth: {
+                user: document.getElementById('smtpUser').value.trim() || undefined,
+                pass: document.getElementById('smtpPass').value || undefined
+              }
+            }
+          }
+        };
+        const resp = await fetch('/api/config/notifiers', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => '');
+          statusEl.textContent = 'Save failed: ' + (text || resp.status + ' ' + resp.statusText);
+          statusEl.style.color = '#ff8a80';
+          return;
+        }
+        statusEl.textContent = 'Saved.';
+        statusEl.style.color = '#a5d6a7';
+      } catch (e) {
+        console.error(e);
+        statusEl.textContent = 'Save failed. Check server logs.';
+        statusEl.style.color = '#ff8a80';
+      }
+    }
+
+    document.getElementById('saveBtn').onclick = saveConfig;
+    document.getElementById('backBtn').onclick = () => {
+      window.location.href = 'admin.html';
+    };
+
+    loadConfig();
+  </script>
+</body>
+</html>

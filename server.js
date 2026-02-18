@@ -998,6 +998,25 @@ app.get('/api/notifications', (req, res) => {
   res.json({ notifications });
 });
 
+// Simple API to read/update notifier configuration (Discord, email) from config.json
+app.get('/api/config/notifiers', (req, res) => {
+  res.json({ notifiers: appConfig.notifiers || {} });
+});
+
+app.put('/api/config/notifiers', (req, res) => {
+  try {
+    const incoming = req.body && typeof req.body === 'object' ? req.body : {};
+    const current = appConfig.notifiers || {};
+    // Shallow merge notifier configs; caller can send only the fields they want to change
+    appConfig.notifiers = { ...current, ...incoming };
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify(appConfig, null, 2));
+    res.json({ notifiers: appConfig.notifiers });
+  } catch (e) {
+    console.error('[OmniStream] Failed to update notifier config:', e.message);
+    res.status(500).json({ error: 'Failed to update notifier config' });
+  }
+});
+
 
 // List servers
 app.get('/api/servers', (req, res) => res.json(servers));
