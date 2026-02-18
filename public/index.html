@@ -65,6 +65,48 @@
       --progress-fill: #00ff00;
     }
 
+    /* Ocean theme */
+    :root[data-theme="ocean"] {
+      --bg: #02131f;
+      --text-main: #e3f2fd;
+      --text-muted: #90caf9;
+      --text-faint: #5f7990;
+      --card-bg: #031d2c;
+      --border-offline: #345269;
+      --btn-bg: #031d2c;
+      --btn-border: #4fc3f7;
+      --btn-text: #4fc3f7;
+      --btn-bg-hover: #042639;
+      --btn-text-hover: #ffffff;
+      --plex-color: #29b6f6;
+      --jellyfin-color: #4dd0e1;
+      --emby-color: #26c6da;
+      --session-direct: #00e676;
+      --session-transcode: #ff5252;
+      --progress-fill: #29b6f6;
+    }
+
+    /* Forest theme */
+    :root[data-theme="forest"] {
+      --bg: #04120a;
+      --text-main: #e8f5e9;
+      --text-muted: #a5d6a7;
+      --text-faint: #78957f;
+      --card-bg: #062015;
+      --border-offline: #2e4738;
+      --btn-bg: #062015;
+      --btn-border: #66bb6a;
+      --btn-text: #a5d6a7;
+      --btn-bg-hover: #08301f;
+      --btn-text-hover: #ffffff;
+      --plex-color: #66bb6a;
+      --jellyfin-color: #8bc34a;
+      --emby-color: #43a047;
+      --session-direct: #00e676;
+      --session-transcode: #ff7043;
+      --progress-fill: #66bb6a;
+    }
+
     /* Light theme with subtle borders */
     :root[data-theme="light"] {
       --bg: #f4f5f7;
@@ -252,6 +294,8 @@
       <option value="high-contrast">High contrast</option>
       <option value="light">Light</option>
       <option value="light-borderless">Light (borderless)</option>
+      <option value="ocean">Ocean</option>
+      <option value="forest">Forest</option>
     </select>
   </div>
   <button class="toggle-btn" id="layoutToggle">Switch Layout</button>
@@ -499,6 +543,25 @@
           }
         }
         grid.appendChild(card);
+      });
+      // After rendering, equalize session heights in horizontal layout
+      equalizeSessionHeights();
+    }
+
+    function equalizeSessionHeights() {
+      if (layoutMode !== 'flex') return; // only for horizontal
+      const containers = document.querySelectorAll('.sessions.horizontal-grid');
+      containers.forEach(container => {
+        const sessions = Array.from(container.querySelectorAll('.session'));
+        if (!sessions.length) return;
+        let max = 0;
+        sessions.forEach(s => {
+          s.style.minHeight = '';
+          if (s.offsetHeight > max) max = s.offsetHeight;
+        });
+        sessions.forEach(s => {
+          s.style.minHeight = max + 'px';
+        });
       });
     }
 
