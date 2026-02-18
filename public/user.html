@@ -53,6 +53,14 @@
   <button class="back-btn" onclick="window.history.back();">Back</button>
 
   <script>
+    // Apply saved theme
+    (function() {
+      const savedTheme = localStorage.getItem('omnistreamTheme') || 'default';
+      if (savedTheme && savedTheme !== 'default') {
+        document.documentElement.setAttribute('data-theme', savedTheme);
+      }
+    })();
+
     function getUserFromQuery() {
       const params = new URLSearchParams(window.location.search);
       return params.get('user') || '';
