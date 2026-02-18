@@ -84,9 +84,29 @@
     async function renderHistory() {
       try {
         const { history = [] } = await fetchHistory();
+        // Collapse repeated snapshots: keep only one entry per unique combination
+        // of server + user + title + stream + location (using the first row,
+        // which will be the most recent when sorted by time_desc).
+        const seen = new Set();
+        const unique = [];
+        history.forEach(h => {
+          const keyParts = [
+            h.serverId || h.serverName || '',
+            h.user || '',
+            h.title || '',
+            h.stream || '',
+            h.location || ''
+          ].map(v => String(v).toLowerCase());
+          const key = keyParts.join('|');
+          if (!seen.has(key)) {
+            seen.add(key);
+            unique.push(h);
+          }
+        });
+
         const tbody = document.querySelector('#historyTable tbody');
         tbody.innerHTML = '';
-        history.forEach(h => {
+        unique.forEach(h => {
           const tr = document.createElement('tr');
           tr.style.borderBottom = '1px solid #222';
           function cell(text) {
