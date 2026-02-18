@@ -6,135 +6,98 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <style>
     body{font-family:Segoe UI,Arial;background:#181c24;color:#e0e3e8;margin:0;padding:20px}
-    h1{margin:0 0 18px 0;color:#fff;letter-spacing:1px;font-size:2em}
-    .server-list{margin-bottom:24px;}
-    .server-card{background:#232837;border-radius:12px;padding:18px 24px;margin-bottom:14px;box-shadow:0 2px 12px #00bfff44;border:3px solid #00bfff;display:flex;align-items:center;gap:18px;}
-    .server-card.disabled{opacity:0.5;border:3px solid #888;}
-    .server-info{flex:1;}
-    .server-actions button{margin-left:8px;}
-    .add-form{background:#232837;padding:18px 24px;border-radius:12px;box-shadow:0 2px 12px #00bfff22;margin-bottom:24px;}
-    .add-form input,.add-form select{margin:0 8px 0 0;padding:6px 10px;border-radius:6px;border:1px solid #444;background:#181c24;color:#e0e3e8;}
-    .add-form label{margin-right:8px;}
-    .add-form button{padding:6px 18px;border-radius:6px;background:#00bfff;color:#fff;border:none;cursor:pointer;}
-    .add-form button:hover{background:#0099cc;}
+    h1{margin:0 0 8px 0;color:#fff;letter-spacing:1px;font-size:2em}
+    .tabs{display:flex;gap:10px;margin-bottom:20px;border-bottom:1px solid #333;padding-bottom:8px;}
+    .tab-link{padding:6px 14px;border-radius:999px;border:1px solid #444;background:#232837;color:#e0e3e8;text-decoration:none;font-size:13px;cursor:pointer;}
+    .tab-link.active{border-color:#00bfff;background:#00bfff;color:#000;}
+    .top-bar{display:flex;align-items:center;gap:12px;margin-bottom:10px;}
+    .top-bar button{padding:6px 14px;border-radius:8px;border:1px solid #555;background:#232837;color:#e0e3e8;cursor:pointer;}
+    .top-bar button:hover{background:#2b3040;}
+    .status-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;margin-top:20px;}
+    .status-card{background:#232837;border-radius:14px;padding:16px 18px;box-shadow:0 2px 10px #0006;border:2px solid #00bfff;}
+    .status-card.offline{opacity:0.6;border-color:#555;}
+    .status-title{font-weight:600;margin-bottom:4px;}
+    .status-meta{font-size:13px;color:#a0a4b0;margin-bottom:6px;}
+    .status-small{font-size:12px;color:#888;}
+    .badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;margin-left:6px;}
+    .badge-online{background:#39ff14;color:#000;}
+    .badge-offline{background:#ff073a;color:#fff;}
+    .summary-line{font-size:12px;color:#c0c3cc;margin-top:6px;}
   </style>
 </head>
 <body>
   <h1>OmniStream Admin</h1>
-  <button class="toggle-btn" id="returnBtn" style="margin-bottom:18px;">Return to Main</button>
-  <form class="add-form" id="addServerForm">
-    <label>Name: <input type="text" id="name" required></label>
-    <label>Base URL: <input type="text" id="baseUrl" required placeholder="http://..."></label>
-    <label>Type: <select id="type"><option value="plex">Plex</option><option value="jellyfin">Jellyfin</option><option value="emby">Emby</option></select></label>
-    <label>Token: <input type="text" id="token" required></label>
-    <button type="submit">Add Server</button>
-  </form>
-  <div class="server-list" id="serverList"></div>
+  <div class="tabs">
+    <a href="admin.html" class="tab-link active">Overview</a>
+    <a href="servers.html" class="tab-link">Servers</a>
+    <a href="reports.html" class="tab-link">Reports</a>
+    <a href="notifications.html" class="tab-link">Notifications</a>
+    <a href="history.html" class="tab-link">History</a>
+  </div>
+  <div class="top-bar">
+    <button id="returnBtn">Return to Main</button>
+    <button id="manageServersBtn">Manage Servers</button>
+  </div>
+  <div class="status-grid" id="statusGrid"></div>
   <script>
-    async function fetchServers() {
-      const r = await fetch('/api/servers');
-      return await r.json();
-    }
-    async function updateServerList() {
-      const servers = await fetchServers();
-      const list = document.getElementById('serverList');
-      list.innerHTML = '';
-      servers.forEach((s, idx) => {
-        const card = document.createElement('div');
-        card.className = 'server-card' + (s.disabled ? ' disabled' : '');
-        const info = document.createElement('div');
-        info.className = 'server-info';
-        info.innerHTML = `<b>${s.name || s.baseUrl}</b><br>Type: ${s.type} <br>Base URL: ${s.baseUrl}`;
-        card.appendChild(info);
-        const actions = document.createElement('div');
-        actions.className = 'server-actions';
-        // Edit button
-        const editBtn = document.createElement('button');
-        editBtn.textContent = 'Edit';
-        editBtn.onclick = () => {
-          showEditModal(s);
-        };
-        actions.appendChild(editBtn);
-        // Enable/disable
-        const enableBtn = document.createElement('button');
-        enableBtn.textContent = s.disabled ? 'Enable' : 'Disable';
-        enableBtn.onclick = async () => {
-          await fetch('/api/servers/' + encodeURIComponent(s.id) + '/toggle', {method:'POST'});
-          updateServerList();
-        };
-        actions.appendChild(enableBtn);
-        // Remove
-        const removeBtn = document.createElement('button');
-        removeBtn.textContent = 'Remove';
-        removeBtn.onclick = async () => {
-          if (confirm('Remove this server?')) {
-            await fetch('/api/servers/' + encodeURIComponent(s.id), {method:'DELETE'});
-            updateServerList();
-          }
-        };
-        actions.appendChild(removeBtn);
-        card.appendChild(actions);
-        list.appendChild(card);
-      });
-    }
-    document.getElementById('addServerForm').onsubmit = async (e) => {
-      e.preventDefault();
-      const name = document.getElementById('name').value;
-      const baseUrl = document.getElementById('baseUrl').value;
-      const type = document.getElementById('type').value;
-      const token = document.getElementById('token').value;
-      const resp = await fetch('/api/servers', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({name, baseUrl, type, token})
-      });
-      if (!resp.ok) {
-        const text = await resp.text().catch(()=> '');
-        alert('Failed to add server: ' + (text || resp.status + ' ' + resp.statusText));
-        return;
+    async function fetchStatus() {
+      try {
+        const r = await fetch('/api/status');
+        return await r.json();
+      } catch (e) {
+        console.error(e);
+        return { servers: [], statuses: {} };
       }
-      e.target.reset();
-      updateServerList();
-    };
+    }
+
+    async function renderOverview() {
+      const data = await fetchStatus();
+      const { servers = [], statuses = {} } = data;
+      const grid = document.getElementById('statusGrid');
+      grid.innerHTML = '';
+      servers.forEach(s => {
+        const st = statuses && statuses[s.id] ? statuses[s.id] : { online: false };
+        const card = document.createElement('div');
+        card.className = 'status-card' + (st.online ? '' : ' offline');
+        const title = document.createElement('div');
+        title.className = 'status-title';
+        title.textContent = s.name || s.baseUrl;
+        const badge = document.createElement('span');
+        badge.className = 'badge ' + (st.online ? 'badge-online' : 'badge-offline');
+        badge.textContent = st.online ? 'Online' : 'Offline';
+        title.appendChild(badge);
+        const meta = document.createElement('div');
+        meta.className = 'status-meta';
+        meta.textContent = (s.type || 'generic') + (st.online ? '' : '');
+        const small = document.createElement('div');
+        small.className = 'status-small';
+        small.innerHTML = `Latency: ${st.latency ?? '-'}ms<br>Last: ${st.lastChecked ? new Date(st.lastChecked).toLocaleTimeString() : '-'}`;
+        card.appendChild(title);
+        card.appendChild(meta);
+        card.appendChild(small);
+        if (st.online) {
+          const summary = st.summary || {};
+          const directPlays = typeof summary.directPlays === 'number' ? summary.directPlays : 0;
+          const transcodes = typeof summary.transcodes === 'number' ? summary.transcodes : 0;
+          const totalStreams = st.sessions && Array.isArray(st.sessions) ? st.sessions.length : (typeof summary.totalStreams === 'number' ? summary.totalStreams : 0);
+          const summaryLine = document.createElement('div');
+          summaryLine.className = 'summary-line';
+          summaryLine.textContent = `Streams: ${totalStreams}  |  Direct: ${directPlays}  |  Transcoding: ${transcodes}`;
+          card.appendChild(summaryLine);
+        }
+        grid.appendChild(card);
+      });
+    }
+
     document.getElementById('returnBtn').onclick = () => {
       window.location.href = '/index.html';
     };
-    // Modal logic
-    let editModal;
-    fetch('/edit-server-modal.html').then(r=>r.text()).then(html=>{
-      document.body.insertAdjacentHTML('beforeend', html);
-      editModal = document.getElementById('editModal');
-      document.getElementById('cancelEditBtn').onclick = () => { editModal.style.display = 'none'; };
-      document.getElementById('editServerForm').onsubmit = async (e) => {
-        e.preventDefault();
-        const id = document.getElementById('editId').value;
-        const name = document.getElementById('editName').value;
-        const baseUrl = document.getElementById('editBaseUrl').value;
-        const type = document.getElementById('editType').value;
-        const token = document.getElementById('editToken').value;
-        const resp = await fetch('/api/servers/' + encodeURIComponent(id), {
-          method: 'PUT',
-          headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({name, baseUrl, type, token})
-        });
-        if (!resp.ok) {
-          const text = await resp.text().catch(()=> '');
-          alert('Failed to save server: ' + (text || resp.status + ' ' + resp.statusText));
-          return;
-        }
-        editModal.style.display = 'none';
-        updateServerList();
-      };
-    });
-    window.showEditModal = function(s) {
-      document.getElementById('editId').value = s.id;
-      document.getElementById('editName').value = s.name || '';
-      document.getElementById('editBaseUrl').value = s.baseUrl || '';
-      document.getElementById('editType').value = s.type || 'plex';
-      document.getElementById('editToken').value = s.token || '';
-      editModal.style.display = 'flex';
-    }
-    updateServerList();
+    document.getElementById('manageServersBtn').onclick = () => {
+      window.location.href = '/servers.html';
+    };
+
+    renderOverview();
+    setInterval(renderOverview, 5000);
   </script>
 </body>
 </html>
