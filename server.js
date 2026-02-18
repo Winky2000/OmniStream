@@ -534,6 +534,59 @@ app.get('/api/history', (req, res) => {
   res.json({ history });
 });
 
+// Derived notifications based on current statuses
+app.get('/api/notifications', (req, res) => {
+  const notifications = [];
+  const now = new Date().toISOString();
+  Object.values(statuses).forEach(st => {
+    // Server offline
+    if (!st.online) {
+      notifications.push({
+        id: `offline-${st.id}`,
+        level: 'error',
+        serverId: st.id,
+        serverName: st.name,
+        time: now,
+        message: `${st.name || 'Server'} is offline`
+      });
+      return;
+    }
+    // Any WAN transcodes
+    const wanTranscodes = (st.sessions || []).filter(sess => {
+      const isWan = sess.location && sess.location.toUpperCase().includes('WAN');
+      let isTranscode = false;
+      if (typeof sess.transcoding === 'boolean') isTranscode = sess.transcoding;
+      else if (sess.stream && typeof sess.stream === 'string' && sess.stream.toLowerCase().includes('transcode')) isTranscode = true;
+      else if (sess.state && typeof sess.state === 'string' && sess.state.toLowerCase().includes('transcode')) isTranscode = true;
+      return isWan && isTranscode;
+    });
+    if (wanTranscodes.length > 0) {
+      notifications.push({
+        id: `wan-transcode-${st.id}`,
+        level: 'warn',
+        serverId: st.id,
+        serverName: st.name,
+        time: now,
+        message: `${wanTranscodes.length} WAN transcode${wanTranscodes.length > 1 ? 's' : ''} active on ${st.name || 'server'}`
+      });
+    }
+    // High total bandwidth (simple threshold)
+    const summary = st.summary || {};
+    const totalBw = typeof summary.totalBandwidth === 'number' ? summary.totalBandwidth : 0;
+    if (totalBw > 50) {
+      notifications.push({
+        id: `high-bandwidth-${st.id}`,
+        level: 'warn',
+        serverId: st.id,
+        serverName: st.name,
+        time: now,
+        message: `High total bandwidth on ${st.name || 'server'}: ${totalBw.toFixed(1)} Mbps`
+      });
+    }
+  });
+  res.json({ notifications });
+});
+
 
 // List servers
 app.get('/api/servers', (req, res) => res.json(servers));

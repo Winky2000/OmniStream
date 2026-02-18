@@ -10,9 +10,14 @@
     .tabs{display:flex;gap:10px;margin-bottom:20px;border-bottom:1px solid #333;padding-bottom:8px;}
     .tab-link{padding:6px 14px;border-radius:999px;border:1px solid #444;background:#232837;color:#e0e3e8;text-decoration:none;font-size:13px;cursor:pointer;}
     .tab-link.active{border-color:#00bfff;background:#00bfff;color:#000;}
-    .placeholder{margin-top:24px;font-size:14px;color:#b0b3b8;}
     .back-btn{margin-top:12px;padding:6px 14px;border-radius:8px;border:1px solid #555;background:#232837;color:#e0e3e8;cursor:pointer;}
     .back-btn:hover{background:#2b3040;}
+    .notif-list{margin-top:20px;display:flex;flex-direction:column;gap:10px;}
+    .notif-card{background:#232837;border-radius:10px;padding:10px 14px;box-shadow:0 2px 8px #0006;border-left:4px solid #00bfff;font-size:13px;}
+    .notif-card.warn{border-left-color:#f0a500;}
+    .notif-card.error{border-left-color:#ff073a;}
+    .notif-title{font-weight:600;margin-bottom:4px;}
+    .notif-meta{font-size:11px;color:#a0a4b0;}
   </style>
 </head>
 <body>
@@ -24,9 +29,50 @@
     <a href="notifications.html" class="tab-link active">Notifications</a>
     <a href="history.html" class="tab-link">History</a>
   </div>
-  <div class="placeholder">
-    Alerts and notification settings will appear here.
-  </div>
+  <div id="notifList" class="notif-list"></div>
   <button class="back-btn" onclick="window.location.href='admin.html'">Back to Overview</button>
+  <script>
+    async function fetchNotifications() {
+      try {
+        const r = await fetch('/api/notifications');
+        return await r.json();
+      } catch (e) {
+        console.error(e);
+        return { notifications: [] };
+      }
+    }
+
+    async function renderNotifications() {
+      const data = await fetchNotifications();
+      const list = document.getElementById('notifList');
+      list.innerHTML = '';
+      const notifs = data.notifications || [];
+      if (!notifs.length) {
+        const empty = document.createElement('div');
+        empty.textContent = 'No active alerts.';
+        empty.style.fontSize = '14px';
+        empty.style.color = '#b0b3b8';
+        list.appendChild(empty);
+        return;
+      }
+      notifs.forEach(n => {
+        const card = document.createElement('div');
+        card.className = 'notif-card ' + (n.level || 'info');
+        const title = document.createElement('div');
+        title.className = 'notif-title';
+        title.textContent = n.message;
+        const meta = document.createElement('div');
+        meta.className = 'notif-meta';
+        const when = n.time ? new Date(n.time).toLocaleTimeString() : '';
+        meta.textContent = `${n.serverName || ''} ${when ? '• ' + when : ''}`.trim();
+        card.appendChild(title);
+        card.appendChild(meta);
+        list.appendChild(card);
+      });
+    }
+
+    renderNotifications();
+    setInterval(renderNotifications, 10000);
+  </script>
 </body>
 </html>
