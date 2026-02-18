@@ -144,6 +144,7 @@
     .session-poster{width:120px;object-fit:cover;margin-right:10px;border-radius:3px;box-shadow:0 1px 2px #0003;align-self:stretch}
     .progress-bar{background:#2a2e39;height:4px;border-radius:2px;margin-top:2px;overflow:hidden}
     .progress-fill{background:var(--progress-fill);height:100%;transition:width 0.3s}
+    .progress-meta{margin-top:3px;font-size:10px;color:var(--text-faint);display:flex;justify-content:space-between;gap:6px;white-space:nowrap;}
     .badge-row{margin-top:4px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;}
     .badge{font-size:10px;padding:1px 6px;border-radius:999px;border:1px solid rgba(255,255,255,0.16);background:rgba(0,0,0,0.3);color:var(--text-main);white-space:nowrap;}
     .badge-wan{border-color:#ff7043;color:#ffab91;}
@@ -451,7 +452,7 @@
             row.appendChild(info);
             // Append the combined row for both layouts so sessions never appear empty
             session.appendChild(row);
-            // Progress bar
+            // Progress bar + meta (▶ Playing, elapsed/total, ETA)
             const bar = document.createElement('div');
             bar.className = 'progress-bar';
             const fill = document.createElement('div');
@@ -459,6 +460,35 @@
             fill.style.width = (sess.progress || 0) + '%';
             bar.appendChild(fill);
             session.appendChild(bar);
+
+            const progressMeta = document.createElement('div');
+            progressMeta.className = 'progress-meta';
+            const durationSec = typeof sess.duration === 'number' ? sess.duration : 0;
+            const offsetSec = typeof sess.viewOffset === 'number' ? sess.viewOffset : 0;
+            function fmtTime(sec) {
+              if (!sec || sec <= 0 || !isFinite(sec)) return '0:00';
+              const m = Math.floor(sec / 60);
+              const s = Math.floor(sec % 60).toString().padStart(2, '0');
+              return m + ':' + s;
+            }
+            const playedStr = durationSec > 0 ? fmtTime(offsetSec) : '--:--';
+            const totalStr = durationSec > 0 ? fmtTime(durationSec) : '--:--';
+            const remainingSec = durationSec > 0 && offsetSec >= 0 && offsetSec < durationSec
+              ? (durationSec - offsetSec)
+              : 0;
+            const etaStr = remainingSec > 0 ? fmtTime(remainingSec) : '';
+            const leftLabel = `▶ Playing`;
+            let rightLabel = `${playedStr} / ${totalStr}`;
+            if (etaStr) {
+              rightLabel += ` · ETA ${etaStr}`;
+            }
+            const leftSpan = document.createElement('span');
+            leftSpan.textContent = leftLabel;
+            const rightSpan = document.createElement('span');
+            rightSpan.textContent = rightLabel;
+            progressMeta.appendChild(leftSpan);
+            progressMeta.appendChild(rightSpan);
+            session.appendChild(progressMeta);
             sessionsDiv.appendChild(session);
           });
           if (visibleSessions.length > 0) {
