@@ -103,14 +103,22 @@ function summaryFromResponse(resp) {
             }
           }
         }
-        // Bandwidth as number (parse from Plex bandwidth field, e.g. '20280')
+        // Bandwidth as number (prefer Session/TranscodeSession metrics, fallback to legacy m.bandwidth)
         let bandwidth = 0;
-        if (typeof m.bandwidth === 'number') bandwidth = m.bandwidth;
-        else if (typeof m.bandwidth === 'string') {
+        // Plex Session.bandwidth is typically in kbps
+        if (m.Session && typeof m.Session.bandwidth === 'number') {
+          bandwidth = m.Session.bandwidth / 1000; // kbps -> Mbps
+        } else if (m.TranscodeSession && m.TranscodeSession.bitrate) {
+          // TranscodeSession.bitrate is often in kbps
+          const raw = Number(m.TranscodeSession.bitrate);
+          if (!Number.isNaN(raw)) bandwidth = raw / 1000;
+        } else if (typeof m.bandwidth === 'number') {
+          bandwidth = m.bandwidth;
+        } else if (typeof m.bandwidth === 'string') {
           const match = m.bandwidth.match(/([\d.]+)/);
           if (match) bandwidth = parseFloat(match[1]);
         }
-        // If bandwidth is > 1000, treat as kbps and convert to Mbps
+        // If bandwidth still looks like kbps (big number), convert to Mbps
         if (bandwidth > 1000) bandwidth = bandwidth / 1000;
         return {
           user: m.user || m.User?.title || 'Unknown',
