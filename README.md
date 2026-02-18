@@ -1,12 +1,4 @@
-git init
-git add .
-git commit -m "Initial commit"
-git branch -M main
-git remote add origin git@github.com:YOUR_USERwinky2000/omnistream.git
-git push -u origin main
-docker pull ghcr.io/YOUR_USERwinky2000/omnistream:latest
-docker run --rm -p 3000:3000 ghcr.io/YOUR_USERwinky2000/omnistream:latest
-echo $GITHUB_TOKEN | docker login ghcr.io -u YOUR_USER --password-stdin
+
 # OmniStream
 
 OmniStream is a dashboard to monitor multiple Plex, Jellyfin, and Emby servers on one screen. It shows active sessions, direct play vs transcoding, bandwidth usage, history, reports, and basic notifications.

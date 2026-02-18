@@ -4,6 +4,7 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 const cors = require('cors');
+const sqlite3 = require('sqlite3').verbose();
 // ...existing code...
 
 const app = express();
@@ -53,8 +54,36 @@ app.put('/api/servers/:id', (req, res) => {
 });
 
 const statuses = {}; // keyed by server.id
-const history = []; // recent session history
 const MAX_HISTORY = 500;
+
+// SQLite-backed history
+const HISTORY_DB_FILE = path.join(__dirname, 'history.db');
+let historyDb;
+try {
+  historyDb = new sqlite3.Database(HISTORY_DB_FILE);
+  historyDb.serialize(() => {
+    historyDb.run(
+      'CREATE TABLE IF NOT EXISTS history (\n' +
+      '  id INTEGER PRIMARY KEY AUTOINCREMENT,\n' +
+      '  time TEXT NOT NULL,\n' +
+      '  serverId TEXT,\n' +
+      '  serverName TEXT,\n' +
+      '  type TEXT,\n' +
+      '  user TEXT,\n' +
+      '  title TEXT,\n' +
+      '  stream TEXT,\n' +
+      '  transcoding INTEGER,\n' +
+      '  location TEXT,\n' +
+      '  bandwidth REAL\n' +
+      ')'
+    );
+    historyDb.run('CREATE INDEX IF NOT EXISTS idx_history_time ON history(time)');
+  });
+  console.log('[OmniStream] Using history database at', HISTORY_DB_FILE);
+} catch (e) {
+  console.error('Failed to initialize history database:', e.message);
+  historyDb = null;
+}
 
 const defaultPathForType = (t) => {
   if (t === 'plex') return '/status/sessions';
@@ -487,27 +516,46 @@ async function pollServer(s) {
 async function pollAll() {
   if (!servers || servers.length === 0) return;
   await Promise.all(servers.map((s) => pollServer(s)));
-  // After polling all servers, snapshot current sessions into history
-  const timestamp = new Date().toISOString();
-  Object.values(statuses).forEach(st => {
-    if (!st.online || !Array.isArray(st.sessions)) return;
-    st.sessions.forEach(sess => {
-      history.push({
-        time: timestamp,
-        serverId: st.id,
-        serverName: st.name,
-        type: st.type,
-        user: sess.user || sess.userName || 'Unknown',
-        title: sess.grandparentTitle || sess.title || sess.channel || 'Idle',
-        stream: sess.stream || '',
-        transcoding: typeof sess.transcoding === 'boolean' ? sess.transcoding : undefined,
-        location: sess.location || '',
-        bandwidth: typeof sess.bandwidth === 'number' ? sess.bandwidth : 0
+  // After polling all servers, snapshot current sessions into history database
+  if (historyDb) {
+    const timestamp = new Date().toISOString();
+    historyDb.serialize(() => {
+      const stmt = historyDb.prepare(
+        'INSERT INTO history (time, serverId, serverName, type, user, title, stream, transcoding, location, bandwidth) VALUES (?,?,?,?,?,?,?,?,?,?)'
+      );
+      Object.values(statuses).forEach(st => {
+        if (!st.online || !Array.isArray(st.sessions)) return;
+        st.sessions.forEach(sess => {
+          const user = sess.user || sess.userName || 'Unknown';
+          const title = sess.grandparentTitle || sess.title || sess.channel || 'Idle';
+          const stream = sess.stream || '';
+          const transcoding = typeof sess.transcoding === 'boolean' ? (sess.transcoding ? 1 : 0) : null;
+          const location = sess.location || '';
+          const bandwidth = typeof sess.bandwidth === 'number' ? sess.bandwidth : 0;
+          stmt.run(
+            timestamp,
+            st.id,
+            st.name,
+            st.type,
+            user,
+            title,
+            stream,
+            transcoding,
+            location,
+            bandwidth
+          );
+        });
       });
+      stmt.finalize();
+      // Trim to MAX_HISTORY rows to keep DB small
+      historyDb.run(
+        'DELETE FROM history WHERE id NOT IN (SELECT id FROM history ORDER BY id DESC LIMIT ?)',
+        [MAX_HISTORY],
+        (err) => {
+          if (err) console.error('Failed to trim history database:', err.message);
+        }
+      );
     });
-  });
-  if (history.length > MAX_HISTORY) {
-    history.splice(0, history.length - MAX_HISTORY);
   }
 }
 
@@ -529,9 +577,32 @@ app.get('/api/status', (req, res) => {
   });
 });
 
-// Simple history API
+// Simple history API - backed by SQLite
 app.get('/api/history', (req, res) => {
-  res.json({ history });
+  if (!historyDb) return res.json({ history: [] });
+  historyDb.all(
+    'SELECT time, serverId, serverName, type, user, title, stream, transcoding, location, bandwidth FROM history ORDER BY id ASC LIMIT ?',
+    [MAX_HISTORY],
+    (err, rows) => {
+      if (err) {
+        console.error('Failed to read history database:', err.message);
+        return res.status(500).json({ history: [] });
+      }
+      const history = rows.map(r => ({
+        time: r.time,
+        serverId: r.serverId,
+        serverName: r.serverName,
+        type: r.type,
+        user: r.user,
+        title: r.title,
+        stream: r.stream,
+        transcoding: typeof r.transcoding === 'number' ? !!r.transcoding : undefined,
+        location: r.location,
+        bandwidth: typeof r.bandwidth === 'number' ? r.bandwidth : 0
+      }));
+      res.json({ history });
+    }
+  );
 });
 
 // Derived notifications based on current statuses
