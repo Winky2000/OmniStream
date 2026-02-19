@@ -251,7 +251,7 @@
       const grid = document.getElementById('grid');
       const sidebar = document.querySelector('.sidebar');
       const layoutToggle = document.getElementById('layoutToggle');
-      grid.innerHTML = '';
+      const fragment = document.createDocumentFragment();
       // Setup mode: no servers configured yet
       if (setup || !servers.length) {
         if (sidebar) sidebar.style.display = 'none';
@@ -531,8 +531,10 @@
             card.appendChild(sessionsDiv);
           }
         }
-        grid.appendChild(card);
+        fragment.appendChild(card);
       });
+      // Swap the entire grid in one go to minimize flashing
+      grid.replaceChildren(fragment);
       // After rendering, equalize session heights in horizontal layout
       equalizeSessionHeights();
     }
@@ -560,7 +562,8 @@
     }
 
     loop();
-    setInterval(loop, 5000);
+    // Poll less aggressively to reduce visual flashing while keeping data fresh
+    setInterval(loop, 10000);
   </script>
 </body>
 </html>
