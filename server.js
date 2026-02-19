@@ -1231,6 +1231,65 @@ app.get('/api/notifications', (req, res) => {
   res.json({ notifications });
 });
 
+// Fire a synthetic test notification through configured notifiers
+app.post('/api/notifiers/test', (req, res) => {
+  try {
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const requested = Array.isArray(body.channels) ? body.channels : null;
+    const notifierCfg = (appConfig && appConfig.notifiers) || {};
+    const notification = {
+      id: `test-${Date.now()}`,
+      level: 'info',
+      serverId: 'test',
+      serverName: 'OmniStream',
+      time: new Date().toISOString(),
+      kind: 'test',
+      message: 'This is a test notification from OmniStream. If you received this, your notifier is working.'
+    };
+    const sent = [];
+
+    const shouldUse = (name) => !requested || requested.includes(name);
+
+    if (shouldUse('discord') && notifierCfg.discord && notifierCfg.discord.webhookUrl) {
+      sendDiscordNotification(notification);
+      sent.push('discord');
+    }
+    if (shouldUse('email') && notifierCfg.email && notifierCfg.email.enabled !== false && notifierCfg.email.from && notifierCfg.email.to) {
+      sendEmailNotification(notification);
+      sent.push('email');
+    }
+    if (shouldUse('webhook') && notifierCfg.webhook && notifierCfg.webhook.url) {
+      sendGenericWebhookNotification(notification);
+      sent.push('webhook');
+    }
+    if (shouldUse('slack') && notifierCfg.slack && notifierCfg.slack.webhookUrl) {
+      sendSlackNotification(notification);
+      sent.push('slack');
+    }
+    if (shouldUse('telegram') && notifierCfg.telegram && notifierCfg.telegram.botToken && notifierCfg.telegram.chatId) {
+      sendTelegramNotification(notification);
+      sent.push('telegram');
+    }
+    if (shouldUse('twilio') && notifierCfg.twilio && notifierCfg.twilio.accountSid && notifierCfg.twilio.authToken && notifierCfg.twilio.from && notifierCfg.twilio.to) {
+      sendTwilioSmsNotification(notification);
+      sent.push('twilio');
+    }
+    if (shouldUse('pushover') && notifierCfg.pushover && notifierCfg.pushover.user && notifierCfg.pushover.token) {
+      sendPushoverNotification(notification);
+      sent.push('pushover');
+    }
+    if (shouldUse('gotify') && notifierCfg.gotify && notifierCfg.gotify.serverUrl && notifierCfg.gotify.token) {
+      sendGotifyNotification(notification);
+      sent.push('gotify');
+    }
+
+    res.json({ ok: true, channels: sent });
+  } catch (e) {
+    console.error('[OmniStream] Failed to send test notification:', e.message);
+    res.status(500).json({ error: 'Failed to send test notification' });
+  }
+});
+
 // Simple API to read/update notifier configuration (Discord, email) from config.json
 app.get('/api/config/notifiers', (req, res) => {
   res.json({ notifiers: appConfig.notifiers || {} });

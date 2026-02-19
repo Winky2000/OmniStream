@@ -260,6 +260,8 @@
 
   <button id="saveBtn" class="btn">Save Settings</button>
   <span id="saveStatus" class="status"></span>
+  <button id="testBtn" class="btn" style="margin-left:8px;">Send test notification</button>
+  <span id="testStatus" class="status"></span>
   <button id="backBtn" class="btn" style="margin-left:8px;">Back to Settings</button>
 
   <script>
@@ -518,7 +520,35 @@
       }
     }
 
+    async function testNotifiers() {
+      const statusEl = document.getElementById('testStatus');
+      statusEl.textContent = 'Sending test notification...';
+      statusEl.style.color = '';
+      try {
+        const resp = await fetch('/api/notifiers/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({})
+        });
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => '');
+          statusEl.textContent = 'Test failed: ' + (text || resp.status + ' ' + resp.statusText);
+          statusEl.style.color = '#ff8a80';
+          return;
+        }
+        const data = await resp.json().catch(() => ({}));
+        const channels = Array.isArray(data.channels) && data.channels.length ? data.channels.join(', ') : 'configured notifiers';
+        statusEl.textContent = 'Test notification sent via ' + channels + '. Check your targets to confirm.';
+        statusEl.style.color = '#a5d6a7';
+      } catch (e) {
+        console.error(e);
+        statusEl.textContent = 'Test failed. Check server logs.';
+        statusEl.style.color = '#ff8a80';
+      }
+    }
+
     document.getElementById('saveBtn').onclick = saveConfig;
+    document.getElementById('testBtn').onclick = testNotifiers;
     document.getElementById('backBtn').onclick = () => {
       window.location.href = 'admin.html';
     };
