@@ -38,6 +38,29 @@ OmniStream is a dashboard to monitor multiple Plex, Jellyfin, and Emby servers o
 - Simple notifications (offline servers, WAN transcodes, high bandwidth)
 
 ---
+## Screenshots
+
+### Setup
+
+![Setup welcome screen](screenshots/Setup.png)
+
+### Dashboard
+
+![Dashboard sessions view](screenshots/Dashboard.png)
+![Dashboard alternative layout](screenshots/Dashboard2.png)
+
+### Servers
+
+![Servers overview](screenshots/Connected Servers.png)
+
+### Notifiers
+
+![Notifier configuration](screenshots/Notifiers.png)
+
+### Themes
+
+![Theme selector](screenshots/Themes.png)
+
 
 ## Running with Docker (recommended)
 
