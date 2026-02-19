@@ -1,6 +1,8 @@
 
 # OmniStream
 
+_Read-only monitoring for Plex, Jellyfin, and Emby with history, reports, and notifications._
+
 OmniStream is a dashboard to monitor multiple Plex, Jellyfin, and Emby servers on one screen. It shows active sessions, direct play vs transcoding, bandwidth usage, history, reports, and basic notifications.
 
 ## Quick start
@@ -36,6 +38,13 @@ OmniStream is a dashboard to monitor multiple Plex, Jellyfin, and Emby servers o
 - History and basic reports
 - Admin UI to add/edit/enable/disable servers
 - Simple notifications (offline servers, WAN transcodes, high bandwidth)
+
+---
+## What OmniStream does (and doesn't) do
+
+- **Read-only monitoring** &mdash; OmniStream never modifies your media libraries or playback; it only calls the official Plex/Jellyfin/Emby APIs to read status.
+- **No library management** &mdash; it does not add/remove media, manage metadata, or control your players.
+- **Focused on visibility** &mdash; the goal is a clear view of sessions, bandwidth, and health across servers, plus basic alerts.
 
 ---
 ## Screenshots
@@ -173,6 +182,20 @@ Open http://localhost:3000 and add servers via the Admin UI.
 
 ---
 
+## Notifications
+
+OmniStream can send basic alerts when something important happens.
+
+- **Channels**: Discord, generic webhook, Slack, Telegram, SMS (Twilio), Pushover, Gotify, and Email.
+- **Events** (global rules):
+	- Offline servers
+	- WAN transcodes
+	- High total bandwidth above a configurable Mbps threshold
+- **Per-channel triggers**: each notifier (e.g. Discord vs SMS) can opt in/out of specific events on the Notifiers page.
+- **Test button**: use **Send test notification** on the Notifiers page to confirm your configuration without waiting for a real event.
+
+---
+
 ## Running on unRAID
 
 An example unRAID Docker template is provided at:
@@ -206,6 +229,18 @@ An example unRAID Docker template is provided at:
 	- Host port for the WebUI (if `3000` is already in use).
 	- Host path for `servers.json` if you prefer a different appdata location.
 5. Apply to create and start the container, then open the WebUI.
+
+---
+
+## Configuration at a glance
+
+| Item                         | Location / file                           | Description                                           |
+|------------------------------|-------------------------------------------|-------------------------------------------------------|
+| Server list                  | `servers.json`                            | List of Plex/Jellyfin/Emby servers and tokens.       |
+| Notifier & advanced config   | `config.json`                             | Created/updated when you save Notifier settings.     |
+| History database             | `history.db`                              | SQLite DB storing recent session snapshots.          |
+| Docker compose definition    | `docker-compose.yml`                      | Recommended way to run the container.                |
+| unRAID template              | `unraid/omnistream.xml`                   | Example template for unRAID Docker manager.          |
 
 ---
 
@@ -251,6 +286,29 @@ You can edit servers via the Admin → Servers UI rather than hand-editing `serv
 Once servers are online, the main dashboard shows live sessions, and the Admin tabs (Servers, Reports, Notifications, History) provide management and insights.
 
 ---
+
+## Releases
+
+### v0.1.0
+
+Initial public release of OmniStream:
+
+- Multi-server dashboard for Plex, Jellyfin, and Emby with active session cards and bandwidth stats.
+- Per-server status, history storage, and a simple reports view (top users/titles, 7-day activity).
+- Read-only monitoring with support for multiple notifier channels and basic rules.
+- New sidebar-driven UI with Settings subpages, themes/layout selection, and Notifiers test button.
+
+---
+## Contributing
+
+Contributions and feedback are welcome.
+
+- For small fixes (typos, wording, minor UI tweaks), feel free to open a pull request directly.
+- For larger changes, please open an issue first so we can discuss the approach.
+- When adding user-visible changes, update:
+	- `README.md` where appropriate.
+	- `CHANGELOG.md` with a brief entry under the **Unreleased** section (or the next version).
+
 
 ## TODO / ideas
 
