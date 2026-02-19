@@ -80,6 +80,17 @@ const MAX_HISTORY = 500;
 // Track last derived notifications so we only fire notifiers on changes
 let lastNotificationIds = new Set();
 
+function shouldSendNotificationToChannel(notification, channelCfg) {
+  if (!channelCfg) return false;
+  const triggers = channelCfg.triggers;
+  const kind = notification.kind;
+  if (!kind || !triggers) return true;
+  if (kind === 'offline') return triggers.offline !== false;
+  if (kind === 'wanTranscode') return triggers.wanTranscodes !== false;
+  if (kind === 'highBandwidth') return triggers.highBandwidth !== false;
+  return true;
+}
+
 function triggerNotifiers() {
   try {
     const notifications = buildNotificationsSnapshot();
@@ -90,15 +101,32 @@ function triggerNotifiers() {
       lastNotificationIds = currentIds;
       return;
     }
+    const notifierCfg = (appConfig && appConfig.notifiers) || {};
     newlyActive.forEach(n => {
-      sendDiscordNotification(n);
-      sendEmailNotification(n);
-      sendGenericWebhookNotification(n);
-      sendSlackNotification(n);
-      sendTelegramNotification(n);
-      sendTwilioSmsNotification(n);
-      sendPushoverNotification(n);
-      sendGotifyNotification(n);
+      if (shouldSendNotificationToChannel(n, notifierCfg.discord)) {
+        sendDiscordNotification(n);
+      }
+      if (shouldSendNotificationToChannel(n, notifierCfg.email)) {
+        sendEmailNotification(n);
+      }
+      if (shouldSendNotificationToChannel(n, notifierCfg.webhook)) {
+        sendGenericWebhookNotification(n);
+      }
+      if (shouldSendNotificationToChannel(n, notifierCfg.slack)) {
+        sendSlackNotification(n);
+      }
+      if (shouldSendNotificationToChannel(n, notifierCfg.telegram)) {
+        sendTelegramNotification(n);
+      }
+      if (shouldSendNotificationToChannel(n, notifierCfg.twilio)) {
+        sendTwilioSmsNotification(n);
+      }
+      if (shouldSendNotificationToChannel(n, notifierCfg.pushover)) {
+        sendPushoverNotification(n);
+      }
+      if (shouldSendNotificationToChannel(n, notifierCfg.gotify)) {
+        sendGotifyNotification(n);
+      }
     });
     lastNotificationIds = currentIds;
   } catch (e) {
@@ -1136,15 +1164,26 @@ app.post('/api/import-history', async (req, res) => {
 function buildNotificationsSnapshot() {
   const notifications = [];
   const now = new Date().toISOString();
+  const rules = (appConfig.notifiers && appConfig.notifiers.rules) || {};
+  const offlineRule = rules.offline || {};
+  const wanRule = rules.wanTranscodes || {};
+  const highRule = rules.highBandwidth || {};
+  const offlineEnabled = offlineRule.enabled !== false;
+  const wanEnabled = wanRule.enabled !== false;
+  const highEnabled = highRule.enabled !== false;
+  const highThreshold = typeof highRule.thresholdMbps === 'number' && !Number.isNaN(highRule.thresholdMbps)
+    ? highRule.thresholdMbps
+    : 50;
   Object.values(statuses).forEach(st => {
     // Server offline
-    if (!st.online) {
+    if (!st.online && offlineEnabled) {
       notifications.push({
         id: `offline-${st.id}`,
         level: 'error',
         serverId: st.id,
         serverName: st.name,
         time: now,
+        kind: 'offline',
         message: `${st.name || 'Server'} is offline`
       });
       return;
@@ -1158,27 +1197,29 @@ function buildNotificationsSnapshot() {
       else if (sess.state && typeof sess.state === 'string' && sess.state.toLowerCase().includes('transcode')) isTranscode = true;
       return isWan && isTranscode;
     });
-    if (wanTranscodes.length > 0) {
+    if (wanEnabled && wanTranscodes.length > 0) {
       notifications.push({
         id: `wan-transcode-${st.id}`,
         level: 'warn',
         serverId: st.id,
         serverName: st.name,
         time: now,
+        kind: 'wanTranscode',
         message: `${wanTranscodes.length} WAN transcode${wanTranscodes.length > 1 ? 's' : ''} active on ${st.name || 'server'}`
       });
     }
     // High total bandwidth (simple threshold)
     const summary = st.summary || {};
     const totalBw = typeof summary.totalBandwidth === 'number' ? summary.totalBandwidth : 0;
-    if (totalBw > 50) {
+    if (highEnabled && totalBw > highThreshold) {
       notifications.push({
         id: `high-bandwidth-${st.id}`,
         level: 'warn',
         serverId: st.id,
         serverName: st.name,
         time: now,
-        message: `High total bandwidth on ${st.name || 'server'}: ${totalBw.toFixed(1)} Mbps`
+        kind: 'highBandwidth',
+        message: `High total bandwidth on ${st.name || 'server'}: ${totalBw.toFixed(1)} Mbps (threshold ${highThreshold.toFixed(1)} Mbps)`
       });
     }
   });

@@ -35,7 +35,9 @@
     .btn:hover{background:var(--btn-bg-hover);color:var(--btn-text-hover);}
     .danger{border-color:#ff7043;color:#ffab91;}
     .status{font-size:12px;margin-top:8px;}
-  </style>
+    .notifier-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 14px 0;}
+    .notifier-tab{padding:4px 10px;border-radius:999px;border:1px solid var(--btn-border);background:transparent;color:var(--text-muted);font-size:12px;cursor:pointer;}
+    .notifier-tab-active{background:var(--btn-bg);color:var(--btn-text);}
   </style>
 </head>
 <body>
@@ -64,33 +66,76 @@
   <h2 style="margin:10px 0 12px 0;font-size:16px;color:var(--text-main);">Notifier settings</h2>
 
   <div class="section">
+    <h2>Notification rules</h2>
+    <label class="inline">
+      <input type="checkbox" id="ruleOffline"> Notify when a server goes offline
+    </label>
+    <label class="inline">
+      <input type="checkbox" id="ruleWanTranscodes"> Notify on WAN transcodes
+    </label>
+    <label class="inline">
+      <span style="flex:1;min-width:0;">
+        Notify on high total bandwidth above (Mbps)
+        <input type="number" id="ruleHighBandwidthThreshold" value="50" style="max-width:120px;">
+      </span>
+      <span class="inline" style="gap:4px;">
+        <input type="checkbox" id="ruleHighBandwidth"> Enable high-bandwidth alerts
+      </span>
+    </label>
+    <div class="hint">These rules control when OmniStream generates alerts that are sent to your notifiers. Defaults are: offline, WAN transcodes, and bandwidth above 50 Mbps.</div>
+  </div>
+
+  <div class="notifier-tabs">
+    <button type="button" class="notifier-tab" data-panel="email">Email</button>
+    <button type="button" class="notifier-tab" data-panel="discord">Discord</button>
+    <button type="button" class="notifier-tab" data-panel="webhook">Webhook</button>
+    <button type="button" class="notifier-tab" data-panel="slack">Slack</button>
+    <button type="button" class="notifier-tab" data-panel="telegram">Telegram</button>
+    <button type="button" class="notifier-tab" data-panel="twilio">SMS (Twilio)</button>
+    <button type="button" class="notifier-tab" data-panel="pushover">Pushover</button>
+    <button type="button" class="notifier-tab" data-panel="gotify">Gotify</button>
+  </div>
+
+  <div class="section notifier-panel" data-panel="discord">
     <h2>Discord</h2>
     <label>
       Webhook URL
       <input type="text" id="discordWebhook" placeholder="https://discord.com/api/webhooks/...">
     </label>
     <div class="hint">Paste a Discord Incoming Webhook URL to receive alerts (offline servers, WAN transcodes, high bandwidth).</div>
+    <label style="margin-top:10px;font-size:12px;font-weight:500;">Notification triggers</label>
+    <label class="inline"><input type="checkbox" id="discordTrigOffline"> Offline servers</label>
+    <label class="inline"><input type="checkbox" id="discordTrigWan"> WAN transcodes</label>
+    <label class="inline"><input type="checkbox" id="discordTrigHigh"> High total bandwidth</label>
   </div>
 
-  <div class="section">
+  <div class="section notifier-panel" data-panel="webhook">
     <h2>Generic Webhook</h2>
     <label>
       Webhook URL
       <input type="text" id="webhookUrl" placeholder="https://your-service.example.com/webhook">
     </label>
     <div class="hint">Useful for Home Assistant, custom bots, or any service that accepts a simple JSON POST.</div>
+    <label style="margin-top:10px;font-size:12px;font-weight:500;">Notification triggers</label>
+    <label class="inline"><input type="checkbox" id="webhookTrigOffline"> Offline servers</label>
+    <label class="inline"><input type="checkbox" id="webhookTrigWan"> WAN transcodes</label>
+    <label class="inline"><input type="checkbox" id="webhookTrigHigh"> High total bandwidth</label>
   </div>
 
-  <div class="section">
+  <div class="section notifier-panel" data-panel="slack">
     <h2>Slack</h2>
     <label>
       Incoming Webhook URL
       <input type="text" id="slackWebhook" placeholder="https://hooks.slack.com/services/...">
     </label>
     <div class="hint">Use a Slack Incoming Webhook to post alerts into a channel.</div>
+    <label style="margin-top:10px;font-size:12px;font-weight:500;">Notification triggers</label>
+    <label class="inline"><input type="checkbox" id="slackTrigOffline"> Offline servers</label>
+    <label class="inline"><input type="checkbox" id="slackTrigWan"> WAN transcodes</label>
+    <label class="inline"><input type="checkbox" id="slackTrigHigh"> High total bandwidth</label>
   </div>
 
-  <div class="section">
+  <div class="section notifier-panel" data-panel="telegram">
     <h2>Telegram</h2>
     <label>
       Bot token
@@ -101,9 +146,13 @@
       <input type="text" id="telegramChat" placeholder="@your_channel or numeric chat id">
     </label>
     <div class="hint">Create a bot with @BotFather, then paste its token and the chat/channel ID where you want alerts.</div>
+    <label style="margin-top:10px;font-size:12px;font-weight:500;">Notification triggers</label>
+    <label class="inline"><input type="checkbox" id="telegramTrigOffline"> Offline servers</label>
+    <label class="inline"><input type="checkbox" id="telegramTrigWan"> WAN transcodes</label>
+    <label class="inline"><input type="checkbox" id="telegramTrigHigh"> High total bandwidth</label>
   </div>
 
-  <div class="section">
+  <div class="section notifier-panel" data-panel="twilio">
     <h2>SMS (Twilio)</h2>
     <label>
       Account SID
@@ -122,9 +171,13 @@
       <input type="text" id="twilioTo" placeholder="+1234567890">
     </label>
     <div class="hint">Twilio credentials and numbers are stored in config.json. Use for critical alerts only.</div>
+    <label style="margin-top:10px;font-size:12px;font-weight:500;">Notification triggers</label>
+    <label class="inline"><input type="checkbox" id="twilioTrigOffline"> Offline servers</label>
+    <label class="inline"><input type="checkbox" id="twilioTrigWan"> WAN transcodes</label>
+    <label class="inline"><input type="checkbox" id="twilioTrigHigh"> High total bandwidth</label>
   </div>
 
-  <div class="section">
+  <div class="section notifier-panel" data-panel="pushover">
     <h2>Pushover</h2>
     <label>
       User key
@@ -138,9 +191,13 @@
       Priority (default 0)
       <input type="number" id="pushoverPriority" value="0" style="max-width:120px;">
     </label>
+    <label style="margin-top:10px;font-size:12px;font-weight:500;">Notification triggers</label>
+    <label class="inline"><input type="checkbox" id="pushoverTrigOffline"> Offline servers</label>
+    <label class="inline"><input type="checkbox" id="pushoverTrigWan"> WAN transcodes</label>
+    <label class="inline"><input type="checkbox" id="pushoverTrigHigh"> High total bandwidth</label>
   </div>
 
-  <div class="section">
+  <div class="section notifier-panel" data-panel="gotify">
     <h2>Gotify</h2>
     <label>
       Server URL
@@ -154,9 +211,13 @@
       Priority (default 5)
       <input type="number" id="gotifyPriority" value="5" style="max-width:120px;">
     </label>
+    <label style="margin-top:10px;font-size:12px;font-weight:500;">Notification triggers</label>
+    <label class="inline"><input type="checkbox" id="gotifyTrigOffline"> Offline servers</label>
+    <label class="inline"><input type="checkbox" id="gotifyTrigWan"> WAN transcodes</label>
+    <label class="inline"><input type="checkbox" id="gotifyTrigHigh"> High total bandwidth</label>
   </div>
 
-  <div class="section">
+  <div class="section notifier-panel" data-panel="email">
     <h2>Email</h2>
     <label class="inline">
       <input type="checkbox" id="emailEnabled"> Enable email notifications
@@ -191,6 +252,10 @@
       <input type="password" id="smtpPass" placeholder="smtp password">
     </label>
     <div class="hint">Email credentials are stored in config.json on the server. Use a dedicated app password if possible.</div>
+    <label style="margin-top:10px;font-size:12px;font-weight:500;">Notification triggers</label>
+    <label class="inline"><input type="checkbox" id="emailTrigOffline"> Offline servers</label>
+    <label class="inline"><input type="checkbox" id="emailTrigWan"> WAN transcodes</label>
+    <label class="inline"><input type="checkbox" id="emailTrigHigh"> High total bandwidth</label>
   </div>
 
   <button id="saveBtn" class="btn">Save Settings</button>
@@ -226,6 +291,25 @@
           localStorage.setItem('omnistreamSidebar', collapsed ? 'collapsed' : 'open');
         });
       }
+
+      const tabs = document.querySelectorAll('.notifier-tab');
+      const panels = document.querySelectorAll('.notifier-panel');
+      function showPanel(name) {
+        tabs.forEach(tab => {
+          tab.classList.toggle('notifier-tab-active', tab.dataset.panel === name);
+        });
+        panels.forEach(panel => {
+          panel.style.display = panel.dataset.panel === name ? 'block' : 'none';
+        });
+        localStorage.setItem('omnistreamNotifierTab', name);
+      }
+      if (tabs.length && panels.length) {
+        const savedPanel = localStorage.getItem('omnistreamNotifierTab') || 'email';
+        showPanel(savedPanel);
+        tabs.forEach(tab => {
+          tab.addEventListener('click', () => showPanel(tab.dataset.panel));
+        });
+      }
     })();
 
     async function loadConfig() {
@@ -233,8 +317,14 @@
         const r = await fetch('/api/config/notifiers');
         const data = await r.json();
         const n = data.notifiers || {};
+        const rules = n.rules || {};
         const discord = n.discord || {};
         const email = n.email || {};
+        document.getElementById('ruleOffline').checked = rules.offline ? rules.offline.enabled !== false : true;
+        document.getElementById('ruleWanTranscodes').checked = rules.wanTranscodes ? rules.wanTranscodes.enabled !== false : true;
+        const highRule = rules.highBandwidth || {};
+        document.getElementById('ruleHighBandwidth').checked = highRule.enabled !== false;
+        document.getElementById('ruleHighBandwidthThreshold').value = highRule.thresholdMbps != null ? highRule.thresholdMbps : 50;
         document.getElementById('discordWebhook').value = discord.webhookUrl || '';
         document.getElementById('emailEnabled').checked = email.enabled === true;
         document.getElementById('emailFrom').value = email.from || '';
@@ -266,6 +356,46 @@
         document.getElementById('gotifyServer').value = gotify.serverUrl || '';
         document.getElementById('gotifyToken').value = gotify.token || '';
         document.getElementById('gotifyPriority').value = gotify.priority != null ? gotify.priority : 5;
+
+        const emailTrig = email.triggers || {};
+        document.getElementById('emailTrigOffline').checked = emailTrig.offline !== false;
+        document.getElementById('emailTrigWan').checked = emailTrig.wanTranscodes !== false;
+        document.getElementById('emailTrigHigh').checked = emailTrig.highBandwidth !== false;
+
+        const discordTrig = discord.triggers || {};
+        document.getElementById('discordTrigOffline').checked = discordTrig.offline !== false;
+        document.getElementById('discordTrigWan').checked = discordTrig.wanTranscodes !== false;
+        document.getElementById('discordTrigHigh').checked = discordTrig.highBandwidth !== false;
+
+        const webhookTrig = webhook.triggers || {};
+        document.getElementById('webhookTrigOffline').checked = webhookTrig.offline !== false;
+        document.getElementById('webhookTrigWan').checked = webhookTrig.wanTranscodes !== false;
+        document.getElementById('webhookTrigHigh').checked = webhookTrig.highBandwidth !== false;
+
+        const slackTrig = slack.triggers || {};
+        document.getElementById('slackTrigOffline').checked = slackTrig.offline !== false;
+        document.getElementById('slackTrigWan').checked = slackTrig.wanTranscodes !== false;
+        document.getElementById('slackTrigHigh').checked = slackTrig.highBandwidth !== false;
+
+        const telegramTrig = telegram.triggers || {};
+        document.getElementById('telegramTrigOffline').checked = telegramTrig.offline !== false;
+        document.getElementById('telegramTrigWan').checked = telegramTrig.wanTranscodes !== false;
+        document.getElementById('telegramTrigHigh').checked = telegramTrig.highBandwidth !== false;
+
+        const twilioTrig = twilio.triggers || {};
+        document.getElementById('twilioTrigOffline').checked = twilioTrig.offline !== false;
+        document.getElementById('twilioTrigWan').checked = twilioTrig.wanTranscodes !== false;
+        document.getElementById('twilioTrigHigh').checked = twilioTrig.highBandwidth !== false;
+
+        const pushoverTrig = pushover.triggers || {};
+        document.getElementById('pushoverTrigOffline').checked = pushoverTrig.offline !== false;
+        document.getElementById('pushoverTrigWan').checked = pushoverTrig.wanTranscodes !== false;
+        document.getElementById('pushoverTrigHigh').checked = pushoverTrig.highBandwidth !== false;
+
+        const gotifyTrigObj = gotify.triggers || {};
+        document.getElementById('gotifyTrigOffline').checked = gotifyTrigObj.offline !== false;
+        document.getElementById('gotifyTrigWan').checked = gotifyTrigObj.wanTranscodes !== false;
+        document.getElementById('gotifyTrigHigh').checked = gotifyTrigObj.highBandwidth !== false;
       } catch (e) {
         console.error(e);
       }
@@ -276,8 +406,21 @@
       statusEl.textContent = 'Saving...';
       try {
         const body = {
+          rules: {
+            offline: { enabled: document.getElementById('ruleOffline').checked },
+            wanTranscodes: { enabled: document.getElementById('ruleWanTranscodes').checked },
+            highBandwidth: {
+              enabled: document.getElementById('ruleHighBandwidth').checked,
+              thresholdMbps: Number(document.getElementById('ruleHighBandwidthThreshold').value) || 50
+            }
+          },
           discord: {
-            webhookUrl: document.getElementById('discordWebhook').value.trim() || undefined
+            webhookUrl: document.getElementById('discordWebhook').value.trim() || undefined,
+            triggers: {
+              offline: document.getElementById('discordTrigOffline').checked,
+              wanTranscodes: document.getElementById('discordTrigWan').checked,
+              highBandwidth: document.getElementById('discordTrigHigh').checked
+            }
           },
           email: {
             enabled: document.getElementById('emailEnabled').checked,
@@ -291,33 +434,68 @@
                 user: document.getElementById('smtpUser').value.trim() || undefined,
                 pass: document.getElementById('smtpPass').value || undefined
               }
+            },
+            triggers: {
+              offline: document.getElementById('emailTrigOffline').checked,
+              wanTranscodes: document.getElementById('emailTrigWan').checked,
+              highBandwidth: document.getElementById('emailTrigHigh').checked
             }
           },
           webhook: {
-            url: document.getElementById('webhookUrl').value.trim() || undefined
+            url: document.getElementById('webhookUrl').value.trim() || undefined,
+            triggers: {
+              offline: document.getElementById('webhookTrigOffline').checked,
+              wanTranscodes: document.getElementById('webhookTrigWan').checked,
+              highBandwidth: document.getElementById('webhookTrigHigh').checked
+            }
           },
           slack: {
-            webhookUrl: document.getElementById('slackWebhook').value.trim() || undefined
+            webhookUrl: document.getElementById('slackWebhook').value.trim() || undefined,
+            triggers: {
+              offline: document.getElementById('slackTrigOffline').checked,
+              wanTranscodes: document.getElementById('slackTrigWan').checked,
+              highBandwidth: document.getElementById('slackTrigHigh').checked
+            }
           },
           telegram: {
             botToken: document.getElementById('telegramToken').value.trim() || undefined,
-            chatId: document.getElementById('telegramChat').value.trim() || undefined
+            chatId: document.getElementById('telegramChat').value.trim() || undefined,
+            triggers: {
+              offline: document.getElementById('telegramTrigOffline').checked,
+              wanTranscodes: document.getElementById('telegramTrigWan').checked,
+              highBandwidth: document.getElementById('telegramTrigHigh').checked
+            }
           },
           twilio: {
             accountSid: document.getElementById('twilioSid').value.trim() || undefined,
             authToken: document.getElementById('twilioToken').value || undefined,
             from: document.getElementById('twilioFrom').value.trim() || undefined,
-            to: document.getElementById('twilioTo').value.trim() || undefined
+            to: document.getElementById('twilioTo').value.trim() || undefined,
+            triggers: {
+              offline: document.getElementById('twilioTrigOffline').checked,
+              wanTranscodes: document.getElementById('twilioTrigWan').checked,
+              highBandwidth: document.getElementById('twilioTrigHigh').checked
+            }
           },
           pushover: {
             user: document.getElementById('pushoverUser').value.trim() || undefined,
             token: document.getElementById('pushoverToken').value.trim() || undefined,
-            priority: Number(document.getElementById('pushoverPriority').value)
+            priority: Number(document.getElementById('pushoverPriority').value),
+            triggers: {
+              offline: document.getElementById('pushoverTrigOffline').checked,
+              wanTranscodes: document.getElementById('pushoverTrigWan').checked,
+              highBandwidth: document.getElementById('pushoverTrigHigh').checked
+            }
           },
           gotify: {
             serverUrl: document.getElementById('gotifyServer').value.trim() || undefined,
             token: document.getElementById('gotifyToken').value.trim() || undefined,
-            priority: Number(document.getElementById('gotifyPriority').value)
+            priority: Number(document.getElementById('gotifyPriority').value),
+            triggers: {
+              offline: document.getElementById('gotifyTrigOffline').checked,
+              wanTranscodes: document.getElementById('gotifyTrigWan').checked,
+              highBandwidth: document.getElementById('gotifyTrigHigh').checked
+            }
           }
         };
         const resp = await fetch('/api/config/notifiers', {
