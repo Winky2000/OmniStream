@@ -6,11 +6,16 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link rel="stylesheet" href="theme.css">
   <style>
-    body{font-family:Segoe UI,Arial;background:var(--bg);color:var(--text-main);margin:0;padding:20px}
-    h1{margin:0 0 8px 0;color:var(--text-main);letter-spacing:1px;font-size:2em}
-    .tabs{display:flex;gap:10px;margin-bottom:20px;border-bottom:1px solid #333;padding-bottom:8px;}
-    .tab-link{padding:6px 14px;border-radius:999px;border:1px solid #444;background:#232837;color:var(--text-main);text-decoration:none;font-size:13px;cursor:pointer;}
-    .tab-link.active{border-color:#00bfff;background:#00bfff;color:#000;}
+    body{font-family:Segoe UI,Arial;background:var(--bg);color:var(--text-main);margin:0;padding:0}
+    .app-shell{display:flex;min-height:100vh;}
+    .sidebar{width:220px;background:#050814;border-right:1px solid rgba(15,23,42,0.8);padding:18px 16px;box-sizing:border-box;display:flex;flex-direction:column;gap:18px;}
+    .sidebar-brand{font-size:13px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:var(--text-muted);}
+    .sidebar-nav{display:flex;flex-direction:column;gap:4px;margin-top:8px;}
+    .nav-link{display:block;padding:8px 10px;border-radius:8px;font-size:13px;color:var(--text-muted);text-decoration:none;transition:background 0.15s,color 0.15s;}
+    .nav-link:hover{background:rgba(148,163,184,0.15);color:var(--text-main);}
+    .nav-link-active{background:rgba(59,130,246,0.18);color:#e5edff;border-left:3px solid var(--btn-border);padding-left:7px;}
+    .main-content{flex:1;box-sizing:border-box;padding:20px;}
+    h1{margin:0 0 8px 0;color:var(--text-main);letter-spacing:0.5px;font-size:1.8em;font-weight:600;}
     .back-btn{margin-top:12px;padding:6px 14px;border-radius:8px;border:1px solid var(--btn-border);background:var(--btn-bg);color:var(--btn-text);cursor:pointer;}
     .back-btn:hover{background:var(--btn-bg-hover);color:var(--btn-text-hover);}
     .notif-list{margin-top:20px;display:flex;flex-direction:column;gap:10px;}
@@ -20,18 +25,25 @@
     .notif-title{font-weight:600;margin-bottom:4px;}
     .notif-meta{font-size:11px;color:var(--text-muted);}
   </style>
+  </style>
 </head>
 <body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="sidebar-brand">OmniStream</div>
+      <nav class="sidebar-nav">
+        <a href="index.html" class="nav-link">Dashboard</a>
+        <a href="history.html" class="nav-link">History</a>
+        <a href="reports.html" class="nav-link">Reports</a>
+        <a href="notifications.html" class="nav-link nav-link-active">Notifications</a>
+        <a href="servers.html" class="nav-link">Servers</a>
+        <a href="admin.html" class="nav-link">Settings</a>
+      </nav>
+    </aside>
+    <main class="main-content">
   <h1>Notifications</h1>
-  <div class="tabs">
-    <a href="admin.html" class="tab-link">Overview</a>
-    <a href="servers.html" class="tab-link">Servers</a>
-    <a href="reports.html" class="tab-link">Reports</a>
-    <a href="notifications.html" class="tab-link active">Notifications</a>
-    <a href="history.html" class="tab-link">History</a>
-  </div>
   <div id="notifList" class="notif-list"></div>
-  <button class="back-btn" onclick="window.location.href='admin.html'">Back to Overview</button>
+  <button class="back-btn" onclick="window.location.href='admin.html'">Back to Settings</button>
   <script>
     // Apply saved theme
     (function() {
@@ -83,5 +95,7 @@
     renderNotifications();
     setInterval(renderNotifications, 10000);
   </script>
+    </main>
+  </div>
 </body>
 </html>

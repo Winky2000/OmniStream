@@ -6,11 +6,16 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link rel="stylesheet" href="theme.css">
   <style>
-    body{font-family:Segoe UI,Arial;background:var(--bg);color:var(--text-main);margin:0;padding:20px}
+    body{font-family:Segoe UI,Arial;background:var(--bg);color:var(--text-main);margin:0;padding:0}
+    .app-shell{display:flex;min-height:100vh;}
+    .sidebar{width:220px;background:#050814;border-right:1px solid rgba(15,23,42,0.8);padding:18px 16px;box-sizing:border-box;display:flex;flex-direction:column;gap:18px;}
+    .sidebar-brand{font-size:13px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:var(--text-muted);}
+    .sidebar-nav{display:flex;flex-direction:column;gap:4px;margin-top:8px;}
+    .nav-link{display:block;padding:8px 10px;border-radius:8px;font-size:13px;color:var(--text-muted);text-decoration:none;transition:background 0.15s,color 0.15s;}
+    .nav-link:hover{background:rgba(148,163,184,0.15);color:var(--text-main);}
+    .nav-link-active{background:rgba(59,130,246,0.18);color:#e5edff;border-left:3px solid var(--btn-border);padding-left:7px;}
+    .main-content{flex:1;box-sizing:border-box;padding:20px;}
     h1{margin:0 0 8px 0;color:var(--text-main);letter-spacing:0.5px;font-size:1.8em;font-weight:600;}
-    .tabs{display:flex;gap:10px;margin-bottom:20px;border-bottom:1px solid #333;padding-bottom:8px;}
-    .tab-link{padding:6px 14px;border-radius:999px;border:1px solid rgba(148,163,184,0.45);background:transparent;color:var(--text-main);text-decoration:none;font-size:13px;cursor:pointer;}
-    .tab-link.active{border-color:var(--btn-border);background:var(--btn-border);color:#ffffff;}
     .top-bar{display:flex;align-items:center;gap:12px;margin-bottom:10px;}
     .top-bar button{padding:6px 14px;border-radius:8px;border:1px solid var(--btn-border);background:var(--btn-bg);color:var(--btn-text);cursor:pointer;}
     .top-bar button:hover{background:var(--btn-bg-hover);color:var(--btn-text-hover);}
@@ -27,21 +32,25 @@
     .badge-offline{background:var(--session-transcode);color:#fff;}
     .summary-line{font-size:12px;color:#c0c3cc;margin-top:6px;}
   </style>
+  </style>
 </head>
 <body>
-  <h1>OmniStream Admin</h1>
-  <div class="tabs">
-    <a href="admin.html" class="tab-link active">Overview</a>
-    <a href="servers.html" class="tab-link">Servers</a>
-    <a href="reports.html" class="tab-link">Reports</a>
-    <a href="notifications.html" class="tab-link">Notifications</a>
-    <a href="notifiers.html" class="tab-link">Notifiers</a>
-    <a href="history.html" class="tab-link">History</a>
-  </div>
-  <div class="top-bar">
-    <button id="returnBtn">Return to Main</button>
-    <button id="manageServersBtn">Manage Servers</button>
-    <select id="themeSelect" class="theme-select">
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="sidebar-brand">OmniStream</div>
+      <nav class="sidebar-nav">
+        <a href="index.html" class="nav-link">Dashboard</a>
+        <a href="history.html" class="nav-link">History</a>
+        <a href="reports.html" class="nav-link">Reports</a>
+        <a href="notifications.html" class="nav-link">Notifications</a>
+        <a href="servers.html" class="nav-link">Servers</a>
+        <a href="admin.html" class="nav-link nav-link-active">Settings</a>
+      </nav>
+    </aside>
+    <main class="main-content">
+      <h1>Settings</h1>
+      <div class="top-bar">
+        <select id="themeSelect" class="theme-select">
       <option value="default">Neon</option>
       <option value="minimal">Minimal</option>
       <option value="high-contrast">High contrast</option>
@@ -54,8 +63,10 @@
       <option value="orange">Orange</option>
       <option value="forest">Forest</option>
     </select>
+      </div>
+      <div class="status-grid" id="statusGrid"></div>
+    </main>
   </div>
-  <div class="status-grid" id="statusGrid"></div>
   <script>
     // Apply saved theme and wire admin theme selector
     (function() {
@@ -128,14 +139,6 @@
         grid.appendChild(card);
       });
     }
-
-    document.getElementById('returnBtn').onclick = () => {
-      window.location.href = '/index.html';
-    };
-    document.getElementById('manageServersBtn').onclick = () => {
-      window.location.href = '/servers.html';
-    };
-
     renderOverview();
     setInterval(renderOverview, 5000);
   </script>

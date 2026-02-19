@@ -6,11 +6,16 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link rel="stylesheet" href="theme.css">
   <style>
-    body{font-family:Segoe UI,Arial;background:var(--bg);color:var(--text-main);margin:0;padding:20px}
-    h1{margin:0 0 8px 0;color:var(--text-main);letter-spacing:1px;font-size:2em}
-    .tabs{display:flex;gap:10px;margin-bottom:20px;border-bottom:1px solid #333;padding-bottom:8px;}
-    .tab-link{padding:6px 14px;border-radius:999px;border:1px solid #444;background:#232837;color:var(--text-main);text-decoration:none;font-size:13px;cursor:pointer;}
-    .tab-link.active{border-color:#00bfff;background:#00bfff;color:#000;}
+    body{font-family:Segoe UI,Arial;background:var(--bg);color:var(--text-main);margin:0;padding:0}
+    .app-shell{display:flex;min-height:100vh;}
+    .sidebar{width:220px;background:#050814;border-right:1px solid rgba(15,23,42,0.8);padding:18px 16px;box-sizing:border-box;display:flex;flex-direction:column;gap:18px;}
+    .sidebar-brand{font-size:13px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:var(--text-muted);}
+    .sidebar-nav{display:flex;flex-direction:column;gap:4px;margin-top:8px;}
+    .nav-link{display:block;padding:8px 10px;border-radius:8px;font-size:13px;color:var(--text-muted);text-decoration:none;transition:background 0.15s,color 0.15s;}
+    .nav-link:hover{background:rgba(148,163,184,0.15);color:var(--text-main);}
+    .nav-link-active{background:rgba(59,130,246,0.18);color:#e5edff;border-left:3px solid var(--btn-border);padding-left:7px;}
+    .main-content{flex:1;box-sizing:border-box;padding:20px;}
+    h1{margin:0 0 8px 0;color:var(--text-main);letter-spacing:0.5px;font-size:1.8em}
     .section{background:var(--card-bg);border-radius:14px;padding:16px 18px;box-shadow:0 2px 10px #0006;border:1px solid #2f3a52;margin-bottom:18px;max-width:640px;}
     .section h2{margin:0 0 8px 0;font-size:15px;color:var(--text-main);}
     label{display:block;font-size:13px;margin:6px 0;}
@@ -22,17 +27,23 @@
     .danger{border-color:#ff7043;color:#ffab91;}
     .status{font-size:12px;margin-top:8px;}
   </style>
+  </style>
 </head>
 <body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="sidebar-brand">OmniStream</div>
+      <nav class="sidebar-nav">
+        <a href="index.html" class="nav-link">Dashboard</a>
+        <a href="history.html" class="nav-link">History</a>
+        <a href="reports.html" class="nav-link">Reports</a>
+        <a href="notifications.html" class="nav-link">Notifications</a>
+        <a href="servers.html" class="nav-link">Servers</a>
+        <a href="admin.html" class="nav-link nav-link-active">Settings</a>
+      </nav>
+    </aside>
+    <main class="main-content">
   <h1>Notifier Settings</h1>
-  <div class="tabs">
-    <a href="admin.html" class="tab-link">Overview</a>
-    <a href="servers.html" class="tab-link">Servers</a>
-    <a href="reports.html" class="tab-link">Reports</a>
-    <a href="notifications.html" class="tab-link">Notifications</a>
-    <a href="history.html" class="tab-link">History</a>
-    <a href="notifiers.html" class="tab-link active">Notifiers</a>
-  </div>
 
   <div class="section">
     <h2>Discord</h2>
@@ -166,7 +177,7 @@
 
   <button id="saveBtn" class="btn">Save Settings</button>
   <span id="saveStatus" class="status"></span>
-  <button id="backBtn" class="btn" style="margin-left:8px;">Back to Overview</button>
+  <button id="backBtn" class="btn" style="margin-left:8px;">Back to Settings</button>
 
   <script>
     // Apply saved theme
@@ -296,5 +307,7 @@
 
     loadConfig();
   </script>
+    </main>
+  </div>
 </body>
 </html>
