@@ -1,0 +1,41 @@
+<?xml version="1.0"?>
+<Container>
+  <Name>OmniStream</Name>
+  <Repository>ghcr.io/winky2000/omnistream:latest</Repository>
+  <Registry>https://ghcr.io</Registry>
+  <Network>bridge</Network>
+  <MyIP/>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/winky2000/omnistream</Support>
+  <Project>https://github.com/winky2000/omnistream</Project>
+  <Overview>OmniStream is a dashboard to monitor multiple Plex, Jellyfin, and Emby servers on one screen. It shows active sessions, direct play vs transcoding, bandwidth usage, history, reports, and basic notifications.</Overview>
+  <Category>Media:Video</Category>
+  <WebUI>http://[IP]:[PORT:3000]/</WebUI>
+  <Icon>https://raw.githubusercontent.com/winky2000/omnistream/main/public/favicon.png</Icon>
+  <ExtraParams></ExtraParams>
+  <Environment>
+    <Variable>
+      <Name>NODE_ENV</Name>
+      <Value>production</Value>
+      <Description>Node environment mode for OmniStream.</Description>
+      <Mode/>
+    </Variable>
+  </Environment>
+  <Data>
+    <Volume>
+      <HostDir>/mnt/user/appdata/omnistream/servers.json</HostDir>
+      <ContainerDir>/usr/src/app/servers.json</ContainerDir>
+      <Mode>rw</Mode>
+      <Description>Path to servers.json on the array/cache. The file is created/updated by OmniStream.</Description>
+    </Volume>
+  </Data>
+  <Ports>
+    <Port>
+      <HostPort>3000</HostPort>
+      <ContainerPort>3000</ContainerPort>
+      <Protocol>tcp</Protocol>
+      <Description>Web UI port for OmniStream.</Description>
+    </Port>
+  </Ports>
+</Container>

@@ -5,14 +5,17 @@ OmniStream is a dashboard to monitor multiple Plex, Jellyfin, and Emby servers o
 
 ## Quick start
 
-- **Docker (recommended)**
+- **Docker compose (recommended)**
 
 	```bash
 	# On your host
 	mkdir -p /home/youruser/omnistream
 	printf "[]\n" > /home/youruser/omnistream/servers.json
 
-	# Start OmniStream
+	# Optionally point SERVERS_PATH at your host file
+	export SERVERS_PATH=/home/youruser/omnistream/servers.json
+
+	# From the project root (where docker-compose.yml lives):
 	docker compose up -d
 	```
 
@@ -53,25 +56,30 @@ printf "[]\n" > /home/youruser/omnistream/servers.json
 
 ### 2. Run with docker-compose
 
-Example `docker-compose.yml`:
+The root `docker-compose.yml` is already wired to the published image and supports an overridable path for `servers.json` via `SERVERS_PATH`:
 
 ```yaml
 services:
 	omnistream:
 		image: ghcr.io/winky2000/omnistream:latest
 		container_name: omnistream
+		restart: unless-stopped
 		ports:
 			- "3000:3000"
-		volumes:
-			- /home/youruser/omnistream/servers.json:/usr/src/app/servers.json
-		restart: unless-stopped
 		environment:
 			- NODE_ENV=production
+		volumes:
+			- ${SERVERS_PATH:-./servers.json}:/usr/src/app/servers.json
+			# Optional: override bundled UI with local files
+			# - ./public:/usr/src/app/public:ro
 ```
 
-Start it:
+From the project root:
 
 ```bash
+# Optionally point SERVERS_PATH at your host file
+export SERVERS_PATH=/home/youruser/omnistream/servers.json
+
 docker compose up -d
 ```
 
@@ -139,6 +147,42 @@ node server.js
 ```
 
 Open http://localhost:3000 and add servers via the Admin UI.
+
+---
+
+## Running on unRAID
+
+An example unRAID Docker template is provided at:
+
+- `unraid/omnistream.xml`
+
+### Template overview
+
+- **Repository**: `ghcr.io/winky2000/omnistream:latest`
+- **Network type**: `bridge`
+- **WebUI**: `http://[IP]:[PORT:3000]/`
+- **Port**:
+	- Container port `3000` mapped to a host port (defaults to `3000`).
+- **Volume**:
+	- Host path: `/mnt/user/appdata/omnistream/servers.json`
+	- Container path: `/usr/src/app/servers.json`
+	- Mode: `rw`
+	- Description: `Path to servers.json on the array/cache. The file is created/updated by OmniStream.`
+- **Environment**:
+	- `NODE_ENV=production`
+
+### Importing the template
+
+1. Copy `unraid/omnistream.xml` from this repo to your unRAID box under:
+
+	- `/boot/config/plugins/dockerMan/templates-user/`
+
+2. In the unRAID web UI, go to **Docker → Add Container**.
+3. In the **Template** drop-down, choose **OmniStream**.
+4. Adjust if needed:
+	- Host port for the WebUI (if `3000` is already in use).
+	- Host path for `servers.json` if you prefer a different appdata location.
+5. Apply to create and start the container, then open the WebUI.
 
 ---
 

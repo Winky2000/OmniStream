@@ -2,13 +2,18 @@ version: '3.8'
 
 services:
   omnistream:
-    build: .
+    image: ghcr.io/winky2000/omnistream:latest
     container_name: omnistream
+    restart: unless-stopped
     ports:
       - "3000:3000"
-    volumes:
-      - ./servers.json:/usr/src/app/servers.json
-      - ./public:/usr/src/app/public
-    restart: unless-stopped
     environment:
       - NODE_ENV=production
+    volumes:
+      # Path to servers.json on the host. By default this uses
+      # ./servers.json next to this compose file, but you can
+      # override with SERVERS_PATH=/absolute/path/to/servers.json
+      - ${SERVERS_PATH:-./servers.json}:/usr/src/app/servers.json
+      # Optional: uncomment to override the bundled UI with the
+      # public/ folder from this checkout (useful for local dev)
+      # - ./public:/usr/src/app/public:ro
