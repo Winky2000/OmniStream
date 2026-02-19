@@ -14,6 +14,15 @@
     .nav-link{display:block;padding:8px 10px;border-radius:8px;font-size:13px;color:var(--text-muted);text-decoration:none;transition:background 0.15s,color 0.15s;}
     .nav-link:hover{background:rgba(148,163,184,0.15);color:var(--text-main);}
     .nav-link-active{background:rgba(59,130,246,0.18);color:#e5edff;border-left:3px solid var(--btn-border);padding-left:7px;}
+    .settings-group{margin-top:4px;}
+    .settings-submenu{display:none;flex-direction:column;gap:2px;padding-left:14px;margin-top:3px;}
+    .settings-submenu.open{display:flex;}
+    .submenu-link{display:block;padding:6px 10px;border-radius:8px;font-size:12px;color:var(--text-muted);text-decoration:none;}
+    .submenu-link:hover{background:rgba(148,163,184,0.15);color:var(--text-main);}
+    .submenu-link-active{background:rgba(59,130,246,0.18);color:#e5edff;}
+    .sidebar-toggle{margin-bottom:10px;padding:4px 10px;border-radius:999px;border:1px solid var(--btn-border);background:var(--btn-bg);color:var(--btn-text);cursor:pointer;font-size:12px;}
+    .sidebar-toggle:hover{background:var(--btn-bg-hover);color:var(--btn-text-hover);}
+    .app-shell.sidebar-collapsed .sidebar{display:none;}
     .main-content{flex:1;box-sizing:border-box;padding:20px;}
     h1{margin:0 0 8px 0;color:var(--text-main);letter-spacing:0.5px;font-size:1.8em;font-weight:600;}
     .settings-subnav{display:flex;gap:8px;margin:10px 0 16px 0;font-size:13px;flex-wrap:wrap;}
@@ -34,17 +43,20 @@
         <a href="history.html" class="nav-link">History</a>
         <a href="reports.html" class="nav-link">Reports</a>
         <a href="notifications.html" class="nav-link">Notifications</a>
-        <a href="admin.html" class="nav-link nav-link-active">Settings</a>
+        <div class="settings-group">
+          <button type="button" class="nav-link nav-link-active settings-toggle">Settings</button>
+          <div class="settings-submenu open">
+            <a href="admin.html" class="submenu-link">Connected servers</a>
+            <a href="servers.html" class="submenu-link">Servers</a>
+            <a href="display.html" class="submenu-link submenu-link-active">Themes &amp; layout</a>
+            <a href="notifiers.html" class="submenu-link">Notifiers</a>
+          </div>
+        </div>
       </nav>
     </aside>
     <main class="main-content">
+      <button class="sidebar-toggle" id="sidebarToggle">Hide menu</button>
       <h1>Settings</h1>
-      <div class="settings-subnav">
-        <a href="admin.html">Connected servers</a>
-        <a href="servers.html">Servers</a>
-        <a href="display.html" class="active">Themes &amp; layout</a>
-        <a href="notifiers.html">Notifiers</a>
-      </div>
       <div class="card">
         <h2 style="margin:0 0 10px 0;font-size:16px;">Display preferences</h2>
         <label>
@@ -76,10 +88,12 @@
     </main>
   </div>
   <script>
-    // Apply saved theme and layout, wire selectors
+    // Apply saved theme and layout, wire selectors and Settings + sidebar toggle
     (function() {
       const themeSelect = document.getElementById('themeSelect');
       const layoutSelect = document.getElementById('layoutSelect');
+      const settingsToggle = document.querySelector('.settings-toggle');
+      const settingsSubmenu = document.querySelector('.settings-submenu');
       const savedTheme = localStorage.getItem('omnistreamTheme') || 'default';
       if (savedTheme && savedTheme !== 'default') {
         document.documentElement.setAttribute('data-theme', savedTheme);
@@ -104,6 +118,27 @@
         layoutSelect.addEventListener('change', () => {
           const mode = layoutSelect.value === 'flex' ? 'flex' : 'grid';
           localStorage.setItem('omnistreamLayout', mode);
+        });
+      }
+
+      if (settingsToggle && settingsSubmenu) {
+        settingsToggle.addEventListener('click', () => {
+          settingsSubmenu.classList.toggle('open');
+        });
+      }
+
+      const appShell = document.querySelector('.app-shell');
+      const sidebarToggle = document.getElementById('sidebarToggle');
+      if (appShell && sidebarToggle) {
+        const savedSidebar = localStorage.getItem('omnistreamSidebar') || 'open';
+        if (savedSidebar === 'collapsed') {
+          appShell.classList.add('sidebar-collapsed');
+          sidebarToggle.textContent = 'Show menu';
+        }
+        sidebarToggle.addEventListener('click', () => {
+          const collapsed = appShell.classList.toggle('sidebar-collapsed');
+          sidebarToggle.textContent = collapsed ? 'Show menu' : 'Hide menu';
+          localStorage.setItem('omnistreamSidebar', collapsed ? 'collapsed' : 'open');
         });
       }
     })();

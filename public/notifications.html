@@ -14,6 +14,9 @@
     .nav-link{display:block;padding:8px 10px;border-radius:8px;font-size:13px;color:var(--text-muted);text-decoration:none;transition:background 0.15s,color 0.15s;}
     .nav-link:hover{background:rgba(148,163,184,0.15);color:var(--text-main);}
     .nav-link-active{background:rgba(59,130,246,0.18);color:#e5edff;border-left:3px solid var(--btn-border);padding-left:7px;}
+    .sidebar-toggle{margin-bottom:10px;padding:4px 10px;border-radius:999px;border:1px solid var(--btn-border);background:var(--btn-bg);color:var(--btn-text);cursor:pointer;font-size:12px;}
+    .sidebar-toggle:hover{background:var(--btn-bg-hover);color:var(--btn-text-hover);}
+    .app-shell.sidebar-collapsed .sidebar{display:none;}
     .main-content{flex:1;box-sizing:border-box;padding:20px;}
     h1{margin:0 0 8px 0;color:var(--text-main);letter-spacing:0.5px;font-size:1.8em;font-weight:600;}
     .back-btn{margin-top:12px;padding:6px 14px;border-radius:8px;border:1px solid var(--btn-border);background:var(--btn-bg);color:var(--btn-text);cursor:pointer;}
@@ -40,15 +43,30 @@
       </nav>
     </aside>
     <main class="main-content">
+  <button class="sidebar-toggle" id="sidebarToggle">Hide menu</button>
   <h1>Notifications</h1>
   <div id="notifList" class="notif-list"></div>
   <button class="back-btn" onclick="window.location.href='admin.html'">Back to Settings</button>
   <script>
-    // Apply saved theme
+    // Apply saved theme and wire sidebar toggle
     (function() {
       const savedTheme = localStorage.getItem('omnistreamTheme') || 'default';
       if (savedTheme && savedTheme !== 'default') {
         document.documentElement.setAttribute('data-theme', savedTheme);
+      }
+      const appShell = document.querySelector('.app-shell');
+      const sidebarToggle = document.getElementById('sidebarToggle');
+      if (appShell && sidebarToggle) {
+        const savedSidebar = localStorage.getItem('omnistreamSidebar') || 'open';
+        if (savedSidebar === 'collapsed') {
+          appShell.classList.add('sidebar-collapsed');
+          sidebarToggle.textContent = 'Show menu';
+        }
+        sidebarToggle.addEventListener('click', () => {
+          const collapsed = appShell.classList.toggle('sidebar-collapsed');
+          sidebarToggle.textContent = collapsed ? 'Show menu' : 'Hide menu';
+          localStorage.setItem('omnistreamSidebar', collapsed ? 'collapsed' : 'open');
+        });
       }
     })();
 
