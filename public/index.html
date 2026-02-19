@@ -166,7 +166,6 @@
         <a href="history.html" class="nav-link">History</a>
         <a href="reports.html" class="nav-link">Reports</a>
         <a href="notifications.html" class="nav-link">Notifications</a>
-        <a href="servers.html" class="nav-link">Servers</a>
         <a href="admin.html" class="nav-link">Settings</a>
       </nav>
     </aside>
@@ -174,25 +173,22 @@
       <div class="header-flex">
         <img src="omnistream_logo.png" alt="OmniStream Logo" class="logo-img" />
         <h1>OmniStream</h1>
-        <select class="toggle-btn" id="themeSelect" style="margin-left:auto;margin-bottom:0;padding:6px 12px;">
-          <option value="default">Neon</option>
-          <option value="minimal">Minimal</option>
-          <option value="high-contrast">High contrast</option>
-          <option value="light">Light</option>
-          <option value="light-borderless">Light (borderless)</option>
-          <option value="ocean">Ocean</option>
-          <option value="winter">Winter</option>
-          <option value="purple">Purple</option>
-          <option value="yellow">Yellow</option>
-          <option value="orange">Orange</option>
-          <option value="forest">Forest</option>
-        </select>
       </div>
       <div id="grid" class="grid-layout"></div>
     </main>
   </div>
 
   <script>
+    // Apply saved theme from Settings
+    (function() {
+      const savedTheme = localStorage.getItem('omnistreamTheme') || 'default';
+      if (savedTheme && savedTheme !== 'default') {
+        document.documentElement.setAttribute('data-theme', savedTheme);
+      } else {
+        document.documentElement.removeAttribute('data-theme');
+      }
+    })();
+
     async function fetchStatus() {
       try {
         const r = await fetch('/api/status');
@@ -203,24 +199,6 @@
     let layoutMode = 'grid';
     document.addEventListener('DOMContentLoaded', () => {
       const grid = document.getElementById('grid');
-      const themeSelect = document.getElementById('themeSelect');
-
-      // Apply saved theme
-      const savedTheme = localStorage.getItem('omnistreamTheme') || 'default';
-      if (savedTheme && savedTheme !== 'default') {
-        document.documentElement.setAttribute('data-theme', savedTheme);
-      }
-      themeSelect.value = savedTheme;
-
-      themeSelect.addEventListener('change', () => {
-        const v = themeSelect.value;
-        if (v === 'default') {
-          document.documentElement.removeAttribute('data-theme');
-        } else {
-          document.documentElement.setAttribute('data-theme', v);
-        }
-        localStorage.setItem('omnistreamTheme', v);
-      });
       // Apply saved layout mode from Settings (default to grid)
       const savedLayout = localStorage.getItem('omnistreamLayout') || 'grid';
       layoutMode = savedLayout === 'flex' ? 'flex' : 'grid';

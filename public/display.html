@@ -1,0 +1,112 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>OmniStream Display Settings</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="theme.css">
+  <style>
+    body{font-family:Segoe UI,Arial;background:var(--bg);color:var(--text-main);margin:0;padding:0}
+    .app-shell{display:flex;min-height:100vh;}
+    .sidebar{width:220px;background:#050814;border-right:1px solid rgba(15,23,42,0.8);padding:18px 16px;box-sizing:border-box;display:flex;flex-direction:column;gap:18px;}
+    .sidebar-brand{font-size:13px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:var(--text-muted);}
+    .sidebar-nav{display:flex;flex-direction:column;gap:4px;margin-top:8px;}
+    .nav-link{display:block;padding:8px 10px;border-radius:8px;font-size:13px;color:var(--text-muted);text-decoration:none;transition:background 0.15s,color 0.15s;}
+    .nav-link:hover{background:rgba(148,163,184,0.15);color:var(--text-main);}
+    .nav-link-active{background:rgba(59,130,246,0.18);color:#e5edff;border-left:3px solid var(--btn-border);padding-left:7px;}
+    .main-content{flex:1;box-sizing:border-box;padding:20px;}
+    h1{margin:0 0 8px 0;color:var(--text-main);letter-spacing:0.5px;font-size:1.8em;font-weight:600;}
+    .settings-subnav{display:flex;gap:8px;margin:10px 0 16px 0;font-size:13px;flex-wrap:wrap;}
+    .settings-subnav a{padding:4px 10px;border-radius:999px;border:1px solid rgba(148,163,184,0.4);color:var(--text-muted);text-decoration:none;}
+    .settings-subnav a.active{background:var(--btn-border);border-color:var(--btn-border);color:#ffffff;}
+    .card{background:var(--card-bg);border-radius:14px;padding:16px 18px;box-shadow:0 12px 30px rgba(15,23,42,0.85);border:1px solid rgba(148,163,184,0.35);max-width:520px;}
+    label{display:block;font-size:13px;margin:6px 0;}
+    select{padding:6px 10px;border-radius:8px;border:1px solid var(--btn-border);background:var(--btn-bg);color:var(--btn-text);font-size:13px;}
+    .hint{font-size:12px;color:var(--text-muted);margin-top:4px;}
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="sidebar-brand">OmniStream</div>
+      <nav class="sidebar-nav">
+        <a href="index.html" class="nav-link">Dashboard</a>
+        <a href="history.html" class="nav-link">History</a>
+        <a href="reports.html" class="nav-link">Reports</a>
+        <a href="notifications.html" class="nav-link">Notifications</a>
+        <a href="admin.html" class="nav-link nav-link-active">Settings</a>
+      </nav>
+    </aside>
+    <main class="main-content">
+      <h1>Settings</h1>
+      <div class="settings-subnav">
+        <a href="admin.html">Connected servers</a>
+        <a href="servers.html">Servers</a>
+        <a href="display.html" class="active">Themes &amp; layout</a>
+        <a href="notifiers.html">Notifiers</a>
+      </div>
+      <div class="card">
+        <h2 style="margin:0 0 10px 0;font-size:16px;">Display preferences</h2>
+        <label>
+          Theme
+          <select id="themeSelect">
+            <option value="default">Default dark</option>
+            <option value="minimal">Minimal</option>
+            <option value="high-contrast">High contrast</option>
+            <option value="light">Light</option>
+            <option value="light-borderless">Light (borderless)</option>
+            <option value="ocean">Ocean</option>
+            <option value="winter">Winter</option>
+            <option value="purple">Purple</option>
+            <option value="yellow">Yellow</option>
+            <option value="orange">Orange</option>
+            <option value="forest">Forest</option>
+          </select>
+          <div class="hint">Controls the overall color palette. Default dark is tuned for low-light rooms; other themes keep the same layout with different colors.</div>
+        </label>
+        <label style="margin-top:10px;">
+          Layout
+          <select id="layoutSelect">
+            <option value="grid">Vertical layout</option>
+            <option value="flex">Horizontal layout</option>
+          </select>
+          <div class="hint">Vertical layout stacks server cards in columns. Horizontal layout shows wider rows with sessions flowing across, better for ultra-wide screens.</div>
+        </label>
+      </div>
+    </main>
+  </div>
+  <script>
+    // Apply saved theme and layout, wire selectors
+    (function() {
+      const themeSelect = document.getElementById('themeSelect');
+      const layoutSelect = document.getElementById('layoutSelect');
+      const savedTheme = localStorage.getItem('omnistreamTheme') || 'default';
+      if (savedTheme && savedTheme !== 'default') {
+        document.documentElement.setAttribute('data-theme', savedTheme);
+      } else {
+        document.documentElement.removeAttribute('data-theme');
+      }
+      if (themeSelect) {
+        themeSelect.value = savedTheme;
+        themeSelect.addEventListener('change', () => {
+          const v = themeSelect.value;
+          if (v === 'default') {
+            document.documentElement.removeAttribute('data-theme');
+          } else {
+            document.documentElement.setAttribute('data-theme', v);
+          }
+          localStorage.setItem('omnistreamTheme', v);
+        });
+      }
+      const savedLayout = localStorage.getItem('omnistreamLayout') || 'grid';
+      if (layoutSelect) {
+        layoutSelect.value = savedLayout === 'flex' ? 'flex' : 'grid';
+        layoutSelect.addEventListener('change', () => {
+          const mode = layoutSelect.value === 'flex' ? 'flex' : 'grid';
+          localStorage.setItem('omnistreamLayout', mode);
+        });
+      }
+    })();
+  </script>
+</body>
+</html>

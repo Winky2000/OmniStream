@@ -15,6 +15,9 @@
     .nav-link:hover{background:rgba(148,163,184,0.15);color:var(--text-main);}
     .nav-link-active{background:rgba(59,130,246,0.18);color:#e5edff;border-left:3px solid var(--btn-border);padding-left:7px;}
     .main-content{flex:1;box-sizing:border-box;padding:20px;}
+    .settings-subnav{display:flex;gap:8px;margin:10px 0 16px 0;font-size:13px;flex-wrap:wrap;}
+    .settings-subnav a{padding:4px 10px;border-radius:999px;border:1px solid rgba(148,163,184,0.4);color:var(--text-muted);text-decoration:none;}
+    .settings-subnav a.active{background:var(--btn-border);border-color:var(--btn-border);color:#ffffff;}
     h1{margin:0 0 18px 0;color:var(--text-main);letter-spacing:0.5px;font-size:1.8em;font-weight:600;}
     .server-list{margin-top:12px;margin-bottom:24px;}
     .server-card{background:var(--card-bg);border-radius:12px;padding:18px 24px;margin-bottom:14px;box-shadow:0 12px 30px rgba(15,23,42,0.85);border:1px solid rgba(148,163,184,0.4);display:flex;align-items:center;gap:18px;}
@@ -41,12 +44,18 @@
         <a href="history.html" class="nav-link">History</a>
         <a href="reports.html" class="nav-link">Reports</a>
         <a href="notifications.html" class="nav-link">Notifications</a>
-        <a href="servers.html" class="nav-link nav-link-active">Servers</a>
-        <a href="admin.html" class="nav-link">Settings</a>
+        <a href="admin.html" class="nav-link nav-link-active">Settings</a>
       </nav>
     </aside>
     <main class="main-content">
-      <h1>Servers</h1>
+      <h1>Settings</h1>
+      <div class="settings-subnav">
+        <a href="admin.html">Connected servers</a>
+        <a href="servers.html" class="active">Servers</a>
+        <a href="display.html">Themes &amp; layout</a>
+        <a href="notifiers.html">Notifiers</a>
+      </div>
+      <h2 style="margin:0 0 12px 0;font-size:16px;color:var(--text-main);">Manage servers</h2>
       <form class="add-form" id="addServerForm">
     <label>Name: <input type="text" id="name" required></label>
     <label>Base URL: <input type="text" id="baseUrl" required placeholder="e.g. http://192.168.1.138:32400"></label>
