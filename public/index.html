@@ -6,7 +6,15 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link rel="stylesheet" href="theme.css">
   <style>
-    body{font-family:Segoe UI,Arial;background:var(--bg);color:var(--text-main);margin:0;padding:20px}
+    body{font-family:Segoe UI,Arial;background:var(--bg);color:var(--text-main);margin:0;padding:0}
+    .app-shell{display:flex;min-height:100vh;}
+    .sidebar{width:220px;background:#050814;border-right:1px solid rgba(15,23,42,0.8);padding:18px 16px;box-sizing:border-box;display:flex;flex-direction:column;gap:18px;}
+    .sidebar-brand{font-size:13px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:var(--text-muted);}
+    .sidebar-nav{display:flex;flex-direction:column;gap:4px;margin-top:8px;}
+    .nav-link{display:block;padding:8px 10px;border-radius:8px;font-size:13px;color:var(--text-muted);text-decoration:none;transition:background 0.15s,color 0.15s;}
+    .nav-link:hover{background:rgba(148,163,184,0.15);color:var(--text-main);}
+    .nav-link-active{background:rgba(59,130,246,0.18);color:#e5edff;border-left:3px solid var(--btn-border);padding-left:7px;}
+    .main-content{flex:1;box-sizing:border-box;padding:20px;}
     h1{margin:0;color:var(--text-main);letter-spacing:0.5px;display:inline-block;vertical-align:middle;font-size:1.8em;font-weight:600;}
     .header-flex{display:flex;align-items:center;gap:14px;margin-bottom:20px;}
     .logo-img{height:72px;max-width:160px;object-fit:contain;border-radius:8px;}
@@ -148,29 +156,45 @@
     .badge-codec{border-color:#81c784;color:#c8e6c9;}
     .badge-product{border-color:#b39ddb;color:#e1bee7;}
   </style>
+    .header-flex{display:flex;align-items:center;gap:14px;margin-bottom:20px;}
+    .logo-img{height:72px;max-width:160px;object-fit:contain;border-radius:8px;}
+  </style>
 </head>
 <body>
-  <div class="header-flex">
-    <img src="omnistream_logo.png" alt="OmniStream Logo" class="logo-img" />
-    <h1>OmniStream</h1>
-    <button class="toggle-btn" id="adminBtn" style="margin-left:24px;">Admin</button>
-    <select class="toggle-btn" id="themeSelect" style="margin-left:auto;margin-bottom:0;padding:6px 12px;">
-      <option value="default">Neon</option>
-      <option value="minimal">Minimal</option>
-      <option value="high-contrast">High contrast</option>
-      <option value="light">Light</option>
-      <option value="light-borderless">Light (borderless)</option>
-      <option value="ocean">Ocean</option>
-      <option value="winter">Winter</option>
-      <option value="purple">Purple</option>
-      <option value="yellow">Yellow</option>
-      <option value="orange">Orange</option>
-      <option value="forest">Forest</option>
-    </select>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="sidebar-brand">OmniStream</div>
+      <nav class="sidebar-nav">
+        <a href="index.html" class="nav-link nav-link-active">Dashboard</a>
+        <a href="history.html" class="nav-link">History</a>
+        <a href="reports.html" class="nav-link">Reports</a>
+        <a href="notifications.html" class="nav-link">Notifications</a>
+        <a href="servers.html" class="nav-link">Servers</a>
+        <a href="admin.html" class="nav-link">Settings</a>
+      </nav>
+    </aside>
+    <main class="main-content">
+      <div class="header-flex">
+        <img src="omnistream_logo.png" alt="OmniStream Logo" class="logo-img" />
+        <h1>OmniStream</h1>
+        <select class="toggle-btn" id="themeSelect" style="margin-left:auto;margin-bottom:0;padding:6px 12px;">
+          <option value="default">Neon</option>
+          <option value="minimal">Minimal</option>
+          <option value="high-contrast">High contrast</option>
+          <option value="light">Light</option>
+          <option value="light-borderless">Light (borderless)</option>
+          <option value="ocean">Ocean</option>
+          <option value="winter">Winter</option>
+          <option value="purple">Purple</option>
+          <option value="yellow">Yellow</option>
+          <option value="orange">Orange</option>
+          <option value="forest">Forest</option>
+        </select>
+      </div>
+      <button class="toggle-btn" id="layoutToggle">Switch Layout</button>
+      <div id="grid" class="grid-layout"></div>
+    </main>
   </div>
-  <button class="toggle-btn" id="layoutToggle">Switch Layout</button>
-  <div id="grid" class="grid-layout"></div>
-  <div id="grid"></div>
 
   <script>
     async function fetchStatus() {
@@ -183,7 +207,6 @@
     let layoutMode = 'grid';
     document.addEventListener('DOMContentLoaded', () => {
       const toggleBtn = document.getElementById('layoutToggle');
-      const adminBtn = document.getElementById('adminBtn');
       const grid = document.getElementById('grid');
       const themeSelect = document.getElementById('themeSelect');
 
@@ -208,9 +231,6 @@
         grid.className = layoutMode === 'grid' ? 'grid-layout' : 'flex-layout';
         loop();
       });
-      adminBtn.addEventListener('click', () => {
-        window.location.href = '/admin.html';
-      });
       // Set initial layout
       grid.className = 'grid-layout';
     });
@@ -218,9 +238,13 @@
     function render(data) {
       const { servers = [], statuses = {}, setup = false } = data;
       const grid = document.getElementById('grid');
+      const sidebar = document.querySelector('.sidebar');
+      const layoutToggle = document.getElementById('layoutToggle');
       grid.innerHTML = '';
       // Setup mode: no servers configured yet
       if (setup || !servers.length) {
+        if (sidebar) sidebar.style.display = 'none';
+        if (layoutToggle) layoutToggle.style.display = 'none';
         const card = document.createElement('div');
         card.className = 'card flex-full';
         const title = document.createElement('div');
@@ -240,6 +264,8 @@
         grid.appendChild(card);
         return;
       }
+      if (sidebar) sidebar.style.display = '';
+      if (layoutToggle) layoutToggle.style.display = '';
       servers.forEach(s => {
         const st = statuses && statuses[s.id] ? statuses[s.id] : { online: false };
         const card = document.createElement('div');
