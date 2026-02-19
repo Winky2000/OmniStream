@@ -188,7 +188,6 @@
           <option value="forest">Forest</option>
         </select>
       </div>
-      <button class="toggle-btn" id="layoutToggle">Switch Layout</button>
       <div id="grid" class="grid-layout"></div>
     </main>
   </div>
@@ -203,7 +202,6 @@
 
     let layoutMode = 'grid';
     document.addEventListener('DOMContentLoaded', () => {
-      const toggleBtn = document.getElementById('layoutToggle');
       const grid = document.getElementById('grid');
       const themeSelect = document.getElementById('themeSelect');
 
@@ -223,13 +221,10 @@
         }
         localStorage.setItem('omnistreamTheme', v);
       });
-      toggleBtn.addEventListener('click', () => {
-        layoutMode = layoutMode === 'grid' ? 'flex' : 'grid';
-        grid.className = layoutMode === 'grid' ? 'grid-layout' : 'flex-layout';
-        loop();
-      });
-      // Set initial layout
-      grid.className = 'grid-layout';
+      // Apply saved layout mode from Settings (default to grid)
+      const savedLayout = localStorage.getItem('omnistreamLayout') || 'grid';
+      layoutMode = savedLayout === 'flex' ? 'flex' : 'grid';
+      grid.className = layoutMode === 'grid' ? 'grid-layout' : 'flex-layout';
     });
 
     function render(data) {

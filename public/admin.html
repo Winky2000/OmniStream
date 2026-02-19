@@ -31,7 +31,7 @@
     .badge-online{background:var(--session-direct);color:#000;}
     .badge-offline{background:var(--session-transcode);color:#fff;}
     .summary-line{font-size:12px;color:#c0c3cc;margin-top:6px;}
-  </style>
+    .display-label{font-size:12px;color:var(--text-muted);margin-right:8px;}
   </style>
 </head>
 <body>
@@ -50,27 +50,33 @@
     <main class="main-content">
       <h1>Settings</h1>
       <div class="top-bar">
+        <span class="display-label">Display</span>
         <select id="themeSelect" class="theme-select">
-      <option value="default">Neon</option>
-      <option value="minimal">Minimal</option>
-      <option value="high-contrast">High contrast</option>
-      <option value="light">Light</option>
-      <option value="light-borderless">Light (borderless)</option>
-      <option value="ocean">Ocean</option>
-      <option value="winter">Winter</option>
-      <option value="purple">Purple</option>
-      <option value="yellow">Yellow</option>
-      <option value="orange">Orange</option>
-      <option value="forest">Forest</option>
-    </select>
+          <option value="default">Neon</option>
+          <option value="minimal">Minimal</option>
+          <option value="high-contrast">High contrast</option>
+          <option value="light">Light</option>
+          <option value="light-borderless">Light (borderless)</option>
+          <option value="ocean">Ocean</option>
+          <option value="winter">Winter</option>
+          <option value="purple">Purple</option>
+          <option value="yellow">Yellow</option>
+          <option value="orange">Orange</option>
+          <option value="forest">Forest</option>
+        </select>
+        <select id="layoutSelect" class="theme-select">
+          <option value="grid">Vertical layout</option>
+          <option value="flex">Horizontal layout</option>
+        </select>
       </div>
       <div class="status-grid" id="statusGrid"></div>
     </main>
   </div>
   <script>
-    // Apply saved theme and wire admin theme selector
+    // Apply saved theme and layout, and wire selectors
     (function() {
       const select = document.getElementById('themeSelect');
+      const layoutSelect = document.getElementById('layoutSelect');
       const savedTheme = localStorage.getItem('omnistreamTheme') || 'default';
       if (savedTheme && savedTheme !== 'default') {
         document.documentElement.setAttribute('data-theme', savedTheme);
@@ -87,6 +93,15 @@
             document.documentElement.setAttribute('data-theme', v);
           }
           localStorage.setItem('omnistreamTheme', v);
+        });
+      }
+
+      const savedLayout = localStorage.getItem('omnistreamLayout') || 'grid';
+      if (layoutSelect) {
+        layoutSelect.value = savedLayout === 'flex' ? 'flex' : 'grid';
+        layoutSelect.addEventListener('change', () => {
+          const mode = layoutSelect.value === 'flex' ? 'flex' : 'grid';
+          localStorage.setItem('omnistreamLayout', mode);
         });
       }
     })();
