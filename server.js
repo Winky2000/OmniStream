@@ -22,6 +22,21 @@ app.use(express.static('public'));
 
 const SERVERS_FILE = path.join(__dirname, 'servers.json');
 const CONFIG_FILE = path.join(__dirname, 'config.json');
+const PKG_FILE = path.join(__dirname, 'package.json');
+
+let appVersion = null;
+try {
+  if (fs.existsSync(PKG_FILE)) {
+    const rawPkg = fs.readFileSync(PKG_FILE, 'utf8');
+    if (rawPkg) {
+      const pkg = JSON.parse(rawPkg);
+      appVersion = pkg.version || null;
+    }
+  }
+} catch (e) {
+  console.error('[OmniStream] Failed to read package.json version:', e.message);
+  appVersion = null;
+}
 
 let appConfig = {};
 try {
@@ -84,6 +99,11 @@ if (appConfig && typeof appConfig.maxHistory === 'number') {
 
 // Track last derived notifications so we only fire notifiers on changes
 let lastNotificationIds = new Set();
+
+// Track global polling health/metadata
+let lastPollAt = null;           // ISO string of last completed pollAll
+let lastPollDurationMs = null;   // Duration of last pollAll in milliseconds
+let lastPollError = null;        // Last top-level pollAll error message, if any
 
 function shouldSendNotificationToChannel(notification, channelCfg) {
   if (!channelCfg) return false;
@@ -1171,8 +1191,25 @@ async function pollServer(s) {
 }
 
 async function pollAll() {
-  if (!servers || servers.length === 0) return;
-  await Promise.all(servers.map((s) => pollServer(s)));
+  if (!servers || servers.length === 0) {
+    lastPollAt = new Date().toISOString();
+    lastPollDurationMs = 0;
+    lastPollError = null;
+    return;
+  }
+  const start = Date.now();
+  lastPollError = null;
+  try {
+    await Promise.all(servers.map((s) => pollServer(s)));
+  } catch (e) {
+    // Capture any unexpected top-level error from Promise.all; individual server
+    // errors are already recorded on their respective status entries.
+    lastPollError = e && e.message ? e.message : String(e);
+  }
+  const duration = Date.now() - start;
+  lastPollAt = new Date().toISOString();
+  lastPollDurationMs = duration;
+
   // After polling all servers, snapshot current sessions into history database
   if (historyDb) {
     const timestamp = new Date().toISOString();
@@ -1234,7 +1271,52 @@ app.get('/api/status', (req, res) => {
   res.json({
     servers: enabledServers,
     statuses: enabledStatuses,
-    setup: enabledServers.length === 0
+    setup: enabledServers.length === 0,
+    poll: {
+      lastPollAt,
+      lastPollDurationMs,
+      lastPollError
+    },
+    version: appVersion || null
+  });
+});
+
+// Lightweight health endpoint for external monitors (e.g., Home Assistant, Uptime Kuma)
+app.get('/api/health', (req, res) => {
+  const enabledServers = servers.filter(s => !s.disabled);
+  const total = enabledServers.length;
+  let online = 0;
+  let offline = 0;
+  enabledServers.forEach(s => {
+    const st = statuses[s.id];
+    if (!st) {
+      offline++;
+      return;
+    }
+    if (st.online) online++; else offline++;
+  });
+
+  let overall = 'ok';
+  if (total > 0 && online === 0) {
+    overall = 'down';
+  } else if (offline > 0) {
+    overall = 'degraded';
+  }
+
+  res.json({
+    status: overall,
+    time: new Date().toISOString(),
+    version: appVersion || null,
+    poll: {
+      lastPollAt,
+      lastPollDurationMs,
+      lastPollError
+    },
+    servers: {
+      total,
+      online,
+      offline
+    }
   });
 });
 
@@ -1322,6 +1404,44 @@ app.get('/api/history', (req, res) => {
     }));
     res.json({ history });
   });
+});
+
+// Basic system info for reliability/inspection
+app.get('/api/system', (req, res) => {
+  res.json({
+    version: appVersion,
+    uptimeSeconds: process.uptime(),
+    now: new Date().toISOString(),
+    historyDbPath: HISTORY_DB_FILE,
+    serversFilePath: SERVERS_FILE,
+    hasHistoryDb: !!historyDb,
+    maxHistory: MAX_HISTORY
+  });
+});
+
+// Simple download endpoints for key state files
+app.get('/api/download/servers', (req, res) => {
+  try {
+    if (!fs.existsSync(SERVERS_FILE)) {
+      return res.status(404).json({ error: 'servers.json not found' });
+    }
+    res.download(SERVERS_FILE, 'servers.json');
+  } catch (e) {
+    console.error('[OmniStream] Failed to download servers.json:', e.message);
+    res.status(500).json({ error: 'Failed to download servers.json' });
+  }
+});
+
+app.get('/api/download/history', (req, res) => {
+  try {
+    if (!historyDb || !fs.existsSync(HISTORY_DB_FILE)) {
+      return res.status(404).json({ error: 'history database not available' });
+    }
+    res.download(HISTORY_DB_FILE, 'history.db');
+  } catch (e) {
+    console.error('[OmniStream] Failed to download history.db:', e.message);
+    res.status(500).json({ error: 'Failed to download history.db' });
+  }
 });
 
 // Queryable history API with basic filters and sorting
