@@ -465,8 +465,37 @@ async function importJellyfinHistory(server, { limitPerUser = 100 } = {}) {
           );
           items.forEach(it => {
             const time = (it.UserData && it.UserData.LastPlayedDate) || it.DatePlayed || new Date().toISOString();
-            const title = it.SeriesName ? `${it.SeriesName} - ${it.Name}` : it.Name || 'Unknown';
-            const mediaType = it.Type || it.MediaType || '';
+            // Build a more human-friendly title for movies and episodes
+            let title;
+            const type = it.Type || it.MediaType || '';
+            if (type === 'Episode' || it.SeriesName) {
+              const series = it.SeriesName || '';
+              const epName = it.Name || '';
+              const seasonNum = typeof it.ParentIndexNumber === 'number' ? it.ParentIndexNumber : null;
+              const epNum = typeof it.IndexNumber === 'number' ? it.IndexNumber : null;
+              let epLabel = '';
+              if (seasonNum !== null && epNum !== null) {
+                epLabel = `S${String(seasonNum).padStart(2, '0')}E${String(epNum).padStart(2, '0')}`;
+              } else if (epNum !== null) {
+                epLabel = `E${String(epNum).padStart(2, '0')}`;
+              }
+              if (series && epLabel && epName) {
+                title = `${series} - ${epLabel} - ${epName}`;
+              } else if (series && epName) {
+                title = `${series} - ${epName}`;
+              } else {
+                title = epName || series || it.Name || 'Unknown';
+              }
+            } else {
+              title = it.Name || it.OriginalTitle || 'Unknown';
+            }
+
+            // Use a simple, stable stream label so we don't show
+            // Jellyfin's internal folder/collection types in the UI.
+            let stream = '';
+            if (type === 'Movie' || type === 'Episode') {
+              stream = type;
+            }
             stmt.run(
               time,
               server.id,
@@ -474,7 +503,7 @@ async function importJellyfinHistory(server, { limitPerUser = 100 } = {}) {
               server.type,
               u.Name || u.Username || 'Unknown',
               title,
-              mediaType,
+              stream,
               null,
               '',
               0
