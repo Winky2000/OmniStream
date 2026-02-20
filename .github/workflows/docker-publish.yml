@@ -12,9 +12,6 @@ jobs:
       contents: read
       packages: write
 
-    env:
-      IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/omnistream
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -26,8 +23,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract tag name
-        run: echo "TAG=${GITHUB_REF##*/}" >> $GITHUB_ENV
+      - name: Prepare image name and tag
+        run: |
+          echo "TAG=${GITHUB_REF##*/}" >> $GITHUB_ENV
+          # repository_owner can have uppercase; GHCR requires lowercase
+          OWNER_LC=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          echo "IMAGE_NAME=ghcr.io/${OWNER_LC}/omnistream" >> $GITHUB_ENV
         shell: bash
 
       - name: Build and push image
