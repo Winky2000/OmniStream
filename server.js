@@ -451,6 +451,7 @@ async function importJellyfinHistory(server, { limitPerUser = 100 } = {}) {
         params: {
           Filters: 'IsPlayed',
           IncludeItemTypes: 'Movie,Episode',
+          Recursive: true,
           SortBy: 'DatePlayed',
           SortOrder: 'Descending',
           Limit: limitPerUser
@@ -464,10 +465,16 @@ async function importJellyfinHistory(server, { limitPerUser = 100 } = {}) {
             'INSERT INTO history (time, serverId, serverName, type, user, title, stream, transcoding, location, bandwidth) VALUES (?,?,?,?,?,?,?,?,?,?)'
           );
           items.forEach(it => {
+            const rawType = it.Type || it.MediaType || '';
+            // Ignore Jellyfin library views / folders (CollectionFolder, UserView, etc.)
+            if (rawType !== 'Movie' && rawType !== 'Episode') {
+              return;
+            }
+
             const time = (it.UserData && it.UserData.LastPlayedDate) || it.DatePlayed || new Date().toISOString();
             // Build a more human-friendly title for movies and episodes
             let title;
-            const type = it.Type || it.MediaType || '';
+            const type = rawType;
             if (type === 'Episode' || it.SeriesName) {
               const series = it.SeriesName || '';
               const epName = it.Name || '';
@@ -490,12 +497,8 @@ async function importJellyfinHistory(server, { limitPerUser = 100 } = {}) {
               title = it.Name || it.OriginalTitle || 'Unknown';
             }
 
-            // Use a simple, stable stream label so we don't show
-            // Jellyfin's internal folder/collection types in the UI.
-            let stream = '';
-            if (type === 'Movie' || type === 'Episode') {
-              stream = type;
-            }
+            // Use a simple, stable stream label for reports
+            const stream = type;
             stmt.run(
               time,
               server.id,
