@@ -539,41 +539,55 @@ async function importJellyfinHistory(server, { limitPerUser = 100 } = {}) {
 }
 
 // Plex: pull global watch history (recent or up to a limit)
-async function importPlexHistory(server, { limit = 1000 } = {}) {
+async function importPlexHistory(server, { limit = 2000 } = {}) {
   if (!historyDb) return { serverId: server.id, type: server.type, imported: 0, error: 'history DB not available' };
   const base = (server.baseUrl || '').replace(/\/$/, '');
   if (!server.token) {
     return { serverId: server.id, type: server.type, imported: 0, error: 'no token configured' };
   }
-  let url = base + '/status/sessions/history/all';
+  const url = base + '/status/sessions/history/all';
   const headers = {};
-  const params = {
-    'X-Plex-Container-Start': 0,
-    'X-Plex-Container-Size': limit
-  };
-
-  const tokenLoc = server.tokenLocation || 'query';
-  if (tokenLoc === 'header') {
-    headers['X-Plex-Token'] = server.token;
-  } else {
-    params['X-Plex-Token'] = server.token;
-  }
 
   try {
-    const resp = await axios.get(url, { headers, params, timeout: 20000 });
-    const mc = resp.data && resp.data.MediaContainer ? resp.data.MediaContainer : null;
-    const items = mc && Array.isArray(mc.Metadata) ? mc.Metadata : [];
-    if (!items.length) {
-      return { serverId: server.id, type: server.type, imported: 0 };
+    let imported = 0;
+    const tokenLoc = server.tokenLocation || 'query';
+    if (tokenLoc === 'header') {
+      headers['X-Plex-Token'] = server.token;
     }
 
-    let imported = 0;
     await new Promise((resolve) => {
-      historyDb.serialize(() => {
+      historyDb.serialize(async () => {
         const stmt = historyDb.prepare(
           'INSERT INTO history (time, serverId, serverName, type, user, title, stream, transcoding, location, bandwidth) VALUES (?,?,?,?,?,?,?,?,?,?)'
         );
-        items.forEach(m => {
+
+        let start = 0;
+        const pageSize = 200;
+
+        while (imported < limit) {
+          const remaining = limit - imported;
+          const size = remaining < pageSize ? remaining : pageSize;
+          const params = {
+            'X-Plex-Container-Start': start,
+            'X-Plex-Container-Size': size
+          };
+          if (tokenLoc !== 'header') {
+            params['X-Plex-Token'] = server.token;
+          }
+
+          let resp;
+          try {
+            resp = await axios.get(url, { headers, params, timeout: 20000 });
+          } catch (err) {
+            console.error(`Plex history page fetch failed for ${server.name || server.baseUrl}:`, err.message);
+            break;
+          }
+
+          const mc = resp.data && resp.data.MediaContainer ? resp.data.MediaContainer : null;
+          const items = mc && Array.isArray(mc.Metadata) ? mc.Metadata : [];
+          if (!items.length) break;
+
+          items.forEach(m => {
           const rawType = (m.type || '').toLowerCase();
           if (rawType !== 'movie' && rawType !== 'episode') return;
 
@@ -622,6 +636,10 @@ async function importPlexHistory(server, { limit = 1000 } = {}) {
             user = m.Account[0].title;
           } else if (m.Account && typeof m.Account.title === 'string') {
             user = m.Account.title;
+          } else if (Array.isArray(m.account) && m.account[0] && typeof m.account[0].title === 'string') {
+            user = m.account[0].title;
+          } else if (m.account && typeof m.account.title === 'string') {
+            user = m.account.title;
           } else if (m.User && typeof m.User.title === 'string') {
             user = m.User.title;
           }
@@ -641,6 +659,11 @@ async function importPlexHistory(server, { limit = 1000 } = {}) {
           );
           imported++;
         });
+
+          if (items.length < size) break;
+          start += items.length;
+        }
+
         stmt.finalize(() => resolve());
       });
     });
