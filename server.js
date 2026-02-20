@@ -611,7 +611,20 @@ async function importPlexHistory(server, { limit = 1000 } = {}) {
             title = m.title || m.originalTitle || 'Unknown';
           }
 
-          const user = (m.user && m.user.title) || m.user || (m.Account && m.Account.title) || 'Unknown';
+          // Try hard to extract the Plex account/user name in a few
+          // different shapes this endpoint can return.
+          let user = 'Unknown';
+          if (m.user && typeof m.user === 'string') {
+            user = m.user;
+          } else if (m.user && typeof m.user.title === 'string') {
+            user = m.user.title;
+          } else if (Array.isArray(m.Account) && m.Account[0] && typeof m.Account[0].title === 'string') {
+            user = m.Account[0].title;
+          } else if (m.Account && typeof m.Account.title === 'string') {
+            user = m.Account.title;
+          } else if (m.User && typeof m.User.title === 'string') {
+            user = m.User.title;
+          }
           const stream = rawType === 'movie' ? 'Movie' : (rawType === 'episode' ? 'Episode' : '');
 
           stmt.run(
