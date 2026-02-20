@@ -621,6 +621,7 @@ function summaryFromResponse(resp) {
           channel: m.channelTitle || '',
           episodeTitle: m.episodeTitle || '',
           userName: m.user || m.User?.title || '',
+          isLive: m.type === 'live',
           transcoding
         };
       });
@@ -807,6 +808,8 @@ function summaryFromResponse(resp) {
             location,
             ip,
             bandwidth,
+            channel: s.NowPlayingItem?.ChannelName || '',
+            isLive: (s.NowPlayingItem?.Type === 'LiveTv') || (s.NowPlayingItem?.IsLive === true),
             // Season / episode numbers for Jellyfin/Emby standard API
             seasonNumber: typeof s.NowPlayingItem?.ParentIndexNumber === 'number'
               ? s.NowPlayingItem.ParentIndexNumber

@@ -436,10 +436,15 @@
             }
             title.appendChild(streamType);
             info.appendChild(title);
-            // TV episodes: use seriesTitle (series) + episode for display
+            // Title line: treat live/OTA differently from library episodes
             let displayTitle;
+            const isLive = !!sess.isLive;
             const hasEpisode = !!(sess.episode || sess.episodeTitle);
-            if (hasEpisode) {
+            if (isLive) {
+              const channelName = sess.channel || 'Live TV';
+              const program = sess.title || sess.episodeTitle || '';
+              displayTitle = program ? `${channelName} - ${program}` : channelName;
+            } else if (hasEpisode) {
               const showName = sess.seriesTitle || sess.title || sess.channel || 'Unknown Show';
               const episodeName = sess.episode || sess.episodeTitle || sess.title || 'Episode';
               displayTitle = `${showName} - ${episodeName}`;
@@ -516,6 +521,7 @@
             addInfo('Audio', sess.audio);
             addInfo('Subtitle', sess.subtitle);
             addInfo('Location', sess.location);
+            addInfo('Channel', sess.channel);
             if (sess.location && sess.location.toUpperCase().includes('WAN')) {
               addInfo('WAN', sess.ip);
             }
