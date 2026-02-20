@@ -38,3 +38,4 @@ jobs:
           push: true
           tags: |
             ${{ env.IMAGE_NAME }}:${{ env.TAG }}
+            ${{ contains(env.TAG, 'beta') && format('{0}:beta', env.IMAGE_NAME) || '' }}
