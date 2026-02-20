@@ -532,10 +532,14 @@ function summaryFromResponse(resp) {
       const sessions = (d.MediaContainer.Metadata || []).map(m => {
         let posterUrl;
         let rawThumb = m.thumb || m.grandparentThumb || m.parentThumb || m.art || '';
-        if (resp.config && resp.config.serverConfig && rawThumb) {
+        if (rawThumb && typeof rawThumb === 'string' && /^https?:\/\//i.test(rawThumb)) {
+          // Absolute URL (e.g. Plex metadata-static or provider-static) –
+          // use it directly so OTA/live TV artwork can load correctly.
+          posterUrl = rawThumb;
+        } else if (resp.config && resp.config.serverConfig && rawThumb) {
           const serverId = resp.config.serverConfig.id;
-          // Use a local proxy endpoint so the browser doesn't need
-          // direct access to the Plex baseUrl or token.
+          // Relative library path – go through our poster proxy so the
+          // browser doesn't need direct access to the Plex baseUrl/token.
           posterUrl = `/api/poster?serverId=${encodeURIComponent(serverId)}&path=${encodeURIComponent(rawThumb)}`;
         }
         // Fallback placeholder for live TV if no artwork is available
