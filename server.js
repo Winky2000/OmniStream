@@ -779,6 +779,9 @@ function summaryFromResponse(resp) {
         }
         // If bandwidth still looks like kbps (big number), convert to Mbps
         if (bandwidth > 1000) bandwidth = bandwidth / 1000;
+        const durationSec = m.duration ? Math.round(m.duration / 1000) : 0;
+        const viewOffsetSec = m.viewOffset ? Math.round(m.viewOffset / 1000) : 0;
+        const progressPct = m.progress || (durationSec > 0 ? Math.round(viewOffsetSec / durationSec * 100) : 0);
         return {
           user: m.user || m.User?.title || 'Unknown',
           title: m.media_title || m.title || m.grandparentTitle || 'Unknown',
@@ -789,9 +792,9 @@ function summaryFromResponse(resp) {
           platform: m.platform || m.Player?.platform || m.Player?.product || '',
           state: m.state || m.Player?.state || '',
           poster: m.poster || normalizedPoster,
-          duration: m.duration ? Math.round(m.duration / 1000) : 0,
-          viewOffset: m.viewOffset || 0,
-          progress: m.progress || (m.duration ? Math.round((m.viewOffset || 0) / m.duration * 100) : 0),
+          duration: durationSec,
+          viewOffset: viewOffsetSec,
+          progress: progressPct,
           product: m.product || m.Player?.product || '',
           player: m.player || m.Player?.title || '',
           quality: m.quality || '',
