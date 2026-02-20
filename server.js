@@ -1457,6 +1457,11 @@ app.get('/api/system', (req, res) => {
     serversFilePath: SERVERS_FILE,
     hasHistoryDb: !!historyDb,
     maxHistory: MAX_HISTORY,
+    poll: {
+      lastPollAt,
+      lastPollDurationMs,
+      lastPollError
+    },
     backupEnabled: !!archiver,
     importHistory: {
       lastRunAt: lastImportRunAt,
@@ -1505,6 +1510,77 @@ app.get('/api/system/backup', (req, res) => {
   } catch (e) {
     console.error('[OmniStream] Failed to create backup zip:', e.message);
     res.status(500).json({ error: 'Failed to create backup zip' });
+  }
+});
+
+// Compact summary for Home Assistant and other external dashboards
+// Provides a stable, low-noise JSON shape that can be used with
+// Home Assistant REST sensors or templates.
+app.get('/api/ha/summary', (req, res) => {
+  try {
+    const enabledServers = servers.filter(s => !s.disabled);
+    const totalServers = enabledServers.length;
+    let online = 0;
+    let offline = 0;
+    let totalStreams = 0;
+    let directStreams = 0;
+    let transcodeStreams = 0;
+    let wanStreams = 0;
+
+    enabledServers.forEach(s => {
+      const st = statuses[s.id];
+      if (!st) {
+        offline++;
+        return;
+      }
+      if (st.online) online++; else offline++;
+      const sessions = Array.isArray(st.sessions) ? st.sessions : [];
+      sessions.forEach(sess => {
+        totalStreams++;
+        const isWan = sess.location && typeof sess.location === 'string' && sess.location.toUpperCase().includes('WAN');
+        if (isWan) wanStreams++;
+        let isTranscode = false;
+        if (typeof sess.transcoding === 'boolean') {
+          isTranscode = sess.transcoding;
+        } else if (sess.stream && typeof sess.stream === 'string' && sess.stream.toLowerCase().includes('transcode')) {
+          isTranscode = true;
+        } else if (sess.state && typeof sess.state === 'string' && sess.state.toLowerCase().includes('transcode')) {
+          isTranscode = true;
+        }
+        if (isTranscode) transcodeStreams++; else directStreams++;
+      });
+    });
+
+    let overall = 'ok';
+    if (totalServers > 0 && online === 0) {
+      overall = 'down';
+    } else if (offline > 0) {
+      overall = 'degraded';
+    }
+
+    res.json({
+      status: overall,
+      version: appVersion || null,
+      poll: {
+        lastPollAt,
+        lastPollDurationMs,
+        lastPollError
+      },
+      servers: {
+        total: totalServers,
+        online,
+        offline
+      },
+      streams: {
+        total: totalStreams,
+        direct: directStreams,
+        transcode: transcodeStreams,
+        wan: wanStreams
+      }
+    });
+  } catch (e) {
+    console.error('[OmniStream] /api/ha/summary failed:', e.message);
+    res.status(500).json({ error: 'failed to build summary' });
   }
 });
 

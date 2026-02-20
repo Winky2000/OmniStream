@@ -73,6 +73,14 @@
       </div>
 
       <div class="card">
+        <h2>Polling health</h2>
+        <div class="row"><b>Last poll:</b> <span id="pollLastAt">-</span></div>
+        <div class="row"><b>Duration:</b> <span id="pollDuration">-</span></div>
+        <div class="row"><b>Last poll error:</b> <span id="pollError">None</span></div>
+        <div class="hint">If poll errors occur frequently, OmniStream may be having trouble talking to one or more servers (network, DNS, or token issues).</div>
+      </div>
+
+      <div class="card">
         <h2>Backups</h2>
         <div class="row">Download a zip containing <b>servers.json</b> and <b>history.db</b> for quick backup or migration.</div>
         <button class="btn" id="backupBtn">Download backup (.zip)</button>
@@ -155,6 +163,11 @@
         document.getElementById('historyPath').textContent = data.historyDbPath || '-';
         document.getElementById('serversPath').textContent = data.serversFilePath || '-';
         document.getElementById('maxHistory').textContent = (typeof data.maxHistory === 'number') ? data.maxHistory : 'default';
+
+        const poll = data.poll || {};
+        document.getElementById('pollLastAt').textContent = poll.lastPollAt ? fmtTime(poll.lastPollAt) : '-';
+        document.getElementById('pollDuration').textContent = (typeof poll.lastPollDurationMs === 'number') ? (poll.lastPollDurationMs + ' ms') : '-';
+        document.getElementById('pollError').textContent = poll.lastPollError || 'None';
 
         const importInfo = data.importHistory || {};
         document.getElementById('importLastRun').textContent = importInfo.lastRunAt ? fmtTime(importInfo.lastRunAt) : 'Never';
