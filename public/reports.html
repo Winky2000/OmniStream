@@ -51,6 +51,13 @@
     <main class="main-content">
   <button class="sidebar-toggle" id="sidebarToggle">Hide menu</button>
   <h1>Reports</h1>
+  <div style="margin-bottom:12px;font-size:13px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+    <span style="color:var(--text-muted);">Scope:</span>
+    <select id="serverFilter" style="padding:4px 8px;border-radius:6px;border:1px solid #4b5563;background:var(--card-bg);color:var(--text-main);font-size:13px;">
+      <option value="all">All servers</option>
+    </select>
+    <span id="serverFilterNote" style="color:var(--text-faint);"></span>
+  </div>
   <div id="summary" class="placeholder">Loading summary...</div>
 
   <script>
@@ -91,155 +98,224 @@
         const { history = [] } = historyData;
         const summaryDiv = document.getElementById('summary');
 
-        const totalCurrentStreams = Object.values(statuses).reduce((sum, st) => sum + (Array.isArray(st.sessions) ? st.sessions.length : 0), 0);
-        const totalHistoryEntries = history.length;
+        // Collapse raw history samples into approximate "play events" so
+        // long-running sessions aren't counted on every poll. We treat
+        // repeated (user,title) entries within a sliding window as the
+        // same play.
+        const SESSION_WINDOW_MS = 30 * 60 * 1000; // 30 minutes
+        const events = [];
+        const lastByKey = new Map();
 
-        const users = new Map();
-        const titles = new Map();
-        history.forEach(h => {
-          if (h.user) {
-            users.set(h.user, (users.get(h.user) || 0) + 1);
+        function parseTime(h) {
+          if (typeof h.time === 'number') return h.time;
+          if (typeof h.time === 'string') {
+            const parsed = Date.parse(h.time);
+            if (!Number.isNaN(parsed)) return parsed;
           }
-          if (h.title) {
-            titles.set(h.title, (titles.get(h.title) || 0) + 1);
+          return null;
+        }
+
+        history.forEach(h => {
+          const t = parseTime(h);
+          if (t == null) return;
+          const user = h.user || 'Unknown';
+          const title = h.title || 'Idle';
+          const serverId = h.serverId || 'unknown';
+          const serverName = h.serverName || 'Unknown server';
+          const key = serverId + '|' + user + '|' + title;
+          const last = lastByKey.get(key) || 0;
+          if (!last || (t - last) > SESSION_WINDOW_MS) {
+            events.push({ time: t, user, title, serverId, serverName });
+            lastByKey.set(key, t);
           }
         });
 
-        const topTitles = Array.from(titles.entries())
-          .sort((a,b) => b[1]-a[1])
-          .slice(0,5);
+        // Populate server filter dropdown
+        const serverFilter = document.getElementById('serverFilter');
+        const seenIds = new Set();
+        while (serverFilter.options.length > 1) serverFilter.remove(1);
+        servers.forEach(s => {
+          if (seenIds.has(String(s.id))) return;
+          seenIds.add(String(s.id));
+          const opt = document.createElement('option');
+          opt.value = String(s.id);
+          opt.textContent = s.name || s.baseUrl || ('Server ' + s.id);
+          serverFilter.appendChild(opt);
+        });
 
-        const topUsers = Array.from(users.entries())
-          .sort((a,b) => b[1]-a[1])
-          .slice(0,5);
+        function computeAndRender(scopeServerId) {
+          const scopeAll = !scopeServerId || scopeServerId === 'all';
+          const filteredEvents = scopeAll
+            ? events
+            : events.filter(ev => String(ev.serverId) === String(scopeServerId));
 
-        // Activity over the last 7 days
-        const now = Date.now();
-        const oneDayMs = 24 * 60 * 60 * 1000;
-        const startOfToday = new Date();
-        startOfToday.setHours(0,0,0,0);
-        const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-        const dayBuckets = [];
-        for (let i = 6; i >= 0; i--) {
-          const dayStart = startOfToday.getTime() - i * oneDayMs;
-          const dayEnd = dayStart + oneDayMs;
-          const label = dayNames[new Date(dayStart).getDay()];
-          dayBuckets.push({ label, start: dayStart, end: dayEnd, count: 0 });
-        }
+          const totalCurrentStreams = scopeAll
+            ? Object.values(statuses).reduce((sum, st) => sum + (Array.isArray(st.sessions) ? st.sessions.length : 0), 0)
+            : (statuses[scopeServerId] && Array.isArray(statuses[scopeServerId].sessions)
+                ? statuses[scopeServerId].sessions.length
+                : 0);
 
-        let last24hCount = 0;
-        let last7dCount = 0;
-        const sevenDaysAgo = now - 7 * oneDayMs;
-        const hourBuckets = new Array(24).fill(0);
+          const totalHistoryEntries = filteredEvents.length;
 
-        history.forEach(h => {
-          let t = null;
-          if (typeof h.time === 'number') {
-            t = h.time;
-          } else if (typeof h.time === 'string') {
-            const parsed = Date.parse(h.time);
-            if (!Number.isNaN(parsed)) t = parsed;
-          }
-          if (t == null) return;
-
-          if (t >= now - oneDayMs) last24hCount++;
-          if (t >= sevenDaysAgo) last7dCount++;
-
-          if (t >= sevenDaysAgo) {
-            const local = new Date(t);
-            hourBuckets[local.getHours()]++;
-          }
-
-          dayBuckets.forEach(bucket => {
-            if (t >= bucket.start && t < bucket.end) {
-              bucket.count++;
+          const users = new Map();
+          const titles = new Map();
+          filteredEvents.forEach(ev => {
+            if (ev.user) {
+              users.set(ev.user, (users.get(ev.user) || 0) + 1);
+            }
+            if (ev.title) {
+              titles.set(ev.title, (titles.get(ev.title) || 0) + 1);
             }
           });
-        });
 
-        const maxDayCount = dayBuckets.reduce((max, d) => Math.max(max, d.count), 0);
-        let busiestDayLabel = null;
-        let busiestDayCount = 0;
-        dayBuckets.forEach(bucket => {
-          if (bucket.count > busiestDayCount) {
-            busiestDayCount = bucket.count;
-            busiestDayLabel = bucket.label;
+          const topTitles = Array.from(titles.entries())
+            .sort((a,b) => b[1]-a[1])
+            .slice(0,5);
+
+          const topUsers = Array.from(users.entries())
+            .sort((a,b) => b[1]-a[1])
+            .slice(0,5);
+
+          // Activity over the last 7 days
+          const now = Date.now();
+          const oneDayMs = 24 * 60 * 60 * 1000;
+          const startOfToday = new Date();
+          startOfToday.setHours(0,0,0,0);
+          const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+          const dayBuckets = [];
+          for (let i = 6; i >= 0; i--) {
+            const dayStart = startOfToday.getTime() - i * oneDayMs;
+            const dayEnd = dayStart + oneDayMs;
+            const label = dayNames[new Date(dayStart).getDay()];
+            dayBuckets.push({ label, start: dayStart, end: dayEnd, count: 0 });
           }
-        });
 
-        let peakHourIndex = -1;
-        let peakHourCount = 0;
-        hourBuckets.forEach((count, hour) => {
-          if (count > peakHourCount) {
-            peakHourCount = count;
-            peakHourIndex = hour;
-          }
-        });
+          let last24hCount = 0;
+          let last7dCount = 0;
+          const sevenDaysAgo = now - 7 * oneDayMs;
+          const hourBuckets = new Array(24).fill(0);
 
-        let html = '<div class="cards">';
-        html += '<div class="card">';
-        html += '<h2>Overview</h2>';
-        html += `<div class="metric"><b>Current streams:</b> ${totalCurrentStreams}</div>`;
-        html += `<div class="metric"><b>History entries (recent):</b> ${totalHistoryEntries}</div>`;
-        html += `<div class="metric"><b>Unique users seen:</b> ${users.size}</div>`;
-        html += '</div>';
+          filteredEvents.forEach(ev => {
+            const t = ev.time;
+            if (t == null) return;
 
-        html += '<div class="card">';
-        html += '<h2>Activity (last 7 days)</h2>';
-        html += `<div class="metric"><b>Plays last 24 hours:</b> ${last24hCount}</div>`;
-        html += `<div class="metric"><b>Plays last 7 days:</b> ${last7dCount}</div>`;
-        if (last7dCount > 0 && busiestDayLabel) {
-          html += `<div class="metric"><b>Busiest day:</b> ${busiestDayLabel} · ${busiestDayCount} plays</div>`;
-        }
-        if (peakHourIndex >= 0 && peakHourCount > 0) {
-          const hourLabel = String(peakHourIndex).padStart(2,'0') + ':00–' + String(peakHourIndex).padStart(2,'0') + ':59';
-          html += `<div class="metric"><b>Peak hour:</b> ${hourLabel} · ${peakHourCount} plays</div>`;
-        }
-        if (last7dCount > 0 && maxDayCount > 0) {
-          html += '<div class="activity-grid">';
+            if (t >= now - oneDayMs) last24hCount++;
+            if (t >= sevenDaysAgo) last7dCount++;
+
+            if (t >= sevenDaysAgo) {
+              const local = new Date(t);
+              hourBuckets[local.getHours()]++;
+            }
+
+            dayBuckets.forEach(bucket => {
+              if (t >= bucket.start && t < bucket.end) {
+                bucket.count++;
+              }
+            });
+          });
+
+          const maxDayCount = dayBuckets.reduce((max, d) => Math.max(max, d.count), 0);
+          let busiestDayLabel = null;
+          let busiestDayCount = 0;
           dayBuckets.forEach(bucket => {
-            let heightPct = maxDayCount ? (bucket.count / maxDayCount) * 100 : 0;
-            if (bucket.count > 0 && heightPct < 18) heightPct = 18; // keep visible
-            if (bucket.count === 0) heightPct = 0;
-            html += '<div class="activity-column">';
-            html += '<div class="activity-bar">';
-            html += `<div class="activity-bar-fill" style="height:${heightPct}%;"></div>`;
-            html += '</div>';
-            html += `<div class="activity-bar-label">${bucket.label}</div>`;
-            html += '</div>';
+            if (bucket.count > busiestDayCount) {
+              busiestDayCount = bucket.count;
+              busiestDayLabel = bucket.label;
+            }
           });
+
+          let peakHourIndex = -1;
+          let peakHourCount = 0;
+          hourBuckets.forEach((count, hour) => {
+            if (count > peakHourCount) {
+              peakHourCount = count;
+              peakHourIndex = hour;
+            }
+          });
+
+          const noteEl = document.getElementById('serverFilterNote');
+          if (scopeAll) {
+            noteEl.textContent = 'Showing activity across all servers.';
+          } else {
+            const s = servers.find(sv => String(sv.id) === String(scopeServerId));
+            noteEl.textContent = s ? `Showing activity for ${s.name || s.baseUrl}.` : '';
+          }
+
+          let html = '<div class="cards">';
+          html += '<div class="card">';
+          html += '<h2>Overview</h2>';
+          html += `<div class="metric"><b>Current streams:</b> ${totalCurrentStreams}</div>`;
+          html += `<div class="metric"><b>Unique play events (recent):</b> ${totalHistoryEntries}</div>`;
+          html += `<div class="metric"><b>Unique users seen:</b> ${users.size}</div>`;
           html += '</div>';
-        } else {
-          html += '<div class="list-item">No activity in the last 7 days yet.</div>';
+
+          html += '<div class="card">';
+          html += '<h2>Activity (last 7 days)</h2>';
+          html += `<div class="metric"><b>Plays last 24 hours:</b> ${last24hCount}</div>`;
+          html += `<div class="metric"><b>Plays last 7 days:</b> ${last7dCount}</div>`;
+          if (last7dCount > 0 && busiestDayLabel) {
+            html += `<div class="metric"><b>Busiest day:</b> ${busiestDayLabel} · ${busiestDayCount} plays</div>`;
+          }
+          if (peakHourIndex >= 0 && peakHourCount > 0) {
+            const hourLabel = String(peakHourIndex).padStart(2,'0') + ':00–' + String(peakHourIndex).padStart(2,'0') + ':59';
+            html += `<div class="metric"><b>Peak hour:</b> ${hourLabel} · ${peakHourCount} plays</div>`;
+          }
+          if (last7dCount > 0 && maxDayCount > 0) {
+            html += '<div class="activity-grid">';
+            dayBuckets.forEach(bucket => {
+              let heightPct = maxDayCount ? (bucket.count / maxDayCount) * 100 : 0;
+              if (bucket.count > 0 && heightPct < 18) heightPct = 18;
+              if (bucket.count === 0) heightPct = 0;
+              html += '<div class="activity-column">';
+              html += '<div class="activity-bar">';
+              html += `<div class="activity-bar-fill" style="height:${heightPct}%;"></div>`;
+              html += '</div>';
+              html += `<div class="activity-bar-label">${bucket.label}</div>`;
+              html += '</div>';
+            });
+            html += '</div>';
+          } else {
+            html += '<div class="list-item">No activity in the last 7 days yet.</div>';
+          }
+          html += '</div>';
+
+          html += '<div class="card">';
+          html += '<h2>Top titles (recent)</h2>';
+          if (topTitles.length) {
+            topTitles.forEach(([title,count]) => {
+              html += `<div class="list-item">${title} &times; ${count}</div>`;
+            });
+          } else {
+            html += '<div class="list-item">No history yet.</div>';
+          }
+          html += '</div>';
+
+          html += '<div class="card">';
+          html += '<h2>Top users (recent)</h2>';
+          if (topUsers.length) {
+            topUsers.forEach(([user,count]) => {
+              const href = 'user.html?user=' + encodeURIComponent(user);
+              html += `<div class="list-item"><a class="user-link" href="${href}">${user}</a> &times; ${count}</div>`;
+            });
+          } else {
+            html += '<div class="list-item">No users yet.</div>';
+          }
+          html += '</div>';
+
+          html += '</div>';
+
+          summaryDiv.innerHTML = html;
         }
-        html += '</div>';
 
-        html += '<div class="card">';
-        html += '<h2>Top titles (recent)</h2>';
-        if (topTitles.length) {
-          topTitles.forEach(([title,count]) => {
-            html += `<div class="list-item">${title} &times; ${count}</div>`;
-          });
-        } else {
-          html += '<div class="list-item">No history yet.</div>';
+        // initial render using "all" scope
+        const serverFilter = document.getElementById('serverFilter');
+        computeAndRender(serverFilter ? serverFilter.value : 'all');
+
+        if (serverFilter) {
+          serverFilter.onchange = () => {
+            computeAndRender(serverFilter.value || 'all');
+          };
         }
-        html += '</div>';
-
-        html += '<div class="card">';
-        html += '<h2>Top users (recent)</h2>';
-        if (topUsers.length) {
-          topUsers.forEach(([user,count]) => {
-            const href = 'user.html?user=' + encodeURIComponent(user);
-            html += `<div class="list-item"><a class="user-link" href="${href}">${user}</a> &times; ${count}</div>`;
-          });
-        } else {
-          html += '<div class="list-item">No users yet.</div>';
-        }
-        html += '</div>';
-
-        html += '</div>';
-
-        summaryDiv.innerHTML = html;
       } catch (e) {
         console.error(e);
         document.getElementById('summary').textContent = 'Failed to load reports.';

@@ -75,7 +75,12 @@ app.put('/api/servers/:id', (req, res) => {
 });
 
 const statuses = {}; // keyed by server.id
-const MAX_HISTORY = 500;
+const DEFAULT_MAX_HISTORY = 500;
+let MAX_HISTORY = DEFAULT_MAX_HISTORY;
+if (appConfig && typeof appConfig.maxHistory === 'number') {
+  // maxHistory <= 0 means "no automatic trimming" (keep full history)
+  MAX_HISTORY = appConfig.maxHistory;
+}
 
 // Track last derived notifications so we only fire notifiers on changes
 let lastNotificationIds = new Set();
@@ -480,17 +485,19 @@ async function importJellyfinHistory(server, { limitPerUser = 100 } = {}) {
         });
       });
     }
-    // Trim DB after import
-    await new Promise((resolve) => {
-      historyDb.run(
-        'DELETE FROM history WHERE id NOT IN (SELECT id FROM history ORDER BY id DESC LIMIT ?)',
-        [MAX_HISTORY],
-        (err) => {
-          if (err) console.error('Failed to trim history database after import:', err.message);
-          resolve();
-        }
-      );
-    });
+    // Trim DB after import if a retention limit is configured
+    if (MAX_HISTORY > 0) {
+      await new Promise((resolve) => {
+        historyDb.run(
+          'DELETE FROM history WHERE id NOT IN (SELECT id FROM history ORDER BY id DESC LIMIT ?)',
+          [MAX_HISTORY],
+          (err) => {
+            if (err) console.error('Failed to trim history database after import:', err.message);
+            resolve();
+          }
+        );
+      });
+    }
     return { serverId: server.id, type: server.type, imported };
   } catch (e) {
     console.error(`Failed to import Jellyfin history for ${server.name || server.baseUrl}:`, e.message);
@@ -997,14 +1004,16 @@ async function pollAll() {
         });
       });
       stmt.finalize();
-      // Trim to MAX_HISTORY rows to keep DB small
-      historyDb.run(
-        'DELETE FROM history WHERE id NOT IN (SELECT id FROM history ORDER BY id DESC LIMIT ?)',
-        [MAX_HISTORY],
-        (err) => {
-          if (err) console.error('Failed to trim history database:', err.message);
-        }
-      );
+      // Trim to MAX_HISTORY rows to keep DB small (if configured)
+      if (MAX_HISTORY > 0) {
+        historyDb.run(
+          'DELETE FROM history WHERE id NOT IN (SELECT id FROM history ORDER BY id DESC LIMIT ?)',
+          [MAX_HISTORY],
+          (err) => {
+            if (err) console.error('Failed to trim history database:', err.message);
+          }
+        );
+      }
     });
   }
   // After updating statuses and history, evaluate and send any outbound notifications
@@ -1088,29 +1097,31 @@ app.get('/api/poster', async (req, res) => {
 // Simple history API - backed by SQLite
 app.get('/api/history', (req, res) => {
   if (!historyDb) return res.json({ history: [] });
-  historyDb.all(
-    'SELECT time, serverId, serverName, type, user, title, stream, transcoding, location, bandwidth FROM history ORDER BY id ASC LIMIT ?',
-    [MAX_HISTORY],
-    (err, rows) => {
-      if (err) {
-        console.error('Failed to read history database:', err.message);
-        return res.status(500).json({ history: [] });
-      }
-      const history = rows.map(r => ({
-        time: r.time,
-        serverId: r.serverId,
-        serverName: r.serverName,
-        type: r.type,
-        user: r.user,
-        title: r.title,
-        stream: r.stream,
-        transcoding: typeof r.transcoding === 'number' ? !!r.transcoding : undefined,
-        location: r.location,
-        bandwidth: typeof r.bandwidth === 'number' ? r.bandwidth : 0
-      }));
-      res.json({ history });
+  let sql = 'SELECT time, serverId, serverName, type, user, title, stream, transcoding, location, bandwidth FROM history ORDER BY id ASC';
+  const params = [];
+  if (MAX_HISTORY > 0) {
+    sql += ' LIMIT ?';
+    params.push(MAX_HISTORY);
+  }
+  historyDb.all(sql, params, (err, rows) => {
+    if (err) {
+      console.error('Failed to read history database:', err.message);
+      return res.status(500).json({ history: [] });
     }
-  );
+    const history = rows.map(r => ({
+      time: r.time,
+      serverId: r.serverId,
+      serverName: r.serverName,
+      type: r.type,
+      user: r.user,
+      title: r.title,
+      stream: r.stream,
+      transcoding: typeof r.transcoding === 'number' ? !!r.transcoding : undefined,
+      location: r.location,
+      bandwidth: typeof r.bandwidth === 'number' ? r.bandwidth : 0
+    }));
+    res.json({ history });
+  });
 });
 
 // Queryable history API with basic filters and sorting
@@ -1159,13 +1170,25 @@ app.get('/api/history/query', (req, res) => {
     orderBy = `time ${dir}`;
   }
 
-  const max = Math.min(Number(limit) || MAX_HISTORY, MAX_HISTORY);
+  let max;
+  let limitClause = '';
+  if (MAX_HISTORY > 0) {
+    max = Math.min(Number(limit) || MAX_HISTORY, MAX_HISTORY);
+    limitClause = ' LIMIT ?';
+    params.push(max);
+  } else if (limit) {
+    const requested = Number(limit);
+    if (Number.isFinite(requested) && requested > 0) {
+      max = requested;
+      limitClause = ' LIMIT ?';
+      params.push(max);
+    }
+  }
+
   const sql = `SELECT time, serverId, serverName, type, user, title, stream, transcoding, location, bandwidth
                FROM history
                ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
-               ORDER BY ${orderBy}
-               LIMIT ?`;
-  params.push(max);
+               ORDER BY ${orderBy}${limitClause}`;
 
   historyDb.all(sql, params, (err, rows) => {
     if (err) {
