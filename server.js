@@ -632,6 +632,10 @@ async function importPlexHistory(server, { limit = 2000 } = {}) {
             user = m.user;
           } else if (m.user && typeof m.user.title === 'string') {
             user = m.user.title;
+          } else if (typeof m.username === 'string') {
+            user = m.username;
+          } else if (m.User && typeof m.User.username === 'string') {
+            user = m.User.username;
           } else if (Array.isArray(m.Account) && m.Account[0] && typeof m.Account[0].title === 'string') {
             user = m.Account[0].title;
           } else if (m.Account && typeof m.Account.title === 'string') {
@@ -642,6 +646,15 @@ async function importPlexHistory(server, { limit = 2000 } = {}) {
             user = m.account.title;
           } else if (m.User && typeof m.User.title === 'string') {
             user = m.User.title;
+          }
+          if (user === 'Unknown') {
+            console.log('[OmniStream] Plex history item has unknown user; available user fields:', {
+              user: m.user,
+              username: m.username,
+              Account: m.Account,
+              account: m.account,
+              User: m.User
+            });
           }
           const stream = rawType === 'movie' ? 'Movie' : (rawType === 'episode' ? 'Episode' : '');
 
