@@ -531,32 +531,12 @@ function summaryFromResponse(resp) {
     if (d.MediaContainer) {
       const sessions = (d.MediaContainer.Metadata || []).map(m => {
         let posterUrl;
-        if (resp.config && resp.config.serverConfig) {
-          const base = resp.config.serverConfig.baseUrl;
-          const token = encodeURIComponent(resp.config.serverConfig.token);
-          if (m.type === 'live') {
-            // Live TV: prefer the live item thumb, but fall back to parent/series art or background art
-            if (m.thumb) {
-              posterUrl = `${base}${m.thumb}?X-Plex-Token=${token}`;
-            } else if (m.grandparentThumb) {
-              posterUrl = `${base}${m.grandparentThumb}?X-Plex-Token=${token}`;
-            } else if (m.parentThumb) {
-              posterUrl = `${base}${m.parentThumb}?X-Plex-Token=${token}`;
-            } else if (m.art) {
-              posterUrl = `${base}${m.art}?X-Plex-Token=${token}`;
-            }
-          } else {
-            // Prefer series/parent artwork for TV episodes when available
-            if (m.grandparentThumb) {
-              posterUrl = `${base}${m.grandparentThumb}?X-Plex-Token=${token}`;
-            } else if (m.parentThumb) {
-              posterUrl = `${base}${m.parentThumb}?X-Plex-Token=${token}`;
-            } else if (m.thumb) {
-              posterUrl = `${base}${m.thumb}?X-Plex-Token=${token}`;
-            } else if (m.art) {
-              posterUrl = `${base}${m.art}?X-Plex-Token=${token}`;
-            }
-          }
+        let rawThumb = m.thumb || m.grandparentThumb || m.parentThumb || m.art || '';
+        if (resp.config && resp.config.serverConfig && rawThumb) {
+          const serverId = resp.config.serverConfig.id;
+          // Use a local proxy endpoint so the browser doesn't need
+          // direct access to the Plex baseUrl or token.
+          posterUrl = `/api/poster?serverId=${encodeURIComponent(serverId)}&path=${encodeURIComponent(rawThumb)}`;
         }
         // Fallback placeholder for live TV if no artwork is available
         const normalizedPoster = posterUrl || (m.type === 'live' ? '/live_tv_placeholder.svg' : undefined);
@@ -695,19 +675,15 @@ function summaryFromResponse(resp) {
         if (s.NowPlayingItem && s.PlayState) {
           let posterUrl;
           if (resp.config && resp.config.serverConfig) {
-            const base = resp.config.serverConfig.baseUrl;
-            const token = encodeURIComponent(resp.config.serverConfig.token);
-            // Live TV uses the NowPlaying item artwork when present
-            if (s.NowPlayingItem?.Type === 'LiveTv' && s.NowPlayingItem?.ImageTags?.Primary) {
-              posterUrl = `${base}/Items/${s.NowPlayingItem.Id}/Images/Primary?api_key=${token}`;
-            } else if (s.NowPlayingItem?.ImageTags?.Primary) {
-              // Prefer series artwork for episodes when SeriesId is available
-              const seriesId = s.NowPlayingItem.SeriesId;
-              if (s.NowPlayingItem.Type === 'Episode' && seriesId) {
-                posterUrl = `${base}/Items/${seriesId}/Images/Primary?api_key=${token}`;
-              } else {
-                posterUrl = `${base}/Items/${s.NowPlayingItem.Id}/Images/Primary?api_key=${token}`;
-              }
+            const serverId = resp.config.serverConfig.id;
+            let itemId = s.NowPlayingItem.Id;
+            const seriesId = s.NowPlayingItem.SeriesId;
+            if (s.NowPlayingItem.Type === 'Episode' && seriesId) {
+              itemId = seriesId;
+            }
+            if (itemId) {
+              const embyPath = `/Items/${itemId}/Images/Primary`;
+              posterUrl = `/api/poster?serverId=${encodeURIComponent(serverId)}&path=${encodeURIComponent(embyPath)}`;
             }
           }
           // Fallback placeholder for LiveTv sessions without artwork
@@ -913,8 +889,9 @@ async function pollServer(s) {
 
   try {
     const resp = await axios.get(finalUrl, { timeout: 10000, headers });
-    // Attach server config for poster URL generation
+    // Attach server config for poster URL generation and proxying
     resp.config.serverConfig = {
+      id: s.id,
       baseUrl: s.baseUrl,
       token: s.token || '',
       type: s.type || ''
@@ -1046,6 +1023,62 @@ app.get('/api/status', (req, res) => {
     statuses: enabledStatuses,
     setup: enabledServers.length === 0
   });
+});
+
+// Proxy poster artwork so the browser doesn't need direct access
+// to Plex/Jellyfin/Emby base URLs or tokens. The frontend passes
+// a serverId and a relative artwork path (e.g. /library/metadata/...)
+// and this endpoint streams the image back.
+app.get('/api/poster', async (req, res) => {
+  try {
+    const { serverId, path: artworkPath } = req.query;
+    if (!serverId || !artworkPath) {
+      return res.status(400).end();
+    }
+    const server = servers.find(s => String(s.id) === String(serverId));
+    if (!server || !server.baseUrl) {
+      return res.status(404).end();
+    }
+    let base = server.baseUrl;
+    if (base.endsWith('/')) base = base.slice(0, -1);
+    const rel = String(artworkPath).startsWith('/') ? String(artworkPath) : '/' + String(artworkPath);
+    let url = base + rel;
+    // Attach token using the same rules as pollServer
+    if (server.token) {
+      const tokenLoc = server.tokenLocation || (server.type === 'plex' ? 'query' : 'header');
+      if (tokenLoc === 'query') {
+        const sep = url.includes('?') ? '&' : '?';
+        if (server.type === 'plex') {
+          url += `${sep}X-Plex-Token=${encodeURIComponent(server.token)}`;
+        } else if (server.type === 'jellyfin') {
+          url += `${sep}api_key=${encodeURIComponent(server.token)}`;
+        } else {
+          url += `${sep}X-Emby-Token=${encodeURIComponent(server.token)}`;
+        }
+      }
+    }
+    const headers = {};
+    if (server.token) {
+      const tokenLoc = server.tokenLocation || (server.type === 'plex' ? 'query' : 'header');
+      if (tokenLoc === 'header') {
+        if (server.type === 'plex') {
+          headers['X-Plex-Token'] = server.token;
+        } else if (server.type === 'jellyfin') {
+          headers['X-MediaBrowser-Token'] = server.token;
+        } else {
+          headers['X-Emby-Token'] = server.token;
+        }
+      }
+    }
+    const resp = await axios.get(url, { responseType: 'stream', headers });
+    if (resp.headers['content-type']) {
+      res.setHeader('Content-Type', resp.headers['content-type']);
+    }
+    resp.data.pipe(res);
+  } catch (e) {
+    console.error('[OmniStream] Poster proxy failed:', e.message);
+    res.status(502).end();
+  }
 });
 
 // Simple history API - backed by SQLite
