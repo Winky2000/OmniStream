@@ -7,11 +7,18 @@ const cors = require('cors');
 const sqlite3 = require('sqlite3').verbose();
 const https = require('https');
 let nodemailer = null;
+let archiver = null;
 try {
   // Optional dependency for email notifications; if not installed, email will be disabled gracefully
   nodemailer = require('nodemailer');
 } catch (e) {
   console.log('[OmniStream] Email notifications disabled (nodemailer not installed).');
+}
+try {
+  // Optional dependency for backup zip downloads
+  archiver = require('archiver');
+} catch (e) {
+  console.log('[OmniStream] Backup zip disabled (archiver not installed).');
 }
 // ...existing code...
 
@@ -105,6 +112,13 @@ let lastPollAt = null;           // ISO string of last completed pollAll
 let lastPollDurationMs = null;   // Duration of last pollAll in milliseconds
 let lastPollError = null;        // Last top-level pollAll error message, if any
 
+// Track system-level insights for reliability/debugging
+let lastImportRunAt = null;         // ISO string of last /api/import-history run
+let lastImportResults = null;       // Array of results from last import
+let lastNotifierError = null;       // Last notifier error message (any channel)
+let lastNotifierErrorAt = null;     // ISO string when last notifier error occurred
+let lastNotifierErrorChannel = null;// Channel name for last notifier error
+
 function shouldSendNotificationToChannel(notification, channelCfg) {
   if (!channelCfg) return false;
   const triggers = channelCfg.triggers;
@@ -114,6 +128,17 @@ function shouldSendNotificationToChannel(notification, channelCfg) {
   if (kind === 'wanTranscode') return triggers.wanTranscodes !== false;
   if (kind === 'highBandwidth') return triggers.highBandwidth !== false;
   return true;
+}
+
+function recordNotifierError(channel, message) {
+  try {
+    lastNotifierError = message || null;
+    lastNotifierErrorChannel = channel || null;
+    lastNotifierErrorAt = new Date().toISOString();
+  } catch (e) {
+    // Avoid throwing from error handler; just log.
+    console.error('[OmniStream] Failed to record notifier error:', e.message);
+  }
 }
 
 function triggerNotifiers() {
@@ -182,11 +207,13 @@ function sendDiscordNotification(notification) {
     });
     req.on('error', err => {
       console.error('[OmniStream] Discord notifier error:', err.message);
+      recordNotifierError('discord', err.message);
     });
     req.write(body);
     req.end();
   } catch (e) {
     console.error('[OmniStream] Discord notifier failure:', e.message);
+    recordNotifierError('discord', e.message);
   }
 }
 
@@ -220,10 +247,12 @@ function sendEmailNotification(notification) {
     transport.sendMail(mailOptions, (err) => {
       if (err) {
         console.error('[OmniStream] Email notifier error:', err.message);
+        recordNotifierError('email', err.message);
       }
     });
   } catch (e) {
     console.error('[OmniStream] Email notifier failure:', e.message);
+    recordNotifierError('email', e.message);
   }
 }
 
@@ -254,11 +283,13 @@ function sendGenericWebhookNotification(notification) {
     });
     req.on('error', err => {
       console.error('[OmniStream] Webhook notifier error:', err.message);
+      recordNotifierError('webhook', err.message);
     });
     req.write(body);
     req.end();
   } catch (e) {
     console.error('[OmniStream] Webhook notifier failure:', e.message);
+    recordNotifierError('webhook', e.message);
   }
 }
 
@@ -283,11 +314,13 @@ function sendSlackNotification(notification) {
     });
     req.on('error', err => {
       console.error('[OmniStream] Slack notifier error:', err.message);
+      recordNotifierError('slack', err.message);
     });
     req.write(body);
     req.end();
   } catch (e) {
     console.error('[OmniStream] Slack notifier failure:', e.message);
+    recordNotifierError('slack', e.message);
   }
 }
 
@@ -307,10 +340,12 @@ function sendTelegramNotification(notification) {
     });
     req.on('error', err => {
       console.error('[OmniStream] Telegram notifier error:', err.message);
+      recordNotifierError('telegram', err.message);
     });
     req.end();
   } catch (e) {
     console.error('[OmniStream] Telegram notifier failure:', e.message);
+    recordNotifierError('telegram', e.message);
   }
 }
 
@@ -339,11 +374,13 @@ function sendTwilioSmsNotification(notification) {
     });
     req.on('error', err => {
       console.error('[OmniStream] Twilio notifier error:', err.message);
+      recordNotifierError('twilio', err.message);
     });
     req.write(payload);
     req.end();
   } catch (e) {
     console.error('[OmniStream] Twilio notifier failure:', e.message);
+    recordNotifierError('twilio', e.message);
   }
 }
 
@@ -372,11 +409,13 @@ function sendPushoverNotification(notification) {
     });
     req.on('error', err => {
       console.error('[OmniStream] Pushover notifier error:', err.message);
+      recordNotifierError('pushover', err.message);
     });
     req.write(payload);
     req.end();
   } catch (e) {
     console.error('[OmniStream] Pushover notifier failure:', e.message);
+    recordNotifierError('pushover', e.message);
   }
 }
 
@@ -405,11 +444,13 @@ function sendGotifyNotification(notification) {
     });
     req.on('error', err => {
       console.error('[OmniStream] Gotify notifier error:', err.message);
+      recordNotifierError('gotify', err.message);
     });
     req.write(body);
     req.end();
   } catch (e) {
     console.error('[OmniStream] Gotify notifier failure:', e.message);
+    recordNotifierError('gotify', e.message);
   }
 }
 
@@ -1415,8 +1456,56 @@ app.get('/api/system', (req, res) => {
     historyDbPath: HISTORY_DB_FILE,
     serversFilePath: SERVERS_FILE,
     hasHistoryDb: !!historyDb,
-    maxHistory: MAX_HISTORY
+    maxHistory: MAX_HISTORY,
+    backupEnabled: !!archiver,
+    importHistory: {
+      lastRunAt: lastImportRunAt,
+      lastResults: lastImportResults
+    },
+    notifiers: {
+      lastError: lastNotifierError,
+      lastErrorAt: lastNotifierErrorAt,
+      lastErrorChannel: lastNotifierErrorChannel
+    }
   });
+});
+
+// One-click backup: zip servers.json + history.db into a single download
+app.get('/api/system/backup', (req, res) => {
+  try {
+    if (!archiver) {
+      return res.status(500).json({ error: 'Backup zip not available (archiver not installed on server).' });
+    }
+
+    const hasServers = fs.existsSync(SERVERS_FILE);
+    const hasHistory = historyDb && fs.existsSync(HISTORY_DB_FILE);
+    if (!hasServers && !hasHistory) {
+      return res.status(404).json({ error: 'Nothing to back up (no servers.json or history.db found).' });
+    }
+
+    const ts = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `omnistream-backup-${ts}.zip`;
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    const archive = archiver('zip', { zlib: { level: 9 } });
+    archive.on('error', (err) => {
+      console.error('[OmniStream] Backup zip error:', err.message);
+      try { res.status(500).end(); } catch (_) {}
+    });
+
+    archive.pipe(res);
+    if (hasServers) {
+      archive.file(SERVERS_FILE, { name: 'servers.json' });
+    }
+    if (hasHistory) {
+      archive.file(HISTORY_DB_FILE, { name: 'history.db' });
+    }
+    archive.finalize();
+  } catch (e) {
+    console.error('[OmniStream] Failed to create backup zip:', e.message);
+    res.status(500).json({ error: 'Failed to create backup zip' });
+  }
 });
 
 // Simple download endpoints for key state files
@@ -1546,6 +1635,8 @@ app.post('/api/import-history', async (req, res) => {
       results.push(r);
     }
   }
+  lastImportRunAt = new Date().toISOString();
+  lastImportResults = results;
   res.json({ results });
 });
 
