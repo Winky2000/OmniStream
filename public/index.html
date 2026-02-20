@@ -174,6 +174,9 @@
     .badge-uhd{border-color:#29b6f6;color:#b3e5fc;}
     .badge-codec{border-color:#81c784;color:#c8e6c9;}
     .badge-product{border-color:#b39ddb;color:#e1bee7;}
+    .badge-health-good{border-color:#4caf50;color:#c8e6c9;}
+    .badge-health-warn{border-color:#ffb300;color:#ffe082;}
+    .badge-health-bad{border-color:#e53935;color:#ffab91;}
   </style>
 </head>
 <body>
@@ -342,9 +345,30 @@
           if (wanBandwidth === 0 && st.sessions && Array.isArray(st.sessions)) {
             wanBandwidth = st.sessions.reduce((sum, sess) => sum + (sess.location && sess.location.toUpperCase().includes('WAN') && typeof sess.bandwidth === 'number' ? sess.bandwidth : 0), 0);
           }
+          const latencyMs = typeof st.latency === 'number' ? st.latency : null;
+          let healthLabel = 'Unknown';
+          let healthClass = '';
+          if (latencyMs == null) {
+            healthLabel = 'Health unknown';
+          } else if (latencyMs < 200) {
+            healthLabel = 'Healthy';
+            healthClass = 'badge-health-good';
+          } else if (latencyMs < 600) {
+            healthLabel = 'Okay';
+            healthClass = 'badge-health-warn';
+          } else {
+            healthLabel = 'Slow';
+            healthClass = 'badge-health-bad';
+          }
           const summaryDiv = document.createElement('div');
           summaryDiv.className = 'meta';
           summaryDiv.innerHTML = `Total Streams: <b>${totalStreams}</b> &nbsp;|&nbsp; Direct Play: <b>${directPlays}</b> &nbsp;|&nbsp; Transcoding: <b>${transcodes}</b><br>Bandwidth: ${totalBandwidth.toFixed(1)} Mbps (LAN: ${lanBandwidth.toFixed(1)} Mbps, WAN: ${wanBandwidth.toFixed(1)} Mbps)`;
+          const healthSpan = document.createElement('span');
+          healthSpan.className = 'badge' + (healthClass ? ' ' + healthClass : '');
+          healthSpan.style.marginLeft = '6px';
+          healthSpan.textContent = healthLabel;
+          summaryDiv.appendChild(document.createTextNode(' '));
+          summaryDiv.appendChild(healthSpan);
           card.appendChild(summaryDiv);
         }
         // Sessions
