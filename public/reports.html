@@ -130,18 +130,21 @@
           }
         });
 
-        // Populate server filter dropdown
+        // Populate server filter dropdown if present
         const serverFilter = document.getElementById('serverFilter');
-        const seenIds = new Set();
-        while (serverFilter.options.length > 1) serverFilter.remove(1);
-        servers.forEach(s => {
-          if (seenIds.has(String(s.id))) return;
-          seenIds.add(String(s.id));
-          const opt = document.createElement('option');
-          opt.value = String(s.id);
-          opt.textContent = s.name || s.baseUrl || ('Server ' + s.id);
-          serverFilter.appendChild(opt);
-        });
+        const serverFilterNote = document.getElementById('serverFilterNote');
+        if (serverFilter) {
+          const seenIds = new Set();
+          while (serverFilter.options.length > 1) serverFilter.remove(1);
+          servers.forEach(s => {
+            if (seenIds.has(String(s.id))) return;
+            seenIds.add(String(s.id));
+            const opt = document.createElement('option');
+            opt.value = String(s.id);
+            opt.textContent = s.name || s.baseUrl || ('Server ' + s.id);
+            serverFilter.appendChild(opt);
+          });
+        }
 
         function computeAndRender(scopeServerId) {
           const scopeAll = !scopeServerId || scopeServerId === 'all';
@@ -233,12 +236,13 @@
             }
           });
 
-          const noteEl = document.getElementById('serverFilterNote');
-          if (scopeAll) {
-            noteEl.textContent = 'Showing activity across all servers.';
-          } else {
-            const s = servers.find(sv => String(sv.id) === String(scopeServerId));
-            noteEl.textContent = s ? `Showing activity for ${s.name || s.baseUrl}.` : '';
+          if (serverFilterNote) {
+            if (scopeAll) {
+              serverFilterNote.textContent = 'Showing activity across all servers.';
+            } else {
+              const s = servers.find(sv => String(sv.id) === String(scopeServerId));
+              serverFilterNote.textContent = s ? `Showing activity for ${s.name || s.baseUrl}.` : '';
+            }
           }
 
           let html = '<div class="cards">';
@@ -307,9 +311,8 @@
           summaryDiv.innerHTML = html;
         }
 
-        // initial render using "all" scope
-        const serverFilter = document.getElementById('serverFilter');
-        computeAndRender(serverFilter ? serverFilter.value : 'all');
+        // initial render using current scope (or "all")
+        computeAndRender(serverFilter && serverFilter.value ? serverFilter.value : 'all');
 
         if (serverFilter) {
           serverFilter.onchange = () => {
