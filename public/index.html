@@ -154,6 +154,16 @@
     .session-title{color:var(--text-main);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
     .session-meta{font-size:11px;color:var(--text-muted);margin-bottom:2px}
     .session-poster{width:120px;object-fit:cover;margin-right:10px;border-radius:3px;box-shadow:0 1px 2px #0003;align-self:stretch}
+    .session-poster-placeholder{
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background:linear-gradient(135deg,#ef4444,#f97316);
+      color:#fef2f2;
+      font-weight:700;
+      font-size:24px;
+      text-transform:uppercase;
+    }
     .progress-bar{background:#2a2e39;height:4px;border-radius:2px;margin-top:2px;overflow:hidden}
     .progress-fill{background:var(--progress-fill);height:100%;transition:width 0.3s}
     .progress-meta{margin-top:3px;font-size:10px;color:var(--text-faint);display:flex;justify-content:space-between;gap:6px;white-space:nowrap;}
@@ -360,14 +370,40 @@
             // Always use a flex row for session content so poster and text line up
             row.style.display = 'flex';
             row.style.alignItems = 'stretch';
-            // Poster
+            // Poster (with OTA / fallback placeholder when artwork is missing)
+            function createPosterPlaceholder() {
+              const ph = document.createElement('div');
+              ph.className = 'session-poster session-poster-placeholder';
+              const channel = (sess.channel || '').toString().trim();
+              const titleText = (sess.title || '').toString().trim();
+              let text = '';
+              if (channel) {
+                text = channel.slice(0, 3).toUpperCase();
+              } else if (titleText) {
+                text = titleText.slice(0, 1).toUpperCase();
+              } else {
+                text = 'TV';
+              }
+              ph.textContent = text;
+              ph.title = channel || titleText || 'Live TV';
+              return ph;
+            }
             if (sess.poster) {
               const img = document.createElement('img');
               img.className = 'session-poster';
               img.src = sess.poster;
               img.alt = 'Poster';
-              img.onerror = function() { this.style.display = 'none'; };
+              img.onerror = function() {
+                // If the artwork fails to load (e.g. OTA without poster),
+                // replace it with a styled placeholder so the layout
+                // still shows a "poster" block.
+                if (this.parentNode) {
+                  this.parentNode.replaceChild(createPosterPlaceholder(), this);
+                }
+              };
               row.appendChild(img);
+            } else {
+              row.appendChild(createPosterPlaceholder());
             }
             // Info block
             const info = document.createElement('div');
