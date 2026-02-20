@@ -225,6 +225,13 @@ OmniStream keeps a lightweight history of what has been playing across your serv
 		- Top titles and top users
 	- The note next to the dropdown confirms which server (or all servers) you are currently viewing.
 
+- **Importing server-side watch history**
+	- The **Import history** action calls `POST /api/import-history` to pull past plays from your media servers.
+	- **Jellyfin / Emby**: imports played Movies and Episodes per user (ignores library folders/views) and writes them into `history.db`.
+	- **Plex**: imports recent watch history from Plex's history endpoint and writes Movie/Episode plays into `history.db`.
+	- Imported rows are treated the same as live history; they affect the History page and all Reports metrics.
+	- If you want to keep everything your servers report, set `maxHistory` to `0` before importing so OmniStream does not trim older rows.
+
 ---
 
 ## Running on unRAID

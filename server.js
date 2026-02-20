@@ -429,7 +429,8 @@ const defaultPathForType = (t) => {
   return '/';
 };
 
-// Import watch history helpers (currently implemented for Jellyfin)
+// Import watch history helpers
+// Jellyfin/Emby: pull per-user played movies/episodes
 async function importJellyfinHistory(server, { limitPerUser = 100 } = {}) {
   if (!historyDb) return { serverId: server.id, type: server.type, imported: 0, error: 'history DB not available' };
   const base = (server.baseUrl || '').replace(/\/$/, '');
@@ -532,7 +533,122 @@ async function importJellyfinHistory(server, { limitPerUser = 100 } = {}) {
     }
     return { serverId: server.id, type: server.type, imported };
   } catch (e) {
-    console.error(`Failed to import Jellyfin history for ${server.name || server.baseUrl}:`, e.message);
+    console.error(`Failed to import Jellyfin/Emby history for ${server.name || server.baseUrl}:`, e.message);
+    return { serverId: server.id, type: server.type, imported: 0, error: e.message };
+  }
+}
+
+// Plex: pull global watch history (recent or up to a limit)
+async function importPlexHistory(server, { limit = 1000 } = {}) {
+  if (!historyDb) return { serverId: server.id, type: server.type, imported: 0, error: 'history DB not available' };
+  const base = (server.baseUrl || '').replace(/\/$/, '');
+  if (!server.token) {
+    return { serverId: server.id, type: server.type, imported: 0, error: 'no token configured' };
+  }
+  let url = base + '/status/sessions/history/all';
+  const headers = {};
+  const params = {
+    'X-Plex-Container-Start': 0,
+    'X-Plex-Container-Size': limit
+  };
+
+  const tokenLoc = server.tokenLocation || 'query';
+  if (tokenLoc === 'header') {
+    headers['X-Plex-Token'] = server.token;
+  } else {
+    params['X-Plex-Token'] = server.token;
+  }
+
+  try {
+    const resp = await axios.get(url, { headers, params, timeout: 20000 });
+    const mc = resp.data && resp.data.MediaContainer ? resp.data.MediaContainer : null;
+    const items = mc && Array.isArray(mc.Metadata) ? mc.Metadata : [];
+    if (!items.length) {
+      return { serverId: server.id, type: server.type, imported: 0 };
+    }
+
+    let imported = 0;
+    await new Promise((resolve) => {
+      historyDb.serialize(() => {
+        const stmt = historyDb.prepare(
+          'INSERT INTO history (time, serverId, serverName, type, user, title, stream, transcoding, location, bandwidth) VALUES (?,?,?,?,?,?,?,?,?,?)'
+        );
+        items.forEach(m => {
+          const rawType = (m.type || '').toLowerCase();
+          if (rawType !== 'movie' && rawType !== 'episode') return;
+
+          // Plex history timestamps are often epoch seconds (viewedAt)
+          let timeIso;
+          if (typeof m.viewedAt === 'number') {
+            timeIso = new Date(m.viewedAt * 1000).toISOString();
+          } else if (typeof m.lastViewedAt === 'number') {
+            timeIso = new Date(m.lastViewedAt * 1000).toISOString();
+          } else {
+            timeIso = new Date().toISOString();
+          }
+
+          // Title formatting similar to live sessions
+          let title;
+          if (rawType === 'episode' || m.grandparentTitle) {
+            const series = m.grandparentTitle || '';
+            const epName = m.title || '';
+            const seasonNum = typeof m.parentIndex === 'number' ? m.parentIndex : null;
+            const epNum = typeof m.index === 'number' ? m.index : null;
+            let epLabel = '';
+            if (seasonNum !== null && epNum !== null) {
+              epLabel = `S${String(seasonNum).padStart(2, '0')}E${String(epNum).padStart(2, '0')}`;
+            } else if (epNum !== null) {
+              epLabel = `E${String(epNum).padStart(2, '0')}`;
+            }
+            if (series && epLabel && epName) {
+              title = `${series} - ${epLabel} - ${epName}`;
+            } else if (series && epName) {
+              title = `${series} - ${epName}`;
+            } else {
+              title = epName || series || m.title || m.originalTitle || 'Unknown';
+            }
+          } else {
+            title = m.title || m.originalTitle || 'Unknown';
+          }
+
+          const user = (m.user && m.user.title) || m.user || (m.Account && m.Account.title) || 'Unknown';
+          const stream = rawType === 'movie' ? 'Movie' : (rawType === 'episode' ? 'Episode' : '');
+
+          stmt.run(
+            timeIso,
+            server.id,
+            server.name || server.baseUrl,
+            server.type,
+            user,
+            title,
+            stream,
+            null,
+            '',
+            0
+          );
+          imported++;
+        });
+        stmt.finalize(() => resolve());
+      });
+    });
+
+    // Trim DB after import if a retention limit is configured
+    if (MAX_HISTORY > 0) {
+      await new Promise((resolve) => {
+        historyDb.run(
+          'DELETE FROM history WHERE id NOT IN (SELECT id FROM history ORDER BY id DESC LIMIT ?)',
+          [MAX_HISTORY],
+          (err) => {
+            if (err) console.error('Failed to trim history database after Plex import:', err.message);
+            resolve();
+          }
+        );
+      });
+    }
+
+    return { serverId: server.id, type: server.type, imported };
+  } catch (e) {
+    console.error(`Failed to import Plex history for ${server.name || server.baseUrl}:`, e.message);
     return { serverId: server.id, type: server.type, imported: 0, error: e.message };
   }
 }
@@ -1243,14 +1359,20 @@ app.get('/api/history/query', (req, res) => {
   });
 });
 
-// Import watch history from supported backends (currently Jellyfin only)
+// Import watch history from supported backends (Jellyfin/Emby/Plex)
 app.post('/api/import-history', async (req, res) => {
   if (!historyDb) return res.status(500).json({ error: 'history DB not available' });
-  const enabledServers = servers.filter(s => !s.disabled && s.type === 'jellyfin');
+  const enabledServers = servers.filter(s => !s.disabled && (s.type === 'jellyfin' || s.type === 'emby' || s.type === 'plex'));
   const results = [];
   for (const s of enabledServers) {
-    const r = await importJellyfinHistory(s, { limitPerUser: 100 });
-    results.push(r);
+    if (s.type === 'plex') {
+      const r = await importPlexHistory(s, { limit: 1000 });
+      results.push(r);
+    } else {
+      // Jellyfin/Emby share the same import helper
+      const r = await importJellyfinHistory(s, { limitPerUser: 200 });
+      results.push(r);
+    }
   }
   res.json({ results });
 });
