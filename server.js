@@ -2345,7 +2345,6 @@ app.get('/api/config/app', (req, res) => {
         subject: t.subject,
         body: t.body
       })) : []
-      }
     });
   } catch (e) {
     console.error('[OmniStream] Failed to read app config:', e.message);
@@ -2441,7 +2440,6 @@ app.put('/api/config/app', (req, res) => {
         subject: t.subject,
         body: t.body
       })) : []
-      }
     });
   } catch (e) {
     console.error('[OmniStream] Failed to update app config:', e.message);
