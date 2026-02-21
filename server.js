@@ -103,6 +103,13 @@ if (appConfig && typeof appConfig.maxHistory === 'number') {
   // maxHistory <= 0 means "no automatic trimming" (keep full history)
   MAX_HISTORY = appConfig.maxHistory;
 }
+// Ensure newsletter/email-related blocks exist
+if (!appConfig.newsletterEmail) {
+  appConfig.newsletterEmail = {};
+}
+if (!appConfig.newsletterTemplates) {
+  appConfig.newsletterTemplates = [];
+}
 
 // Track last derived notifications so we only fire notifiers on changes
 let lastNotificationIds = new Set();
@@ -1877,9 +1884,9 @@ app.get('/api/subscribers/summary', (req, res) => {
       if (!nodemailer) {
         return res.status(500).json({ error: 'Email sending not available (nodemailer not installed).' });
       }
-      const emailCfg = appConfig?.notifiers?.email;
+      const emailCfg = appConfig?.newsletterEmail;
       if (!emailCfg || emailCfg.enabled === false) {
-        return res.status(400).json({ error: 'Email notifier is not configured or disabled.' });
+        return res.status(400).json({ error: 'Newsletter email is not configured or disabled.' });
       }
 
       const subject = (req.body && String(req.body.subject || '').trim()) || '';
@@ -2326,6 +2333,18 @@ app.get('/api/config/app', (req, res) => {
       overseerr: {
         baseUrl: overseerrCfg.baseUrl || '',
         hasApiKey: !!overseerrCfg.apiKey
+      },
+      newsletterEmail: {
+        enabled: appConfig.newsletterEmail?.enabled !== false,
+        from: appConfig.newsletterEmail?.from || '',
+        to: appConfig.newsletterEmail?.to || ''
+      },
+      newsletterTemplates: Array.isArray(appConfig.newsletterTemplates) ? appConfig.newsletterTemplates.map(t => ({
+        id: t.id,
+        name: t.name,
+        subject: t.subject,
+        body: t.body
+      })) : []
       }
     });
   } catch (e) {
@@ -2369,6 +2388,39 @@ app.put('/api/config/app', (req, res) => {
       appConfig.overseerr = next;
     }
 
+    // Newsletter email config: separate from alert email notifier
+    if (body.newsletterEmail && typeof body.newsletterEmail === 'object') {
+      const currentNl = appConfig.newsletterEmail || {};
+      const incomingNl = body.newsletterEmail;
+      const nextNl = { ...currentNl };
+      if (Object.prototype.hasOwnProperty.call(incomingNl, 'enabled')) {
+        nextNl.enabled = incomingNl.enabled !== false;
+      }
+      if (Object.prototype.hasOwnProperty.call(incomingNl, 'from')) {
+        nextNl.from = typeof incomingNl.from === 'string' ? incomingNl.from.trim() : '';
+      }
+      if (Object.prototype.hasOwnProperty.call(incomingNl, 'to')) {
+        nextNl.to = typeof incomingNl.to === 'string' ? incomingNl.to.trim() : '';
+      }
+      if (Object.prototype.hasOwnProperty.call(incomingNl, 'smtp') && typeof incomingNl.smtp === 'object') {
+        nextNl.smtp = incomingNl.smtp;
+      }
+      appConfig.newsletterEmail = nextNl;
+    }
+
+    // Newsletter templates (simple replace of array)
+    if (Object.prototype.hasOwnProperty.call(body, 'newsletterTemplates')) {
+      const raw = body.newsletterTemplates;
+      if (Array.isArray(raw)) {
+        appConfig.newsletterTemplates = raw.map((t, idx) => ({
+          id: t.id != null ? String(t.id) : String(idx),
+          name: typeof t.name === 'string' ? t.name : `Template ${idx + 1}`,
+          subject: typeof t.subject === 'string' ? t.subject : '',
+          body: typeof t.body === 'string' ? t.body : ''
+        }));
+      }
+    }
+
     fs.writeFileSync(CONFIG_FILE, JSON.stringify(appConfig, null, 2));
 
     const overseerrCfg = appConfig.overseerr || {};
@@ -2377,6 +2429,18 @@ app.put('/api/config/app', (req, res) => {
       overseerr: {
         baseUrl: overseerrCfg.baseUrl || '',
         hasApiKey: !!overseerrCfg.apiKey
+      },
+      newsletterEmail: {
+        enabled: appConfig.newsletterEmail?.enabled !== false,
+        from: appConfig.newsletterEmail?.from || '',
+        to: appConfig.newsletterEmail?.to || ''
+      },
+      newsletterTemplates: Array.isArray(appConfig.newsletterTemplates) ? appConfig.newsletterTemplates.map(t => ({
+        id: t.id,
+        name: t.name,
+        subject: t.subject,
+        body: t.body
+      })) : []
       }
     });
   } catch (e) {

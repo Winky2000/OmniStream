@@ -71,7 +71,27 @@
       <h1>Subscribers</h1>
 
       <div class="card">
+        <h2>Newsletter email settings</h2>
+        <div class="row"><b>Enabled:</b> <span id="nlEnabledLabel">-</span></div>
+        <label>
+          From address
+          <input type="text" id="nlFrom" placeholder="OmniStream &lt;omnistream@example.com&gt;">
+        </label>
+        <label>
+          To (optional, for logs)
+          <input type="text" id="nlTo" placeholder="Optional primary recipient; subscribers go in BCC.">
+        </label>
+        <div class="hint">These settings are separate from alert notifications. SMTP details can be configured in config.json under <code>newsletterEmail.smtp</code> if needed.</div>
+      </div>
+
+      <div class="card">
         <h2>Send newsletter</h2>
+        <div class="row">
+          <label style="display:inline-block;margin-right:8px;">
+            Template
+            <select id="nlTemplateSelect" style="margin-left:4px;padding:4px 8px;border-radius:6px;border:1px solid #444;background:var(--bg);color:var(--text-main);font-size:13px;min-width:160px;"></select>
+          </label>
+        </div>
         <label>
           Subject
           <input type="text" id="nlSubject" placeholder="Maintenance window, new content, announcements...">
@@ -82,7 +102,7 @@
         </label>
         <button class="btn" id="nlSendBtn">Send newsletter to active subscribers</button>
         <span id="nlSendStatus" class="row"></span>
-        <div class="hint">Uses the Email notifier SMTP settings (from Notifiers). Recipients are BCC'd and come from the active subscribers list.</div>
+        <div class="hint">Uses the dedicated newsletter email settings above. Recipients are BCC'd and come from the active subscribers list.</div>
       </div>
 
       <div class="card">
@@ -129,6 +149,44 @@
         });
       }
     })();
+
+    async function loadNewsletterConfig() {
+      try {
+        const r = await fetch('/api/config/app');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const data = await r.json();
+        const cfg = data.newsletterEmail || {};
+        const enabled = cfg.enabled !== false;
+        const from = cfg.from || '';
+        const to = cfg.to || '';
+        const lbl = document.getElementById('nlEnabledLabel');
+        if (lbl) lbl.textContent = enabled ? 'Yes' : 'No (disabled)';
+        const fromInput = document.getElementById('nlFrom');
+        const toInput = document.getElementById('nlTo');
+        if (fromInput) fromInput.value = from;
+        if (toInput) toInput.value = to;
+
+        const templates = Array.isArray(data.newsletterTemplates) ? data.newsletterTemplates : [];
+        const sel = document.getElementById('nlTemplateSelect');
+        if (sel) {
+          sel.innerHTML = '';
+          const optNone = document.createElement('option');
+          optNone.value = '';
+          optNone.textContent = 'Custom message';
+          sel.appendChild(optNone);
+          templates.forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t.id;
+            opt.textContent = t.name || t.subject || 'Template';
+            opt.dataset.subject = t.subject || '';
+            opt.dataset.body = t.body || '';
+            sel.appendChild(opt);
+          });
+        }
+      } catch (e) {
+        console.error('Failed to load newsletter config:', e);
+      }
+    }
 
     async function loadSubscriberSummary() {
       const el = document.getElementById('subsSummary');
@@ -216,6 +274,18 @@
       loadSubscriberSummary();
     });
 
+    document.getElementById('nlTemplateSelect').addEventListener('change', (ev) => {
+      const sel = ev.target;
+      const opt = sel.options[sel.selectedIndex];
+      if (!opt || !opt.dataset) return;
+      const subj = opt.dataset.subject || '';
+      const body = opt.dataset.body || '';
+      const subjInput = document.getElementById('nlSubject');
+      const bodyInput = document.getElementById('nlBody');
+      if (subjInput && subj) subjInput.value = subj;
+      if (bodyInput && body) bodyInput.value = body;
+    });
+
     document.getElementById('nlSendBtn').addEventListener('click', async () => {
       const statusEl = document.getElementById('nlSendStatus');
       const subjectInput = document.getElementById('nlSubject');
@@ -252,6 +322,33 @@
       }
     });
 
+    // Persist basic newsletter email settings when inputs blur
+    ['nlFrom','nlTo'].forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('blur', async () => {
+        try {
+          const fromInput = document.getElementById('nlFrom');
+          const toInput = document.getElementById('nlTo');
+          const payload = {
+            newsletterEmail: {
+              from: fromInput ? fromInput.value.trim() : '',
+              to: toInput ? toInput.value.trim() : ''
+            }
+          };
+          await fetch('/api/config/app', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          loadNewsletterConfig();
+        } catch (e) {
+          console.error('Failed to save newsletter email config:', e);
+        }
+      });
+    });
+
+    loadNewsletterConfig();
     loadSubscriberSummary();
     loadSubscribers();
   </script>
