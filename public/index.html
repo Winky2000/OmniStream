@@ -464,6 +464,7 @@
             info.appendChild(title);
             // Title line: treat live/OTA differently from library episodes
             let displayTitle;
+            let seasonEpisodeLabel = '';
             const isLive = !!sess.isLive;
             const hasEpisode = !!(sess.episode || sess.episodeTitle);
             if (isLive) {
@@ -477,15 +478,12 @@
             } else {
               displayTitle = sess.title || sess.channel || 'Idle';
             }
-            // If we have season/episode numbers, show them under the title
+            // Build season/episode label (rendered below the title/timer later)
             if (typeof sess.seasonNumber === 'number' || typeof sess.episodeNumber === 'number') {
-              const seLine = document.createElement('div');
-              seLine.className = 'session-meta';
-              let parts = [];
+              const parts = [];
               if (typeof sess.seasonNumber === 'number') parts.push('Season ' + sess.seasonNumber);
               if (typeof sess.episodeNumber === 'number') parts.push('Episode ' + sess.episodeNumber);
-              seLine.textContent = parts.join(' • ');
-              info.appendChild(seLine);
+              seasonEpisodeLabel = parts.join(' • ');
             }
             // Badge row: WAN / HDR / 4K / codec / product
             const badgeRow = document.createElement('div');
@@ -604,6 +602,14 @@
             progressMeta.appendChild(leftSpan);
             progressMeta.appendChild(rightBox);
             session.appendChild(progressMeta);
+
+            // Season/episode line directly beneath the title/timer row
+            if (seasonEpisodeLabel) {
+              const seLine = document.createElement('div');
+              seLine.className = 'session-meta';
+              seLine.textContent = seasonEpisodeLabel;
+              session.appendChild(seLine);
+            }
             sessionsDiv.appendChild(session);
           });
           if (visibleSessions.length > 0) {
