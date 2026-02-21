@@ -167,7 +167,7 @@
     .progress-bar{background:#2a2e39;height:4px;border-radius:2px;margin-top:2px;overflow:hidden}
     .progress-fill{background:var(--progress-fill);height:100%;transition:width 0.3s}
     .progress-meta{margin-top:3px;font-size:10px;color:var(--text-faint);display:flex;justify-content:space-between;align-items:flex-start;gap:6px;}
-    .progress-meta-left{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-main);font-weight:600;font-size:11px;}
+    .progress-meta-left{flex:1;min-width:0;overflow:hidden;color:var(--text-main);font-weight:600;font-size:11px;}
     .badge-row{margin-top:4px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;}
     .badge{font-size:10px;padding:1px 6px;border-radius:999px;border:1px solid rgba(255,255,255,0.16);background:rgba(0,0,0,0.3);color:var(--text-main);white-space:nowrap;}
     .badge-wan{border-color:#ff7043;color:#ffab91;}
@@ -582,7 +582,19 @@
             }
             const leftSpan = document.createElement('span');
             leftSpan.className = 'progress-meta-left';
-            leftSpan.textContent = displayTitle ? `▶ ${displayTitle}` : '▶ Playing';
+            if (displayTitle) {
+              const titleSpan = document.createElement('div');
+              titleSpan.textContent = `▶ ${displayTitle}`;
+              leftSpan.appendChild(titleSpan);
+              if (seasonEpisodeLabel) {
+                const seSpan = document.createElement('div');
+                seSpan.className = 'session-meta';
+                seSpan.textContent = seasonEpisodeLabel;
+                leftSpan.appendChild(seSpan);
+              }
+            } else {
+              leftSpan.textContent = '▶ Playing';
+            }
 
             const rightBox = document.createElement('div');
             rightBox.style.display = 'flex';
@@ -602,14 +614,6 @@
             progressMeta.appendChild(leftSpan);
             progressMeta.appendChild(rightBox);
             session.appendChild(progressMeta);
-
-            // Season/episode line directly beneath the title/timer row
-            if (seasonEpisodeLabel) {
-              const seLine = document.createElement('div');
-              seLine.className = 'session-meta';
-              seLine.textContent = seasonEpisodeLabel;
-              session.appendChild(seLine);
-            }
             sessionsDiv.appendChild(session);
           });
           if (visibleSessions.length > 0) {
