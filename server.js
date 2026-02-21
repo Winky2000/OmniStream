@@ -1745,11 +1745,186 @@ app.get('/api/subscribers/summary', (req, res) => {
         sources[src] = { total: t, active: a };
         total += t;
         active += a;
-      });
-      res.json({ total, active, sources });
+        });
+        res.json({ total, active, sources });
+      }
+    );
+  });
+
+  // List subscribers for management UI (optional filters, basic limit)
+  app.get('/api/subscribers', (req, res) => {
+    if (!historyDb) {
+      return res.json({ total: 0, items: [] });
     }
-  );
-});
+
+    const { source, active, q } = req.query;
+    const where = [];
+    const params = [];
+
+    if (source) {
+      where.push('source = ?');
+      params.push(String(source));
+    }
+
+    if (typeof active !== 'undefined') {
+      const v = String(active).toLowerCase();
+      if (v === '1' || v === 'true') {
+        where.push('active = 1');
+      } else if (v === '0' || v === 'false') {
+        where.push('active = 0');
+      }
+    }
+
+    if (q) {
+      const needle = `%${String(q).toLowerCase()}%`;
+      where.push('(LOWER(name) LIKE ? OR LOWER(email) LIKE ? OR LOWER(source) LIKE ?)');
+      params.push(needle, needle, needle);
+    }
+
+    const DEFAULT_LIMIT = 500;
+    const MAX_LIMIT = 1000;
+    let limit = Number(req.query.limit) || DEFAULT_LIMIT;
+    if (!Number.isFinite(limit) || limit <= 0) limit = DEFAULT_LIMIT;
+    if (limit > MAX_LIMIT) limit = MAX_LIMIT;
+    let offset = Number(req.query.offset) || 0;
+    if (!Number.isFinite(offset) || offset < 0) offset = 0;
+
+    let sql = 'SELECT id, source, externalId, name, email, createdAt, updatedAt, active FROM newsletter_subscribers';
+    if (where.length) {
+      sql += ' WHERE ' + where.join(' AND ');
+    }
+    sql += ' ORDER BY datetime(createdAt) DESC, id DESC LIMIT ? OFFSET ?';
+    params.push(limit, offset);
+
+    historyDb.all(sql, params, (err, rows) => {
+      if (err) {
+        console.error('[OmniStream] Failed to read subscribers:', err.message);
+        return res.status(500).json({ total: 0, items: [] });
+      }
+      const items = (rows || []).map(r => ({
+        id: r.id,
+        source: r.source,
+        externalId: r.externalId,
+        name: r.name,
+        email: r.email,
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt,
+        active: Number(r.active) === 1
+      }));
+      res.json({ total: items.length, items });
+    });
+  });
+
+  // Toggle subscriber active flag
+  app.put('/api/subscribers/:id', (req, res) => {
+    if (!historyDb) {
+      return res.status(500).json({ error: 'history DB not available' });
+    }
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ error: 'Invalid subscriber id' });
+    }
+    const body = req.body || {};
+    if (typeof body.active === 'undefined') {
+      return res.status(400).json({ error: 'active field is required' });
+    }
+    const active = body.active ? 1 : 0;
+    const now = new Date().toISOString();
+
+    historyDb.run(
+      'UPDATE newsletter_subscribers SET active = ?, updatedAt = ? WHERE id = ?',
+      [active, now, id],
+      function(err) {
+        if (err) {
+          console.error('[OmniStream] Failed to update subscriber:', err.message);
+          return res.status(500).json({ error: 'Failed to update subscriber' });
+        }
+        if (this.changes === 0) {
+          return res.status(404).json({ error: 'Subscriber not found' });
+        }
+        historyDb.get(
+          'SELECT id, source, externalId, name, email, createdAt, updatedAt, active FROM newsletter_subscribers WHERE id = ?',
+          [id],
+          (err2, row) => {
+            if (err2 || !row) {
+              if (err2) {
+                console.error('[OmniStream] Failed to read updated subscriber:', err2.message);
+              }
+              return res.json({ id, active: !!active });
+            }
+            res.json({
+              id: row.id,
+              source: row.source,
+              externalId: row.externalId,
+              name: row.name,
+              email: row.email,
+              createdAt: row.createdAt,
+              updatedAt: row.updatedAt,
+              active: Number(row.active) === 1
+            });
+          }
+        );
+      }
+    );
+  });
+
+  // Send a simple newsletter/broadcast email to all active subscribers
+  app.post('/api/newsletter/send', async (req, res) => {
+    try {
+      if (!historyDb) {
+        return res.status(500).json({ error: 'history DB not available' });
+      }
+      if (!nodemailer) {
+        return res.status(500).json({ error: 'Email sending not available (nodemailer not installed).' });
+      }
+      const emailCfg = appConfig?.notifiers?.email;
+      if (!emailCfg || emailCfg.enabled === false) {
+        return res.status(400).json({ error: 'Email notifier is not configured or disabled.' });
+      }
+
+      const subject = (req.body && String(req.body.subject || '').trim()) || '';
+      const body = (req.body && String(req.body.body || '').trim()) || '';
+      if (!subject || !body) {
+        return res.status(400).json({ error: 'subject and body are required' });
+      }
+
+      const rows = await new Promise((resolve, reject) => {
+        historyDb.all(
+          'SELECT DISTINCT email, name FROM newsletter_subscribers WHERE active = 1 AND email IS NOT NULL',
+          [],
+          (err, rows) => {
+            if (err) return reject(err);
+            resolve(rows || []);
+          }
+        );
+      });
+
+      const emails = rows
+        .map(r => (r && r.email ? String(r.email).trim() : ''))
+        .filter(e => !!e);
+      const uniqueEmails = Array.from(new Set(emails));
+
+      if (!uniqueEmails.length) {
+        return res.json({ sent: 0, message: 'No active subscribers with email found.' });
+      }
+
+      const transport = nodemailer.createTransport(emailCfg.smtp || {});
+      const mailOptions = {
+        from: emailCfg.from,
+        to: emailCfg.to || emailCfg.from,
+        bcc: uniqueEmails,
+        subject,
+        text: body
+      };
+
+      await transport.sendMail(mailOptions);
+      res.json({ sent: uniqueEmails.length });
+    } catch (e) {
+      console.error('[OmniStream] Newsletter send failed:', e.message);
+      recordNotifierError('newsletter', e.message);
+      res.status(500).json({ error: 'Failed to send newsletter' });
+    }
+  });
 
 // Compact summary for Home Assistant and other external dashboards
 // Provides a stable, low-noise JSON shape that can be used with

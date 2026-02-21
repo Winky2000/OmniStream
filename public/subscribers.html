@@ -1,0 +1,259 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>OmniStream Subscribers</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="theme.css">
+  <style>
+    body{font-family:Segoe UI,Arial;background:var(--bg);color:var(--text-main);margin:0;padding:0}
+    .app-shell{display:flex;min-height:100vh;}
+    .sidebar{width:220px;background:#050814;border-right:1px solid rgba(15,23,42,0.8);padding:18px 16px;box-sizing:border-box;display:flex;flex-direction:column;gap:18px;}
+    .sidebar-brand{font-size:13px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:var(--text-muted);}
+    .sidebar-nav{display:flex;flex-direction:column;gap:4px;margin-top:8px;}
+    .nav-link{display:block;padding:8px 10px;border-radius:8px;font-size:13px;color:var(--text-muted);text-decoration:none;transition:background 0.15s,color 0.15s;}
+    .nav-link:hover{background:rgba(148,163,184,0.15);color:var(--text-main);}
+    .nav-link-active{background:rgba(59,130,246,0.18);color:#e5edff;border-left:3px solid var(--btn-border);padding-left:7px;}
+    .settings-group{margin-top:4px;}
+    .settings-submenu{display:none;flex-direction:column;gap:2px;padding-left:14px;margin-top:3px;}
+    .settings-submenu.open{display:flex;}
+    .submenu-link{display:block;padding:6px 10px;border-radius:8px;font-size:12px;color:var(--text-muted);text-decoration:none;}
+    .submenu-link:hover{background:rgba(148,163,184,0.15);color:var(--text-main);}
+    .submenu-link-active{background:rgba(59,130,246,0.18);color:#e5edff;}
+    .sidebar-toggle{margin-bottom:10px;padding:4px 10px;border-radius:999px;border:1px solid var(--btn-border);background:var(--btn-bg);color:var(--btn-text);cursor:pointer;font-size:12px;}
+    .sidebar-toggle:hover{background:var(--btn-bg-hover);color:var(--btn-text-hover);}
+    .app-shell.sidebar-collapsed .sidebar{display:none;}
+    .main-content{flex:1;box-sizing:border-box;padding:20px;}
+    h1{margin:0 0 8px 0;color:var(--text-main);letter-spacing:0.5px;font-size:1.8em;font-weight:600;}
+    .card{background:var(--card-bg);border-radius:14px;padding:16px 18px;box-shadow:0 12px 30px rgba(15,23,42,0.85);border:1px solid rgba(148,163,184,0.35);max-width:760px;margin-bottom:18px;}
+    .card h2{margin:0 0 8px 0;font-size:16px;color:var(--text-main);}
+    .row{font-size:13px;margin:4px 0;color:var(--text-muted);}
+    .row b{color:var(--text-main);}
+    .hint{font-size:12px;color:var(--text-muted);margin-top:4px;}
+    .btn{margin-top:10px;padding:6px 14px;border-radius:8px;border:1px solid var(--btn-border);background:var(--btn-bg);color:var(--btn-text);cursor:pointer;font-size:13px;}
+    .btn:hover{background:var(--btn-bg-hover);color:var(--btn-text-hover);}
+    .status-ok{color:#a5d6a7;}
+    .status-error{color:#ff8a80;}
+    label{display:block;font-size:13px;margin:6px 0;color:var(--text-main);}
+    input[type="text"],textarea{width:100%;max-width:640px;padding:6px 10px;border-radius:6px;border:1px solid #444;background:var(--bg);color:var(--text-main);box-sizing:border-box;font-family:Segoe UI,Arial;font-size:13px;}
+    textarea{min-height:120px;resize:vertical;}
+    table{width:100%;border-collapse:collapse;margin-top:8px;font-size:13px;}
+    th,td{padding:6px 8px;border-bottom:1px solid rgba(148,163,184,0.25);text-align:left;}
+    th{color:var(--text-main);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:0.04em;}
+    tbody tr:nth-child(even){background:rgba(15,23,42,0.35);}
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="sidebar-brand">OmniStream</div>
+      <nav class="sidebar-nav">
+        <a href="index.html" class="nav-link">Dashboard</a>
+        <a href="history.html" class="nav-link">History</a>
+        <a href="reports.html" class="nav-link">Reports</a>
+        <a href="notifications.html" class="nav-link">Notifications</a>
+        <div class="settings-group">
+          <button type="button" class="nav-link nav-link-active settings-toggle">Settings</button>
+          <div class="settings-submenu open">
+            <a href="admin.html" class="submenu-link">Connected servers</a>
+            <a href="servers.html" class="submenu-link">Servers</a>
+            <a href="display.html" class="submenu-link">Themes &amp; layout</a>
+            <a href="notifiers.html" class="submenu-link">Notifiers</a>
+            <a href="overseerr.html" class="submenu-link">Overseerr</a>
+            <a href="subscribers.html" class="submenu-link submenu-link-active">Subscribers</a>
+            <a href="system.html" class="submenu-link">System</a>
+          </div>
+        </div>
+      </nav>
+    </aside>
+    <main class="main-content">
+      <button class="sidebar-toggle" id="sidebarToggle">Hide menu</button>
+      <h1>Subscribers</h1>
+
+      <div class="card">
+        <h2>Send newsletter</h2>
+        <label>
+          Subject
+          <input type="text" id="nlSubject" placeholder="Maintenance window, new content, announcements...">
+        </label>
+        <label>
+          Message
+          <textarea id="nlBody" placeholder="This message will be emailed to all active subscribers."></textarea>
+        </label>
+        <button class="btn" id="nlSendBtn">Send newsletter to active subscribers</button>
+        <span id="nlSendStatus" class="row"></span>
+        <div class="hint">Uses the Email notifier SMTP settings (from Notifiers). Recipients are BCC'd and come from the active subscribers list.</div>
+      </div>
+
+      <div class="card">
+        <h2>Subscriber list</h2>
+        <div class="row" id="subsSummary">Loading subscriber summary...</div>
+        <button class="btn" id="subsRefreshBtn">Refresh subscribers</button>
+        <table id="subsTable" style="display:none;">
+          <thead>
+            <tr><th>Name</th><th>Email</th><th>Source</th><th>Active</th></tr>
+          </thead>
+          <tbody id="subsTableBody"></tbody>
+        </table>
+        <div class="hint">Imported subscribers (for example from Overseerr) appear here. Toggle Active to include or exclude them from future newsletters.</div>
+      </div>
+    </main>
+  </div>
+  <script>
+    (function() {
+      const settingsToggle = document.querySelector('.settings-toggle');
+      const settingsSubmenu = document.querySelector('.settings-submenu');
+      const appShell = document.querySelector('.app-shell');
+      const sidebarToggle = document.getElementById('sidebarToggle');
+      const savedTheme = localStorage.getItem('omnistreamTheme') || 'default';
+      if (savedTheme && savedTheme !== 'default') {
+        document.documentElement.setAttribute('data-theme', savedTheme);
+      } else {
+        document.documentElement.removeAttribute('data-theme');
+      }
+      if (settingsToggle && settingsSubmenu) {
+        settingsToggle.addEventListener('click', () => {
+          settingsSubmenu.classList.toggle('open');
+        });
+      }
+      if (appShell && sidebarToggle) {
+        const savedSidebar = localStorage.getItem('omnistreamSidebar') || 'open';
+        if (savedSidebar === 'collapsed') {
+          appShell.classList.add('sidebar-collapsed');
+          sidebarToggle.textContent = 'Show menu';
+        }
+        sidebarToggle.addEventListener('click', () => {
+          const collapsed = appShell.classList.toggle('sidebar-collapsed');
+          sidebarToggle.textContent = collapsed ? 'Show menu' : 'Hide menu';
+          localStorage.setItem('omnistreamSidebar', collapsed ? 'collapsed' : 'open');
+        });
+      }
+    })();
+
+    async function loadSubscriberSummary() {
+      const el = document.getElementById('subsSummary');
+      if (!el) return;
+      try {
+        const r = await fetch('/api/subscribers/summary');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const data = await r.json();
+        const total = typeof data.total === 'number' ? data.total : 0;
+        const active = typeof data.active === 'number' ? data.active : 0;
+        const srcs = data.sources || {};
+        const ov = srcs.overseerr || { total: 0, active: 0 };
+        el.textContent = `Subscribers: ${active} active out of ${total} total (Overseerr: ${ov.active} active / ${ov.total} total).`;
+      } catch (e) {
+        console.error('Failed to load subscribers summary:', e);
+        el.textContent = 'Failed to load subscriber summary.';
+      }
+    }
+
+    async function loadSubscribers() {
+      const table = document.getElementById('subsTable');
+      const tbody = document.getElementById('subsTableBody');
+      if (!table || !tbody) return;
+      tbody.innerHTML = '';
+      table.style.display = 'none';
+      try {
+        const r = await fetch('/api/subscribers?limit=500');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const data = await r.json();
+        const items = Array.isArray(data.items) ? data.items.slice() : [];
+        items.sort((a,b) => {
+          const na = (a.name || a.email || '').toLowerCase();
+          const nb = (b.name || b.email || '').toLowerCase();
+          if (na < nb) return -1; if (na > nb) return 1; return 0;
+        });
+        items.forEach(sub => {
+          const tr = document.createElement('tr');
+          const tdName = document.createElement('td');
+          tdName.textContent = sub.name || '(no name)';
+          const tdEmail = document.createElement('td');
+          tdEmail.textContent = sub.email || '';
+          const tdSource = document.createElement('td');
+          tdSource.textContent = sub.source || '';
+          const tdActive = document.createElement('td');
+          const cb = document.createElement('input');
+          cb.type = 'checkbox';
+          cb.checked = !!sub.active;
+          cb.addEventListener('change', async () => {
+            const desired = cb.checked;
+            try {
+              const resp = await fetch('/api/subscribers/' + encodeURIComponent(sub.id), {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ active: desired })
+              });
+              if (!resp.ok) {
+                const text = await resp.text().catch(() => '');
+                console.error('Update subscriber failed:', text || resp.status);
+                cb.checked = !desired; // revert
+                return;
+              }
+              await loadSubscriberSummary();
+            } catch (e) {
+              console.error('Update subscriber failed:', e);
+              cb.checked = !desired; // revert
+            }
+          });
+          tdActive.appendChild(cb);
+          tr.appendChild(tdName);
+          tr.appendChild(tdEmail);
+          tr.appendChild(tdSource);
+          tr.appendChild(tdActive);
+          tbody.appendChild(tr);
+        });
+        if (items.length) {
+          table.style.display = 'table';
+        }
+      } catch (e) {
+        console.error('Failed to load subscribers:', e);
+      }
+    }
+
+    document.getElementById('subsRefreshBtn').addEventListener('click', () => {
+      loadSubscribers();
+      loadSubscriberSummary();
+    });
+
+    document.getElementById('nlSendBtn').addEventListener('click', async () => {
+      const statusEl = document.getElementById('nlSendStatus');
+      const subjectInput = document.getElementById('nlSubject');
+      const bodyInput = document.getElementById('nlBody');
+      const subject = (subjectInput.value || '').trim();
+      const body = (bodyInput.value || '').trim();
+      if (!subject || !body) {
+        statusEl.textContent = 'Subject and message are required.';
+        statusEl.className = 'row status-error';
+        return;
+      }
+      statusEl.textContent = 'Sending newsletter...';
+      statusEl.className = 'row';
+      try {
+        const resp = await fetch('/api/newsletter/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subject, body })
+        });
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => '');
+          statusEl.textContent = 'Send failed: ' + (text || resp.status + ' ' + resp.statusText);
+          statusEl.className = 'row status-error';
+          return;
+        }
+        const data = await resp.json();
+        const sent = typeof data.sent === 'number' ? data.sent : 0;
+        statusEl.textContent = `Newsletter sent to ${sent} subscriber${sent === 1 ? '' : 's'}.`;
+        statusEl.className = 'row status-ok';
+      } catch (e) {
+        console.error('Newsletter send failed:', e);
+        statusEl.textContent = 'Send failed. Check server logs.';
+        statusEl.className = 'row status-error';
+      }
+    });
+
+    loadSubscriberSummary();
+    loadSubscribers();
+  </script>
+</body>
+</html>
