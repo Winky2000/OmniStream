@@ -35,6 +35,10 @@
     .status-ok{color:#a5d6a7;}
     .status-warn{color:#ffcc80;}
     .status-error{color:#ff8a80;}
+    label{display:block;font-size:13px;margin:6px 0;color:var(--text-main);}
+    input[type="text"],input[type="number"],input[type="password"]{width:100%;max-width:420px;padding:6px 10px;border-radius:6px;border:1px solid #444;background:var(--bg);color:var(--text-main);box-sizing:border-box;}
+    .config-row{margin-top:4px;}
+    .config-actions{margin-top:8px;display:flex;align-items:center;gap:10px;font-size:12px;}
   </style>
 </head>
 <body>
@@ -72,6 +76,36 @@
         <div class="hint">History DB and servers.json should both live on a persistent volume for safe upgrades and restarts.</div>
       </div>
 
+      <div class="card" id="configCard">
+        <h2>Application config</h2>
+        <div class="config-row">
+          <label>
+            History retention (maxHistory)
+            <input type="number" id="cfgMaxHistory" placeholder="500">
+          </label>
+          <div class="hint">Number of history rows to keep. 
+            Use 0 or a negative value for no automatic trimming. Leave blank to use the built-in default (500).</div>
+        </div>
+        <div class="config-row">
+          <label>
+            Overseerr base URL
+            <input type="text" id="cfgOverseerrBaseUrl" placeholder="https://overseerr.yourdomain.local">
+          </label>
+          <div class="hint">Root URL of your Overseerr instance (no trailing slash).</div>
+        </div>
+        <div class="config-row">
+          <label>
+            Overseerr API key
+            <input type="password" id="cfgOverseerrApiKey" placeholder="Enter to set or update API key">
+          </label>
+          <div class="hint">API key from Overseerr settings. For security, the existing key is not shown here; entering a new value will replace it.</div>
+        </div>
+        <div class="config-actions">
+          <button class="btn" id="configSaveBtn">Save config</button>
+          <span id="configStatus"></span>
+        </div>
+      </div>
+
       <div class="card">
         <h2>Polling health</h2>
         <div class="row"><b>Last poll:</b> <span id="pollLastAt">-</span></div>
@@ -101,6 +135,14 @@
         <div class="row"><b>When:</b> <span id="notifierErrorAt">-</span></div>
         <div class="row"><b>Channel:</b> <span id="notifierErrorChannel">-</span></div>
         <div class="hint">If alerts are not reaching their targets, check here for the most recent delivery error and then the server logs for full details.</div>
+      </div>
+
+      <div class="card">
+        <h2>Overseerr users</h2>
+        <div class="row"><b>Configured:</b> <span id="overseerrConfigured">No</span></div>
+        <button class="btn" id="overseerrFetchBtn">Fetch users from Overseerr</button>
+        <div class="row" id="overseerrStatus" style="margin-top:6px;"></div>
+        <div class="hint">Requires Overseerr baseUrl and apiKey in config.json under an <code>overseerr</code> block. Only users with an email address are counted.</div>
       </div>
     </main>
   </div>
@@ -192,6 +234,9 @@
         document.getElementById('notifierErrorAt').textContent = lastErr ? fmtTime(notif.lastErrorAt) : '-';
         document.getElementById('notifierErrorChannel').textContent = lastErr ? (notif.lastErrorChannel || '-') : '-';
 
+        const overseerrInfo = data.overseerr || {};
+        document.getElementById('overseerrConfigured').textContent = overseerrInfo.configured ? 'Yes' : 'No';
+
         const backupStatus = document.getElementById('backupStatus');
         if (!data.backupEnabled) {
           backupStatus.textContent = 'Backup zip not available: archiver module is not installed on the server.';
@@ -204,6 +249,43 @@
         row.className = 'row status-error';
         row.textContent = 'Failed to load system info. Check server logs.';
         card.appendChild(row);
+      }
+    }
+
+    async function loadAppConfig() {
+      try {
+        const r = await fetch('/api/config/app');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const data = await r.json();
+        const maxHistoryInput = document.getElementById('cfgMaxHistory');
+        if (maxHistoryInput) {
+          if (typeof data.maxHistory === 'number') {
+            maxHistoryInput.value = data.maxHistory;
+          } else {
+            maxHistoryInput.value = '';
+          }
+        }
+        const overseerr = data.overseerr || {};
+        const baseInput = document.getElementById('cfgOverseerrBaseUrl');
+        if (baseInput) {
+          baseInput.value = overseerr.baseUrl || '';
+        }
+        const apiInput = document.getElementById('cfgOverseerrApiKey');
+        if (apiInput) {
+          apiInput.value = '';
+          if (overseerr.hasApiKey) {
+            apiInput.placeholder = 'API key is set; enter to replace it';
+          } else {
+            apiInput.placeholder = 'Enter to set API key';
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load app config:', e);
+        const status = document.getElementById('configStatus');
+        if (status) {
+          status.textContent = 'Failed to load config.';
+          status.className = 'status-error';
+        }
       }
     }
 
@@ -223,7 +305,94 @@
       }
     });
 
+    document.getElementById('overseerrFetchBtn').addEventListener('click', async () => {
+      const statusEl = document.getElementById('overseerrStatus');
+      statusEl.textContent = 'Contacting Overseerr...';
+      statusEl.className = 'row';
+      try {
+        const resp = await fetch('/api/overseerr/users');
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => '');
+          statusEl.textContent = 'Fetch failed: ' + (text || resp.status + ' ' + resp.statusText);
+          statusEl.className = 'row status-error';
+          return;
+        }
+        const data = await resp.json();
+        const total = typeof data.total === 'number' ? data.total : 0;
+        const withEmail = typeof data.withEmail === 'number' ? data.withEmail : 0;
+        statusEl.textContent = `Found ${withEmail} user${withEmail === 1 ? '' : 's'} with email (out of ${total} total).`;
+        statusEl.className = 'row status-ok';
+      } catch (e) {
+        console.error('Overseerr fetch failed:', e);
+        statusEl.textContent = 'Fetch failed. Check server logs.';
+        statusEl.className = 'row status-error';
+      }
+    });
+    document.getElementById('configSaveBtn').addEventListener('click', async () => {
+      const statusEl = document.getElementById('configStatus');
+      statusEl.textContent = 'Saving...';
+      statusEl.className = '';
+      try {
+        const payload = {};
+        const maxInput = document.getElementById('cfgMaxHistory');
+        if (maxInput) {
+          const raw = (maxInput.value || '').trim();
+          if (raw === '') {
+            payload.maxHistory = null; // reset to default
+          } else {
+            const n = Number(raw);
+            if (Number.isFinite(n)) {
+              payload.maxHistory = n;
+            }
+          }
+        }
+        const overseerr = {};
+        const baseInput = document.getElementById('cfgOverseerrBaseUrl');
+        if (baseInput) {
+          const rawBase = baseInput.value.trim();
+          if (rawBase !== '') overseerr.baseUrl = rawBase;
+          else overseerr.baseUrl = '';
+        }
+        const apiInput = document.getElementById('cfgOverseerrApiKey');
+        if (apiInput) {
+          const rawKey = apiInput.value.trim();
+          if (rawKey !== '') {
+            overseerr.apiKey = rawKey;
+          }
+        }
+        if (Object.keys(overseerr).length > 0) {
+          payload.overseerr = overseerr;
+        }
+
+        const resp = await fetch('/api/config/app', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => '');
+          throw new Error(text || ('HTTP ' + resp.status));
+        }
+        const data = await resp.json();
+        // Update read-only runtime view and config inputs based on server response
+        if (typeof data.maxHistory === 'number') {
+          document.getElementById('maxHistory').textContent = data.maxHistory;
+        }
+        const overseerrInfo = data.overseerr || {};
+        document.getElementById('overseerrConfigured').textContent = overseerrInfo.hasApiKey || overseerrInfo.baseUrl ? 'Yes' : 'No';
+        statusEl.textContent = 'Config saved.';
+        statusEl.className = 'status-ok';
+        // Clear API key field after successful save for safety
+        if (apiInput) apiInput.value = '';
+      } catch (e) {
+        console.error('Failed to save app config:', e);
+        statusEl.textContent = 'Save failed. Check server logs.';
+        statusEl.className = 'status-error';
+      }
+    });
+
     loadSystemInfo();
+    loadAppConfig();
   </script>
 </body>
 </html>

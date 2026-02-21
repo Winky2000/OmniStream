@@ -75,12 +75,24 @@
       <input type="checkbox" id="ruleWanTranscodes"> Notify on WAN transcodes
     </label>
     <label class="inline">
+      <input type="checkbox" id="ruleAnyWan"> Notify when any WAN stream is active
+    </label>
+    <label class="inline">
       <span style="flex:1;min-width:0;">
         Notify on high total bandwidth above (Mbps)
         <input type="number" id="ruleHighBandwidthThreshold" value="50" style="max-width:120px;">
       </span>
       <span class="inline" style="gap:4px;">
         <input type="checkbox" id="ruleHighBandwidth"> Enable high-bandwidth alerts
+      </span>
+    </label>
+    <label class="inline">
+      <span style="flex:1;min-width:0;">
+        Notify on high WAN bandwidth above (Mbps)
+        <input type="number" id="ruleHighWanThreshold" value="30" style="max-width:120px;">
+      </span>
+      <span class="inline" style="gap:4px;">
+        <input type="checkbox" id="ruleHighWan"> Enable high-WAN-bandwidth alerts
       </span>
     </label>
     <div class="hint">These rules control when OmniStream generates alerts that are sent to your notifiers. Defaults are: offline, WAN transcodes, and bandwidth above 50 Mbps.</div>
@@ -328,6 +340,11 @@
         const highRule = rules.highBandwidth || {};
         document.getElementById('ruleHighBandwidth').checked = highRule.enabled !== false;
         document.getElementById('ruleHighBandwidthThreshold').value = highRule.thresholdMbps != null ? highRule.thresholdMbps : 50;
+        const anyWanRule = rules.anyWan || {};
+        document.getElementById('ruleAnyWan').checked = anyWanRule.enabled === true; // opt-in, default off
+        const highWanRule = rules.highWanBandwidth || {};
+        document.getElementById('ruleHighWan').checked = highWanRule.enabled !== false;
+        document.getElementById('ruleHighWanThreshold').value = highWanRule.thresholdMbps != null ? highWanRule.thresholdMbps : 30;
         document.getElementById('discordWebhook').value = discord.webhookUrl || '';
         document.getElementById('emailEnabled').checked = email.enabled === true;
         document.getElementById('emailFrom').value = email.from || '';
@@ -415,6 +432,13 @@
             highBandwidth: {
               enabled: document.getElementById('ruleHighBandwidth').checked,
               thresholdMbps: Number(document.getElementById('ruleHighBandwidthThreshold').value) || 50
+            },
+            anyWan: {
+              enabled: document.getElementById('ruleAnyWan').checked
+            },
+            highWanBandwidth: {
+              enabled: document.getElementById('ruleHighWan').checked,
+              thresholdMbps: Number(document.getElementById('ruleHighWanThreshold').value) || 30
             }
           },
           discord: {

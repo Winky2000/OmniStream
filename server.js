@@ -1449,6 +1449,7 @@ app.get('/api/history', (req, res) => {
 
 // Basic system info for reliability/inspection
 app.get('/api/system', (req, res) => {
+  const overseerrCfg = appConfig && appConfig.overseerr ? appConfig.overseerr : null;
   res.json({
     version: appVersion,
     uptimeSeconds: process.uptime(),
@@ -1471,6 +1472,9 @@ app.get('/api/system', (req, res) => {
       lastError: lastNotifierError,
       lastErrorAt: lastNotifierErrorAt,
       lastErrorChannel: lastNotifierErrorChannel
+    },
+    overseerr: {
+      configured: !!(overseerrCfg && overseerrCfg.baseUrl && overseerrCfg.apiKey)
     }
   });
 });
@@ -1510,6 +1514,66 @@ app.get('/api/system/backup', (req, res) => {
   } catch (e) {
     console.error('[OmniStream] Failed to create backup zip:', e.message);
     res.status(500).json({ error: 'Failed to create backup zip' });
+  }
+});
+
+// Fetch basic user info (name + email) from Overseerr, if configured
+async function fetchOverseerrUsers() {
+  const cfg = appConfig && appConfig.overseerr ? appConfig.overseerr : null;
+  if (!cfg || !cfg.baseUrl || !cfg.apiKey) {
+    throw new Error('Overseerr is not configured (baseUrl/apiKey missing in config.json).');
+  }
+  const base = String(cfg.baseUrl).replace(/\/$/, '');
+  const headers = {
+    'X-Api-Key': cfg.apiKey
+  };
+  const allUsers = [];
+  let skip = 0;
+  const pageSize = 100;
+  // Simple pagination with a hard guard on pages
+  for (let page = 0; page < 50; page++) {
+    const params = { take: pageSize, skip };
+    let resp;
+    try {
+      resp = await axios.get(base + '/api/v1/user', { headers, params, timeout: 15000 });
+    } catch (e) {
+      throw new Error('Failed to contact Overseerr: ' + (e.message || String(e)));
+    }
+    const data = resp.data;
+    const batch = Array.isArray(data)
+      ? data
+      : (Array.isArray(data.results) ? data.results : []);
+    if (!batch.length) break;
+    allUsers.push(...batch);
+    if (batch.length < pageSize) break;
+    skip += batch.length;
+  }
+  // Map down to a safe shape for the client
+  const mapped = allUsers.map(u => {
+    const email = u.email || u.emailAddress || u.userEmail || null;
+    const name = u.displayName || u.username || u.name || email || null;
+    return {
+      id: u.id ?? u.userId ?? null,
+      name,
+      email
+    };
+  });
+  return mapped;
+}
+
+app.get('/api/overseerr/users', async (req, res) => {
+  try {
+    const users = await fetchOverseerrUsers();
+    // Optionally filter out entries without an email address
+    const withEmail = users.filter(u => u.email);
+    res.json({
+      total: users.length,
+      withEmail: withEmail.length,
+      users: withEmail
+    });
+  } catch (e) {
+    console.error('[OmniStream] /api/overseerr/users failed:', e.message);
+    res.status(500).json({ error: e.message || 'Failed to fetch Overseerr users' });
   }
 });
 
@@ -1724,12 +1788,18 @@ function buildNotificationsSnapshot() {
   const offlineRule = rules.offline || {};
   const wanRule = rules.wanTranscodes || {};
   const highRule = rules.highBandwidth || {};
+   const anyWanRule = rules.anyWan || {};
+   const highWanRule = rules.highWanBandwidth || {};
   const offlineEnabled = offlineRule.enabled !== false;
   const wanEnabled = wanRule.enabled !== false;
   const highEnabled = highRule.enabled !== false;
+   const anyWanEnabled = anyWanRule.enabled === true; // opt-in to avoid noise
   const highThreshold = typeof highRule.thresholdMbps === 'number' && !Number.isNaN(highRule.thresholdMbps)
     ? highRule.thresholdMbps
     : 50;
+   const highWanThreshold = typeof highWanRule.thresholdMbps === 'number' && !Number.isNaN(highWanRule.thresholdMbps)
+    ? highWanRule.thresholdMbps
+    : 30;
   Object.values(statuses).forEach(st => {
     // Server offline
     if (!st.online && offlineEnabled) {
@@ -1744,8 +1814,10 @@ function buildNotificationsSnapshot() {
       });
       return;
     }
+    const sessions = st.sessions || [];
+
     // Any WAN transcodes
-    const wanTranscodes = (st.sessions || []).filter(sess => {
+    const wanTranscodes = sessions.filter(sess => {
       const isWan = sess.location && sess.location.toUpperCase().includes('WAN');
       let isTranscode = false;
       if (typeof sess.transcoding === 'boolean') isTranscode = sess.transcoding;
@@ -1764,6 +1836,23 @@ function buildNotificationsSnapshot() {
         message: `${wanTranscodes.length} WAN transcode${wanTranscodes.length > 1 ? 's' : ''} active on ${st.name || 'server'}`
       });
     }
+
+    // Any WAN streams (direct or transcode) – optional, more chatty
+    if (anyWanEnabled) {
+      const wanSessions = sessions.filter(sess => sess.location && sess.location.toUpperCase().includes('WAN'));
+      if (wanSessions.length > 0) {
+        notifications.push({
+          id: `wan-any-${st.id}`,
+          level: 'info',
+          serverId: st.id,
+          serverName: st.name,
+          time: now,
+          kind: 'anyWan',
+          message: `${wanSessions.length} WAN stream${wanSessions.length > 1 ? 's' : ''} active on ${st.name || 'server'}`
+        });
+      }
+    }
+
     // High total bandwidth (simple threshold)
     const summary = st.summary || {};
     const totalBw = typeof summary.totalBandwidth === 'number' ? summary.totalBandwidth : 0;
@@ -1776,6 +1865,20 @@ function buildNotificationsSnapshot() {
         time: now,
         kind: 'highBandwidth',
         message: `High total bandwidth on ${st.name || 'server'}: ${totalBw.toFixed(1)} Mbps (threshold ${highThreshold.toFixed(1)} Mbps)`
+      });
+    }
+
+    // High WAN bandwidth (Plex has WAN breakdown; Jellyfin/Emby may be zero)
+    const wanBw = typeof summary.wanBandwidth === 'number' ? summary.wanBandwidth : 0;
+    if (highWanRule.enabled !== false && wanBw > highWanThreshold) {
+      notifications.push({
+        id: `high-wan-bandwidth-${st.id}`,
+        level: 'warn',
+        serverId: st.id,
+        serverName: st.name,
+        time: now,
+        kind: 'highWanBandwidth',
+        message: `High WAN bandwidth on ${st.name || 'server'}: ${wanBw.toFixed(1)} Mbps (threshold ${highWanThreshold.toFixed(1)} Mbps)`
       });
     }
   });
@@ -1846,7 +1949,7 @@ app.post('/api/notifiers/test', (req, res) => {
   }
 });
 
-// Simple API to read/update notifier configuration (Discord, email) from config.json
+// Simple API to read/update notifier configuration (Discord, email, rules) from config.json
 app.get('/api/config/notifiers', (req, res) => {
   res.json({ notifiers: appConfig.notifiers || {} });
 });
@@ -1862,6 +1965,74 @@ app.put('/api/config/notifiers', (req, res) => {
   } catch (e) {
     console.error('[OmniStream] Failed to update notifier config:', e.message);
     res.status(500).json({ error: 'Failed to update notifier config' });
+  }
+});
+
+// Read/update global application config (history retention, Overseerr, etc.) from config.json
+app.get('/api/config/app', (req, res) => {
+  try {
+    const overseerrCfg = appConfig.overseerr || {};
+    res.json({
+      maxHistory: typeof MAX_HISTORY === 'number' ? MAX_HISTORY : DEFAULT_MAX_HISTORY,
+      overseerr: {
+        baseUrl: overseerrCfg.baseUrl || '',
+        hasApiKey: !!overseerrCfg.apiKey
+      }
+    });
+  } catch (e) {
+    console.error('[OmniStream] Failed to read app config:', e.message);
+    res.status(500).json({ error: 'Failed to read app config' });
+  }
+});
+
+app.put('/api/config/app', (req, res) => {
+  try {
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+
+    // maxHistory: number, or null to reset to default
+    if (Object.prototype.hasOwnProperty.call(body, 'maxHistory')) {
+      const v = body.maxHistory;
+      if (typeof v === 'number' && Number.isFinite(v)) {
+        appConfig.maxHistory = v;
+        MAX_HISTORY = v;
+      } else if (v === null) {
+        delete appConfig.maxHistory;
+        MAX_HISTORY = DEFAULT_MAX_HISTORY;
+      }
+    }
+
+    // Overseerr config: baseUrl and apiKey (apiKey is write-only; never returned to client)
+    if (body.overseerr && typeof body.overseerr === 'object') {
+      const current = appConfig.overseerr || {};
+      const incoming = body.overseerr;
+      const next = { ...current };
+
+      if (Object.prototype.hasOwnProperty.call(incoming, 'baseUrl')) {
+        const b = incoming.baseUrl;
+        next.baseUrl = typeof b === 'string' ? b.trim() : '';
+      }
+      // Only update apiKey when explicitly provided; empty string means "clear"
+      if (Object.prototype.hasOwnProperty.call(incoming, 'apiKey')) {
+        const k = incoming.apiKey;
+        next.apiKey = typeof k === 'string' ? k.trim() : '';
+      }
+
+      appConfig.overseerr = next;
+    }
+
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify(appConfig, null, 2));
+
+    const overseerrCfg = appConfig.overseerr || {};
+    res.json({
+      maxHistory: typeof MAX_HISTORY === 'number' ? MAX_HISTORY : DEFAULT_MAX_HISTORY,
+      overseerr: {
+        baseUrl: overseerrCfg.baseUrl || '',
+        hasApiKey: !!overseerrCfg.apiKey
+      }
+    });
+  } catch (e) {
+    console.error('[OmniStream] Failed to update app config:', e.message);
+    res.status(500).json({ error: 'Failed to update app config' });
   }
 });
 
