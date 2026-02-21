@@ -476,6 +476,22 @@ try {
       ')'
     );
     historyDb.run('CREATE INDEX IF NOT EXISTS idx_history_time ON history(time)');
+
+    // Table for newsletter / subscriber emails imported from external sources (e.g. Overseerr)
+    historyDb.run(
+      'CREATE TABLE IF NOT EXISTS newsletter_subscribers (\n' +
+      '  id INTEGER PRIMARY KEY AUTOINCREMENT,\n' +
+      "  source TEXT NOT NULL,\n" +
+      "  externalId TEXT,\n" +
+      "  name TEXT,\n" +
+      "  email TEXT NOT NULL,\n" +
+      "  createdAt TEXT NOT NULL,\n" +
+      "  updatedAt TEXT NOT NULL,\n" +
+      "  active INTEGER NOT NULL DEFAULT 1,\n" +
+      '  UNIQUE(source, externalId)\n' +
+      ')'
+    );
+    historyDb.run('CREATE INDEX IF NOT EXISTS idx_subscribers_email ON newsletter_subscribers(email)');
   });
   console.log('[OmniStream] Using history database at', HISTORY_DB_FILE);
 } catch (e) {
@@ -1564,17 +1580,175 @@ async function fetchOverseerrUsers() {
 app.get('/api/overseerr/users', async (req, res) => {
   try {
     const users = await fetchOverseerrUsers();
-    // Optionally filter out entries without an email address
-    const withEmail = users.filter(u => u.email);
+    // Only keep users that have an email address
+    const withEmail = users.filter(u => u && u.email);
+
+    // Look up which Overseerr users are already imported as subscribers
+    let flagsById = new Map();
+    let flagsByEmail = new Map();
+    if (historyDb) {
+      try {
+        const rows = await new Promise((resolve, reject) => {
+          historyDb.all(
+            'SELECT externalId, email, active FROM newsletter_subscribers WHERE source = ?',
+            ['overseerr'],
+            (err, rows) => {
+              if (err) return reject(err);
+              resolve(rows || []);
+            }
+          );
+        });
+        rows.forEach(r => {
+          const extId = r.externalId != null ? String(r.externalId) : null;
+          const email = (r.email || '').toLowerCase();
+          const active = Number(r.active) === 1;
+          if (extId) {
+            flagsById.set(extId, { imported: true, active });
+          }
+          if (email) {
+            if (!flagsByEmail.has(email)) {
+              flagsByEmail.set(email, { imported: true, active });
+            }
+          }
+        });
+      } catch (e) {
+        console.error('[OmniStream] Failed to load existing Overseerr subscribers:', e.message);
+        flagsById = new Map();
+        flagsByEmail = new Map();
+      }
+    }
+
+    const enriched = withEmail.map(u => {
+      let imported = false;
+      let subscriberActive = false;
+      const extId = u.id != null ? String(u.id) : null;
+      const emailKey = u.email ? u.email.toLowerCase() : null;
+      if (extId && flagsById.has(extId)) {
+        const info = flagsById.get(extId);
+        imported = !!info.imported;
+        subscriberActive = !!info.active;
+      } else if (emailKey && flagsByEmail.has(emailKey)) {
+        const info = flagsByEmail.get(emailKey);
+        imported = !!info.imported;
+        subscriberActive = !!info.active;
+      }
+      return {
+        ...u,
+        imported,
+        subscriberActive
+      };
+    });
+
     res.json({
       total: users.length,
       withEmail: withEmail.length,
-      users: withEmail
+      users: enriched
     });
   } catch (e) {
     console.error('[OmniStream] /api/overseerr/users failed:', e.message);
     res.status(500).json({ error: e.message || 'Failed to fetch Overseerr users' });
   }
+});
+
+// Import Overseerr users with email into the local subscribers table for later newsletters
+async function importOverseerrSubscribers() {
+  if (!historyDb) {
+    throw new Error('history DB not available');
+  }
+  const users = await fetchOverseerrUsers();
+  const withEmail = users.filter(u => u && u.email);
+  const now = new Date().toISOString();
+
+  return await new Promise((resolve, reject) => {
+    historyDb.serialize(() => {
+      // Ensure table exists (in case DB was created before this version)
+      historyDb.run(
+        'CREATE TABLE IF NOT EXISTS newsletter_subscribers (\n' +
+        '  id INTEGER PRIMARY KEY AUTOINCREMENT,\n' +
+        "  source TEXT NOT NULL,\n" +
+        "  externalId TEXT,\n" +
+        "  name TEXT,\n" +
+        "  email TEXT NOT NULL,\n" +
+        "  createdAt TEXT NOT NULL,\n" +
+        "  updatedAt TEXT NOT NULL,\n" +
+        "  active INTEGER NOT NULL DEFAULT 1,\n" +
+        '  UNIQUE(source, externalId)\n' +
+        ')'
+      );
+      const stmt = historyDb.prepare(
+        'INSERT INTO newsletter_subscribers (source, externalId, name, email, createdAt, updatedAt, active) ' +
+        'VALUES (?, ?, ?, ?, ?, ?, 1) ' +
+        'ON CONFLICT(source, externalId) DO UPDATE SET ' +
+        '  name = excluded.name, ' +
+        '  email = excluded.email, ' +
+        '  updatedAt = excluded.updatedAt, ' +
+        '  active = 1'
+      );
+
+      let processed = 0;
+      withEmail.forEach(u => {
+        const externalId = u.id != null ? String(u.id) : null;
+        const name = u.name || u.email;
+        stmt.run('overseerr', externalId, name, u.email, now, now, (err) => {
+          if (err) {
+            console.error('[OmniStream] Failed to upsert subscriber from Overseerr:', err.message);
+            return; // continue with others
+          }
+          processed++;
+        });
+      });
+      stmt.finalize((err) => {
+        if (err) {
+          return reject(err);
+        }
+        resolve({
+          total: users.length,
+          withEmail: withEmail.length,
+          imported: withEmail.length, // number attempted; per-row errors are logged
+        });
+      });
+    });
+  });
+}
+
+app.post('/api/subscribers/import/overseerr', async (req, res) => {
+  try {
+    const result = await importOverseerrSubscribers();
+    res.json(result);
+  } catch (e) {
+    console.error('[OmniStream] /api/subscribers/import/overseerr failed:', e.message);
+    res.status(500).json({ error: e.message || 'Failed to import subscribers from Overseerr' });
+  }
+});
+
+// Simple summary of subscribers for UI (total and active, grouped by source)
+app.get('/api/subscribers/summary', (req, res) => {
+  if (!historyDb) {
+    return res.json({ total: 0, active: 0, sources: {} });
+  }
+  historyDb.all(
+    'SELECT source, COUNT(*) AS total, SUM(CASE WHEN active = 1 THEN 1 ELSE 0 END) AS active ' +
+    'FROM newsletter_subscribers GROUP BY source',
+    [],
+    (err, rows) => {
+      if (err) {
+        console.error('[OmniStream] Failed to read subscribers summary:', err.message);
+        return res.status(500).json({ total: 0, active: 0, sources: {} });
+      }
+      const sources = {};
+      let total = 0;
+      let active = 0;
+      (rows || []).forEach(r => {
+        const src = r.source || 'unknown';
+        const t = Number(r.total) || 0;
+        const a = Number(r.active) || 0;
+        sources[src] = { total: t, active: a };
+        total += t;
+        active += a;
+      });
+      res.json({ total, active, sources });
+    }
+  );
 });
 
 // Compact summary for Home Assistant and other external dashboards

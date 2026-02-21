@@ -96,11 +96,13 @@
       <div class="card" id="ovUsersCard">
         <h2>Overseerr users</h2>
         <div class="row" id="ovUsersSummary">No data loaded yet.</div>
+        <div class="row" id="ovSubsSummary">Subscribers in OmniStream: -</div>
         <button class="btn" id="ovUsersBtn">Fetch users from Overseerr</button>
-        <div class="hint">Only users with an email address are returned. Use this to see who you could contact for announcements or newsletters.</div>
+        <button class="btn" id="ovImportBtn" style="margin-left:6px;">Import as subscribers</button>
+        <div class="hint">Only users with an email address are returned. Use this to see and import contacts for future newsletters or announcements.</div>
         <table id="ovUsersTable" style="display:none;">
           <thead>
-            <tr><th>Name</th><th>Email</th></tr>
+            <tr><th>Name</th><th>Email</th><th>Subscriber</th></tr>
           </thead>
           <tbody id="ovUsersTableBody"></tbody>
         </table>
@@ -161,6 +163,25 @@
           status.textContent = 'Failed to load config.';
           status.className = 'status-error';
         }
+      }
+    }
+
+    async function loadSubscriberSummary() {
+      const el = document.getElementById('ovSubsSummary');
+      if (!el) return;
+      try {
+        const r = await fetch('/api/subscribers/summary');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const data = await r.json();
+        const total = typeof data.total === 'number' ? data.total : 0;
+        const active = typeof data.active === 'number' ? data.active : 0;
+        const src = data.sources && data.sources.overseerr ? data.sources.overseerr : null;
+        const srcTotal = src ? src.total : 0;
+        const srcActive = src ? src.active : 0;
+        el.textContent = `Subscribers in OmniStream: ${active} active from Overseerr (${srcTotal} total across sources: ${total}).`;
+      } catch (e) {
+        console.error('Failed to load subscribers summary:', e);
+        el.textContent = 'Subscribers in OmniStream: unknown (failed to load).';
       }
     }
 
@@ -234,8 +255,15 @@
           tdName.textContent = u.name || '(no name)';
           const tdEmail = document.createElement('td');
           tdEmail.textContent = u.email || '';
+          const tdSub = document.createElement('td');
+          let status = 'No';
+          if (u.imported || u.subscriberActive) {
+            status = u.subscriberActive === false ? 'Imported (inactive)' : 'Imported';
+          }
+          tdSub.textContent = status;
           tr.appendChild(tdName);
           tr.appendChild(tdEmail);
+          tr.appendChild(tdSub);
           tbody.appendChild(tr);
         });
         summaryEl.textContent = `Found ${withEmail} user${withEmail === 1 ? '' : 's'} with email (out of ${total} total).`;
@@ -248,7 +276,34 @@
       }
     });
 
+    document.getElementById('ovImportBtn').addEventListener('click', async () => {
+      const summaryEl = document.getElementById('ovUsersSummary');
+      summaryEl.textContent = 'Importing subscribers from Overseerr...';
+      summaryEl.className = 'row';
+      try {
+        const resp = await fetch('/api/subscribers/import/overseerr', {
+          method: 'POST'
+        });
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => '');
+          summaryEl.textContent = 'Import failed: ' + (text || resp.status + ' ' + resp.statusText);
+          summaryEl.className = 'row status-error';
+          return;
+        }
+        const data = await resp.json();
+        const withEmail = typeof data.withEmail === 'number' ? data.withEmail : 0;
+        summaryEl.textContent = `Imported ${withEmail} subscriber${withEmail === 1 ? '' : 's'} from Overseerr into OmniStream.`;
+        summaryEl.className = 'row status-ok';
+        loadSubscriberSummary();
+      } catch (e) {
+        console.error('Overseerr subscribers import failed:', e);
+        summaryEl.textContent = 'Import failed. Check server logs.';
+        summaryEl.className = 'row status-error';
+      }
+    });
+
     loadOverseerrConfig();
+    loadSubscriberSummary();
   </script>
 </body>
 </html>
