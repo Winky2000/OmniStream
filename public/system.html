@@ -57,6 +57,7 @@
             <a href="servers.html" class="submenu-link">Servers</a>
             <a href="display.html" class="submenu-link">Themes &amp; layout</a>
             <a href="notifiers.html" class="submenu-link">Notifiers</a>
+            <a href="overseerr.html" class="submenu-link">Overseerr</a>
             <a href="system.html" class="submenu-link submenu-link-active">System</a>
           </div>
         </div>
@@ -85,20 +86,6 @@
           </label>
           <div class="hint">Number of history rows to keep. 
             Use 0 or a negative value for no automatic trimming. Leave blank to use the built-in default (500).</div>
-        </div>
-        <div class="config-row">
-          <label>
-            Overseerr base URL
-            <input type="text" id="cfgOverseerrBaseUrl" placeholder="https://overseerr.yourdomain.local">
-          </label>
-          <div class="hint">Root URL of your Overseerr instance (no trailing slash).</div>
-        </div>
-        <div class="config-row">
-          <label>
-            Overseerr API key
-            <input type="password" id="cfgOverseerrApiKey" placeholder="Enter to set or update API key">
-          </label>
-          <div class="hint">API key from Overseerr settings. For security, the existing key is not shown here; entering a new value will replace it.</div>
         </div>
         <div class="config-actions">
           <button class="btn" id="configSaveBtn">Save config</button>
@@ -265,20 +252,6 @@
             maxHistoryInput.value = '';
           }
         }
-        const overseerr = data.overseerr || {};
-        const baseInput = document.getElementById('cfgOverseerrBaseUrl');
-        if (baseInput) {
-          baseInput.value = overseerr.baseUrl || '';
-        }
-        const apiInput = document.getElementById('cfgOverseerrApiKey');
-        if (apiInput) {
-          apiInput.value = '';
-          if (overseerr.hasApiKey) {
-            apiInput.placeholder = 'API key is set; enter to replace it';
-          } else {
-            apiInput.placeholder = 'Enter to set API key';
-          }
-        }
       } catch (e) {
         console.error('Failed to load app config:', e);
         const status = document.getElementById('configStatus');
@@ -346,23 +319,6 @@
             }
           }
         }
-        const overseerr = {};
-        const baseInput = document.getElementById('cfgOverseerrBaseUrl');
-        if (baseInput) {
-          const rawBase = baseInput.value.trim();
-          if (rawBase !== '') overseerr.baseUrl = rawBase;
-          else overseerr.baseUrl = '';
-        }
-        const apiInput = document.getElementById('cfgOverseerrApiKey');
-        if (apiInput) {
-          const rawKey = apiInput.value.trim();
-          if (rawKey !== '') {
-            overseerr.apiKey = rawKey;
-          }
-        }
-        if (Object.keys(overseerr).length > 0) {
-          payload.overseerr = overseerr;
-        }
 
         const resp = await fetch('/api/config/app', {
           method: 'PUT',
@@ -378,12 +334,8 @@
         if (typeof data.maxHistory === 'number') {
           document.getElementById('maxHistory').textContent = data.maxHistory;
         }
-        const overseerrInfo = data.overseerr || {};
-        document.getElementById('overseerrConfigured').textContent = overseerrInfo.hasApiKey || overseerrInfo.baseUrl ? 'Yes' : 'No';
         statusEl.textContent = 'Config saved.';
         statusEl.className = 'status-ok';
-        // Clear API key field after successful save for safety
-        if (apiInput) apiInput.value = '';
       } catch (e) {
         console.error('Failed to save app config:', e);
         statusEl.textContent = 'Save failed. Check server logs.';

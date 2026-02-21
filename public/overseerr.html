@@ -1,0 +1,254 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>OmniStream Overseerr</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="theme.css">
+  <style>
+    body{font-family:Segoe UI,Arial;background:var(--bg);color:var(--text-main);margin:0;padding:0}
+    .app-shell{display:flex;min-height:100vh;}
+    .sidebar{width:220px;background:#050814;border-right:1px solid rgba(15,23,42,0.8);padding:18px 16px;box-sizing:border-box;display:flex;flex-direction:column;gap:18px;}
+    .sidebar-brand{font-size:13px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:var(--text-muted);}
+    .sidebar-nav{display:flex;flex-direction:column;gap:4px;margin-top:8px;}
+    .nav-link{display:block;padding:8px 10px;border-radius:8px;font-size:13px;color:var(--text-muted);text-decoration:none;transition:background 0.15s,color 0.15s;}
+    .nav-link:hover{background:rgba(148,163,184,0.15);color:var(--text-main);}
+    .nav-link-active{background:rgba(59,130,246,0.18);color:#e5edff;border-left:3px solid var(--btn-border);padding-left:7px;}
+    .settings-group{margin-top:4px;}
+    .settings-submenu{display:none;flex-direction:column;gap:2px;padding-left:14px;margin-top:3px;}
+    .settings-submenu.open{display:flex;}
+    .submenu-link{display:block;padding:6px 10px;border-radius:8px;font-size:12px;color:var(--text-muted);text-decoration:none;}
+    .submenu-link:hover{background:rgba(148,163,184,0.15);color:var(--text-main);}
+    .submenu-link-active{background:rgba(59,130,246,0.18);color:#e5edff;}
+    .sidebar-toggle{margin-bottom:10px;padding:4px 10px;border-radius:999px;border:1px solid var(--btn-border);background:var(--btn-bg);color:var(--btn-text);cursor:pointer;font-size:12px;}
+    .sidebar-toggle:hover{background:var(--btn-bg-hover);color:var(--btn-text-hover);}
+    .app-shell.sidebar-collapsed .sidebar{display:none;}
+    .main-content{flex:1;box-sizing:border-box;padding:20px;}
+    h1{margin:0 0 8px 0;color:var(--text-main);letter-spacing:0.5px;font-size:1.8em;font-weight:600;}
+    .card{background:var(--card-bg);border-radius:14px;padding:16px 18px;box-shadow:0 12px 30px rgba(15,23,42,0.85);border:1px solid rgba(148,163,184,0.35);max-width:760px;margin-bottom:18px;}
+    .card h2{margin:0 0 8px 0;font-size:16px;color:var(--text-main);}
+    .row{font-size:13px;margin:4px 0;color:var(--text-muted);}
+    .row b{color:var(--text-main);}
+    .hint{font-size:12px;color:var(--text-muted);margin-top:4px;}
+    .btn{margin-top:10px;padding:6px 14px;border-radius:8px;border:1px solid var(--btn-border);background:var(--btn-bg);color:var(--btn-text);cursor:pointer;font-size:13px;}
+    .btn:hover{background:var(--btn-bg-hover);color:var(--btn-text-hover);}
+    label{display:block;font-size:13px;margin:6px 0;color:var(--text-main);}
+    input[type="text"],input[type="number"],input[type="password"]{width:100%;max-width:420px;padding:6px 10px;border-radius:6px;border:1px solid #444;background:var(--bg);color:var(--text-main);box-sizing:border-box;}
+    .config-row{margin-top:4px;}
+    .config-actions{margin-top:8px;display:flex;align-items:center;gap:10px;font-size:12px;}
+    .status-ok{color:#a5d6a7;}
+    .status-error{color:#ff8a80;}
+    table{width:100%;border-collapse:collapse;margin-top:8px;font-size:13px;}
+    th,td{padding:6px 8px;border-bottom:1px solid rgba(148,163,184,0.25);text-align:left;}
+    th{color:var(--text-main);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:0.04em;}
+    tbody tr:nth-child(even){background:rgba(15,23,42,0.35);}
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="sidebar-brand">OmniStream</div>
+      <nav class="sidebar-nav">
+        <a href="index.html" class="nav-link">Dashboard</a>
+        <a href="history.html" class="nav-link">History</a>
+        <a href="reports.html" class="nav-link">Reports</a>
+        <a href="notifications.html" class="nav-link">Notifications</a>
+        <div class="settings-group">
+          <button type="button" class="nav-link nav-link-active settings-toggle">Settings</button>
+          <div class="settings-submenu open">
+            <a href="admin.html" class="submenu-link">Connected servers</a>
+            <a href="servers.html" class="submenu-link">Servers</a>
+            <a href="display.html" class="submenu-link">Themes &amp; layout</a>
+            <a href="notifiers.html" class="submenu-link">Notifiers</a>
+            <a href="overseerr.html" class="submenu-link submenu-link-active">Overseerr</a>
+            <a href="system.html" class="submenu-link">System</a>
+          </div>
+        </div>
+      </nav>
+    </aside>
+    <main class="main-content">
+      <button class="sidebar-toggle" id="sidebarToggle">Hide menu</button>
+      <h1>Overseerr</h1>
+
+      <div class="card" id="ovConfigCard">
+        <h2>Overseerr configuration</h2>
+        <div class="row"><b>Configured:</b> <span id="ovConfigured">No</span></div>
+        <div class="config-row">
+          <label>
+            Overseerr base URL
+            <input type="text" id="ovBaseUrl" placeholder="https://overseerr.yourdomain.local">
+          </label>
+          <div class="hint">Root URL of your Overseerr instance (no trailing slash).</div>
+        </div>
+        <div class="config-row">
+          <label>
+            Overseerr API key
+            <input type="password" id="ovApiKey" placeholder="Enter to set API key">
+          </label>
+          <div class="hint">API key from Overseerr settings. The existing key is never shown; entering a value here will replace it.</div>
+        </div>
+        <div class="config-actions">
+          <button class="btn" id="ovSaveBtn">Save Overseerr config</button>
+          <span id="ovSaveStatus"></span>
+        </div>
+      </div>
+
+      <div class="card" id="ovUsersCard">
+        <h2>Overseerr users</h2>
+        <div class="row" id="ovUsersSummary">No data loaded yet.</div>
+        <button class="btn" id="ovUsersBtn">Fetch users from Overseerr</button>
+        <div class="hint">Only users with an email address are returned. Use this to see who you could contact for announcements or newsletters.</div>
+        <table id="ovUsersTable" style="display:none;">
+          <thead>
+            <tr><th>Name</th><th>Email</th></tr>
+          </thead>
+          <tbody id="ovUsersTableBody"></tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+  <script>
+    (function() {
+      const settingsToggle = document.querySelector('.settings-toggle');
+      const settingsSubmenu = document.querySelector('.settings-submenu');
+      const appShell = document.querySelector('.app-shell');
+      const sidebarToggle = document.getElementById('sidebarToggle');
+      const savedTheme = localStorage.getItem('omnistreamTheme') || 'default';
+      if (savedTheme && savedTheme !== 'default') {
+        document.documentElement.setAttribute('data-theme', savedTheme);
+      } else {
+        document.documentElement.removeAttribute('data-theme');
+      }
+      if (settingsToggle && settingsSubmenu) {
+        settingsToggle.addEventListener('click', () => {
+          settingsSubmenu.classList.toggle('open');
+        });
+      }
+      if (appShell && sidebarToggle) {
+        const savedSidebar = localStorage.getItem('omnistreamSidebar') || 'open';
+        if (savedSidebar === 'collapsed') {
+          appShell.classList.add('sidebar-collapsed');
+          sidebarToggle.textContent = 'Show menu';
+        }
+        sidebarToggle.addEventListener('click', () => {
+          const collapsed = appShell.classList.toggle('sidebar-collapsed');
+          sidebarToggle.textContent = collapsed ? 'Show menu' : 'Hide menu';
+          localStorage.setItem('omnistreamSidebar', collapsed ? 'collapsed' : 'open');
+        });
+      }
+    })();
+
+    async function loadOverseerrConfig() {
+      try {
+        const r = await fetch('/api/config/app');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const data = await r.json();
+        const ov = data.overseerr || {};
+        const baseUrl = ov.baseUrl || '';
+        const hasKey = !!ov.hasApiKey;
+        document.getElementById('ovConfigured').textContent = (baseUrl && hasKey) ? 'Yes' : 'No';
+        const baseInput = document.getElementById('ovBaseUrl');
+        if (baseInput) baseInput.value = baseUrl;
+        const apiInput = document.getElementById('ovApiKey');
+        if (apiInput) {
+          apiInput.value = '';
+          apiInput.placeholder = hasKey ? 'API key is set; enter to replace it' : 'Enter to set API key';
+        }
+      } catch (e) {
+        console.error('Failed to load Overseerr config:', e);
+        const status = document.getElementById('ovSaveStatus');
+        if (status) {
+          status.textContent = 'Failed to load config.';
+          status.className = 'status-error';
+        }
+      }
+    }
+
+    document.getElementById('ovSaveBtn').addEventListener('click', async () => {
+      const statusEl = document.getElementById('ovSaveStatus');
+      statusEl.textContent = 'Saving...';
+      statusEl.className = '';
+      try {
+        const payload = { overseerr: {} };
+        const baseInput = document.getElementById('ovBaseUrl');
+        const apiInput = document.getElementById('ovApiKey');
+        if (baseInput) {
+          const rawBase = baseInput.value.trim();
+          payload.overseerr.baseUrl = rawBase;
+        }
+        if (apiInput) {
+          const rawKey = apiInput.value.trim();
+          if (rawKey !== '') {
+            payload.overseerr.apiKey = rawKey;
+          }
+        }
+        const resp = await fetch('/api/config/app', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => '');
+          throw new Error(text || ('HTTP ' + resp.status));
+        }
+        await resp.json().catch(() => ({}));
+        statusEl.textContent = 'Config saved.';
+        statusEl.className = 'status-ok';
+        if (apiInput) apiInput.value = '';
+        loadOverseerrConfig();
+      } catch (e) {
+        console.error('Failed to save Overseerr config:', e);
+        statusEl.textContent = 'Save failed. Check server logs.';
+        statusEl.className = 'status-error';
+      }
+    });
+
+    document.getElementById('ovUsersBtn').addEventListener('click', async () => {
+      const summaryEl = document.getElementById('ovUsersSummary');
+      const table = document.getElementById('ovUsersTable');
+      const tbody = document.getElementById('ovUsersTableBody');
+      summaryEl.textContent = 'Contacting Overseerr...';
+      summaryEl.className = 'row';
+      table.style.display = 'none';
+      tbody.innerHTML = '';
+      try {
+        const resp = await fetch('/api/overseerr/users');
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => '');
+          summaryEl.textContent = 'Fetch failed: ' + (text || resp.status + ' ' + resp.statusText);
+          summaryEl.className = 'row status-error';
+          return;
+        }
+        const data = await resp.json();
+        const total = typeof data.total === 'number' ? data.total : 0;
+        const withEmail = typeof data.withEmail === 'number' ? data.withEmail : 0;
+        const users = Array.isArray(data.users) ? data.users.slice() : [];
+        users.sort((a,b) => {
+          const na = (a.name || a.email || '').toLowerCase();
+          const nb = (b.name || b.email || '').toLowerCase();
+          if (na < nb) return -1; if (na > nb) return 1; return 0;
+        });
+        users.forEach(u => {
+          const tr = document.createElement('tr');
+          const tdName = document.createElement('td');
+          tdName.textContent = u.name || '(no name)';
+          const tdEmail = document.createElement('td');
+          tdEmail.textContent = u.email || '';
+          tr.appendChild(tdName);
+          tr.appendChild(tdEmail);
+          tbody.appendChild(tr);
+        });
+        summaryEl.textContent = `Found ${withEmail} user${withEmail === 1 ? '' : 's'} with email (out of ${total} total).`;
+        summaryEl.className = 'row status-ok';
+        if (users.length) table.style.display = 'table';
+      } catch (e) {
+        console.error('Overseerr users fetch failed:', e);
+        summaryEl.textContent = 'Fetch failed. Check server logs.';
+        summaryEl.className = 'row status-error';
+      }
+    });
+
+    loadOverseerrConfig();
+  </script>
+</body>
+</html>
