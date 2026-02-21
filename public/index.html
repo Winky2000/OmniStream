@@ -205,7 +205,10 @@
       <button class="sidebar-toggle" id="sidebarToggle">Hide menu</button>
       <div class="header-flex">
         <img src="omnistream_logo.png" alt="OmniStream Logo" class="logo-img" />
-        <h1>OmniStream</h1>
+        <div>
+          <h1>OmniStream</h1>
+          <div id="globalSummary" style="font-size:12px;color:var(--text-muted);margin-top:4px;"></div>
+        </div>
       </div>
       <div id="grid" class="grid-layout"></div>
     </main>
@@ -268,10 +271,11 @@
     });
 
     function render(data) {
-      const { servers = [], statuses = {}, setup = false } = data;
+      const { servers = [], statuses = {}, setup = false, poll = {} } = data;
       const grid = document.getElementById('grid');
       const sidebar = document.querySelector('.sidebar');
       const layoutToggle = document.getElementById('layoutToggle');
+      const globalSummary = document.getElementById('globalSummary');
       const fragment = document.createDocumentFragment();
       // Setup mode: no servers configured yet
       if (setup || !servers.length) {
@@ -298,6 +302,41 @@
       }
       if (sidebar) sidebar.style.display = '';
       if (layoutToggle) layoutToggle.style.display = '';
+
+      // Compute global summary (servers/streams) for the header
+      let online = 0, offline = 0, totalStreams = 0, wanStreams = 0, transcodeStreams = 0;
+      servers.forEach(s => {
+        const st = statuses && statuses[s.id] ? statuses[s.id] : null;
+        if (!st) {
+          offline++;
+          return;
+        }
+        if (st.online) online++; else offline++;
+        const sessions = Array.isArray(st.sessions) ? st.sessions : [];
+        sessions.forEach(sess => {
+          totalStreams++;
+          const isWan = sess.location && typeof sess.location === 'string' && sess.location.toUpperCase().includes('WAN');
+          if (isWan) wanStreams++;
+          let isTranscode = false;
+          if (typeof sess.transcoding === 'boolean') {
+            isTranscode = sess.transcoding;
+          } else if (sess.stream && typeof sess.stream === 'string' && sess.stream.toLowerCase().includes('transcode')) {
+            isTranscode = true;
+          } else if (sess.state && typeof sess.state === 'string' && sess.state.toLowerCase().includes('transcode')) {
+            isTranscode = true;
+          }
+          if (isTranscode) transcodeStreams++;
+        });
+      });
+      if (globalSummary) {
+        const totalServers = servers.length;
+        const lastAt = poll.lastPollAt ? new Date(poll.lastPollAt).toLocaleTimeString() : '-';
+        const parts = [];
+        parts.push(`${totalServers} server${totalServers === 1 ? '' : 's'} (${online} online${offline ? ", " + offline + " offline" : ''})`);
+        parts.push(`${totalStreams} stream${totalStreams === 1 ? '' : 's'}${wanStreams ? ", " + wanStreams + " WAN" : ''}${transcodeStreams ? ", " + transcodeStreams + " transcode" + (transcodeStreams === 1 ? '' : 's') : ''}`);
+        parts.push(`last updated ${lastAt}`);
+        globalSummary.textContent = parts.join('  •  ');
+      }
       servers.forEach(s => {
         const st = statuses && statuses[s.id] ? statuses[s.id] : { online: false };
         const card = document.createElement('div');
