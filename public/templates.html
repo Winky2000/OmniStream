@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>OmniStream - Newsletter templates</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="theme.css" />
+  <style>
+    .page-header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;}
+    .badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;background:rgba(15,23,42,0.75);border:1px solid rgba(148,163,184,0.5);font-size:11px;color:#e5e7eb;}
+    .layout-two{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1.2fr);gap:16px;align-items:flex-start;}
+    @media (max-width: 960px){.layout-two{grid-template-columns:minmax(0,1fr);} }
+    .card{background:var(--card-bg);border-radius:14px;padding:16px 18px;box-shadow:0 12px 30px rgba(15,23,42,0.85);border:1px solid rgba(148,163,184,0.35);}
+    .card h2{margin-top:0;margin-bottom:10px;font-size:17px;}
+    .card h3{margin-top:10px;margin-bottom:8px;font-size:15px;}
+    .row{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+    .template-list{max-height:260px;overflow:auto;margin-top:6px;border-radius:10px;border:1px solid rgba(51,65,85,0.8);background:rgba(15,23,42,0.4);}
+    .template-item{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border-bottom:1px solid rgba(30,41,59,0.9);cursor:pointer;font-size:13px;}
+    .template-item:last-child{border-bottom:none;}
+    .template-item-active{background:rgba(37,99,235,0.22);}
+    .template-item-name{font-weight:500;}
+    .template-item-subject{color:var(--text-muted);font-size:12px;}
+    .template-actions button{margin-left:6px;}
+    label{display:block;margin-bottom:8px;font-size:13px;}
+    input[type="text"],textarea{width:100%;box-sizing:border-box;border-radius:8px;border:1px solid rgba(75,85,99,0.9);background:rgba(15,23,42,0.8);color:var(--text-main);padding:6px 8px;font-size:13px;}
+    textarea{min-height:130px;resize:vertical;font-family:system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;}
+    .btn{padding:6px 11px;border-radius:999px;border:1px solid var(--btn-border);background:var(--btn-bg);color:var(--btn-text);font-size:13px;cursor:pointer;}
+    .btn-secondary{background:transparent;color:var(--text-muted);}
+    .hint{font-size:11px;color:var(--text-muted);margin-top:4px;}
+    .status{font-size:12px;margin-left:8px;}
+    .status-ok{color:#22c55e;}
+    .status-error{color:#f97373;}
+    .preview-box{border-radius:12px;border:1px solid rgba(55,65,81,0.9);background:rgba(15,23,42,0.85);padding:10px 12px;min-height:140px;font-size:13px;white-space:pre-wrap;}
+    .preview-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;font-size:12px;color:var(--text-muted);}
+    .preview-title{font-weight:500;color:var(--text-main);}
+    .preview-list{margin-top:6px;padding-left:16px;}
+    .preview-list li{margin-bottom:2px;}
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <span class="sidebar-title">OmniStream</span>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="index.html" class="nav-link">Dashboard</a>
+        <a href="servers.html" class="nav-link">Servers</a>
+        <a href="history.html" class="nav-link">History</a>
+        <a href="reports.html" class="nav-link">Reports</a>
+        <a href="notifications.html" class="nav-link">Notifications</a>
+        <a href="notifiers.html" class="nav-link">Notifiers</a>
+        <a href="subscribers.html" class="nav-link">Subscribers</a>
+        <a href="templates.html" class="nav-link nav-link-active">Templates</a>
+        <a href="overseerr.html" class="nav-link">Overseerr</a>
+        <a href="system.html" class="nav-link">System</a>
+      </nav>
+    </aside>
+    <div class="app-main">
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="settings-toggle" title="Toggle sidebar">☰</button>
+          <span class="topbar-title">Newsletter templates</span>
+        </div>
+      </header>
+      <main class="main-content">
+        <div class="page-header">
+          <h1>Newsletter templates</h1>
+          <span class="badge">Settings · Newsletter</span>
+        </div>
+
+        <div class="layout-two">
+          <div class="card">
+            <h2>Templates</h2>
+            <div class="row">
+              <button class="btn" id="tplNewBtn">New template</button>
+              <button class="btn btn-secondary" id="tplDeleteBtn">Delete</button>
+              <span id="tplStatus" class="status"></span>
+            </div>
+            <div class="template-list" id="tplList"></div>
+            <div class="hint">Templates are stored in config.json under <code>newsletterTemplates</code> and are used by the Subscribers page when sending newsletters.</div>
+          </div>
+
+          <div class="card">
+            <h2>Editor &amp; preview</h2>
+            <label>
+              Template name
+              <input type="text" id="tplName" placeholder="Weekly recently added" />
+            </label>
+            <label>
+              Subject
+              <input type="text" id="tplSubject" placeholder="Your weekly new content" />
+            </label>
+            <label>
+              Body
+              <textarea id="tplBody" placeholder="Use a friendly tone. You can click 'Preview with Plex recently added' to see how a recent-items block could look."></textarea>
+            </label>
+            <div class="row">
+              <button class="btn" id="tplSaveBtn">Save template</button>
+              <button class="btn btn-secondary" id="tplRevertBtn">Revert changes</button>
+            </div>
+            <div class="hint">Changes are not saved until you click "Save template". Newsletter sending uses the raw subject and body text you define here.</div>
+
+            <h3 style="margin-top:14px;">Preview</h3>
+            <div class="row" style="margin-bottom:6px;">
+              <button class="btn btn-secondary" id="previewReloadBtn">Preview with Plex recently added</button>
+              <span id="previewStatus" class="status"></span>
+            </div>
+            <div class="preview-box" id="previewBox">
+              <div class="preview-header">
+                <span class="preview-title" id="previewSubject">(no subject)</span>
+                <span id="previewMeta"></span>
+              </div>
+              <div id="previewBody">Start editing a template to see a preview.</div>
+            </div>
+            <div class="hint">Preview uses live data from /api/newsletter/plex/recently-added (limited to a few items) and shows how a "Recently added" section could be presented beneath your body text.</div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script>
+    (function(){
+      const appShell = document.querySelector('.app-shell');
+      const settingsToggle = document.querySelector('.settings-toggle');
+      const stored = localStorage.getItem('omnistreamSidebarCollapsed');
+      const initialCollapsed = stored === '1';
+      if (appShell && initialCollapsed) {
+        appShell.classList.add('sidebar-collapsed');
+      }
+      if (appShell && settingsToggle) {
+        settingsToggle.addEventListener('click', () => {
+          const collapsed = appShell.classList.toggle('sidebar-collapsed');
+          localStorage.setItem('omnistreamSidebarCollapsed', collapsed ? '1' : '0');
+        });
+      }
+    })();
+
+    let templates = [];
+    let selectedId = null;
+    let originalSnapshot = null;
+
+    function renderTemplateList(){
+      const list = document.getElementById('tplList');
+      list.innerHTML = '';
+      if (!templates.length){
+        const empty = document.createElement('div');
+        empty.style.padding = '10px';
+        empty.style.fontSize = '12px';
+        empty.style.color = 'var(--text-muted)';
+        empty.textContent = 'No templates yet. Create one to get started.';
+        list.appendChild(empty);
+        return;
+      }
+      templates.forEach(t => {
+        const row = document.createElement('div');
+        row.className = 'template-item' + (t.id === selectedId ? ' template-item-active' : '');
+        row.dataset.id = t.id;
+        const left = document.createElement('div');
+        left.innerHTML = `<div class="template-item-name">${t.name || '(unnamed template)'}</div><div class="template-item-subject">${t.subject || ''}</div>`;
+        const right = document.createElement('div');
+        right.className = 'template-actions';
+        const useBtn = document.createElement('button');
+        useBtn.className = 'btn btn-secondary';
+        useBtn.type = 'button';
+        useBtn.textContent = 'Use in newsletter';
+        useBtn.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          localStorage.setItem('omnistreamNewsletterTemplateId', t.id);
+          const status = document.getElementById('tplStatus');
+          status.textContent = 'Template will be pre-selected on Subscribers page.';
+          status.className = 'status status-ok';
+        });
+        right.appendChild(useBtn);
+        row.appendChild(left);
+        row.appendChild(right);
+        row.addEventListener('click', () => {
+          selectTemplate(t.id);
+        });
+        list.appendChild(row);
+      });
+    }
+
+    function loadIntoEditor(t){
+      selectedId = t ? t.id : null;
+      originalSnapshot = t ? { id: t.id, name: t.name || '', subject: t.subject || '', body: t.body || '' } : null;
+      document.getElementById('tplName').value = t ? (t.name || '') : '';
+      document.getElementById('tplSubject').value = t ? (t.subject || '') : '';
+      document.getElementById('tplBody').value = t ? (t.body || '') : '';
+      renderTemplateList();
+      updatePreviewStatic();
+    }
+
+    function selectTemplate(id){
+      const t = templates.find(x => x.id === id);
+      if (!t) return;
+      loadIntoEditor(t);
+      const status = document.getElementById('tplStatus');
+      status.textContent = '';
+      status.className = 'status';
+    }
+
+    async function fetchTemplates(){
+      const status = document.getElementById('tplStatus');
+      status.textContent = 'Loading templates...';
+      status.className = 'status';
+      try{
+        const r = await fetch('/api/config/app');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const data = await r.json();
+        const list = Array.isArray(data.newsletterTemplates) ? data.newsletterTemplates : [];
+        templates = list.map((t, idx) => ({
+          id: t.id || String(idx+1),
+          name: t.name || '',
+          subject: t.subject || '',
+          body: t.body || ''
+        }));
+        const storedId = localStorage.getItem('omnistreamNewsletterTemplateId');
+        if (storedId && templates.some(x => x.id === storedId)){
+          loadIntoEditor(templates.find(x => x.id === storedId));
+        } else if (templates.length){
+          loadIntoEditor(templates[0]);
+        } else {
+          loadIntoEditor(null);
+        }
+        status.textContent = '';
+        status.className = 'status';
+      }catch(e){
+        console.error('Failed to load templates', e);
+        status.textContent = 'Failed to load templates. See console/logs.';
+        status.className = 'status status-error';
+      }
+    }
+
+    async function saveTemplates(){
+      const status = document.getElementById('tplStatus');
+      status.textContent = 'Saving...';
+      status.className = 'status';
+      try{
+        const clean = templates.map((t, idx) => ({
+          id: t.id || String(idx+1),
+          name: t.name || '',
+          subject: t.subject || '',
+          body: t.body || ''
+        }));
+        const resp = await fetch('/api/config/app', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ newsletterTemplates: clean })
+        });
+        if (!resp.ok){
+          const text = await resp.text().catch(() => '');
+          throw new Error(text || ('HTTP ' + resp.status));
+        }
+        await resp.json().catch(() => ({}));
+        templates = clean;
+        if (selectedId && !templates.some(t => t.id === selectedId)){
+          selectedId = templates.length ? templates[0].id : null;
+        }
+        originalSnapshot = selectedId ? { ...templates.find(t => t.id === selectedId) } : null;
+        renderTemplateList();
+        status.textContent = 'Templates saved.';
+        status.className = 'status status-ok';
+      }catch(e){
+        console.error('Failed to save templates', e);
+        status.textContent = 'Save failed. Check server logs.';
+        status.className = 'status status-error';
+      }
+    }
+
+    function updatePreviewStatic(){
+      const subj = document.getElementById('tplSubject').value || '(no subject)';
+      const body = document.getElementById('tplBody').value || '';
+      document.getElementById('previewSubject').textContent = subj;
+      document.getElementById('previewMeta').textContent = '';
+      document.getElementById('previewBody').textContent = body || 'Start editing a template to see a preview.';
+    }
+
+    async function loadPreview(){
+      const status = document.getElementById('previewStatus');
+      status.textContent = 'Loading Plex recently added...';
+      status.className = 'status';
+      const subj = document.getElementById('tplSubject').value || '(no subject)';
+      const body = document.getElementById('tplBody').value || '';
+      try{
+        const r = await fetch('/api/newsletter/plex/recently-added?limit=5');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const data = await r.json();
+        const items = Array.isArray(data.items) ? data.items : [];
+        document.getElementById('previewSubject').textContent = subj;
+        const meta = document.getElementById('previewMeta');
+        meta.textContent = items.length ? (items.length + ' recently added items') : 'No recent items';
+        const bodyEl = document.getElementById('previewBody');
+        const frag = document.createElement('div');
+        const bodyDiv = document.createElement('div');
+        bodyDiv.textContent = body || 'Start editing a template to see a preview.';
+        frag.appendChild(bodyDiv);
+        if (items.length){
+          const h = document.createElement('div');
+          h.style.marginTop = '10px';
+          h.style.fontWeight = '500';
+          h.textContent = 'Recently added';
+          frag.appendChild(h);
+          const ul = document.createElement('ul');
+          ul.className = 'preview-list';
+          items.forEach(it => {
+            const li = document.createElement('li');
+            let line = it.title || '';
+            if (it.year) line += ' (' + it.year + ')';
+            if (it.serverName) line += ' · ' + it.serverName;
+            li.textContent = line;
+            ul.appendChild(li);
+          });
+          frag.appendChild(ul);
+        }
+        bodyEl.innerHTML = '';
+        bodyEl.appendChild(frag);
+        status.textContent = 'Preview updated.';
+        status.className = 'status status-ok';
+      }catch(e){
+        console.error('Failed to load preview', e);
+        status.textContent = 'Preview failed. Check server logs.';
+        status.className = 'status status-error';
+        updatePreviewStatic();
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('tplNewBtn').addEventListener('click', () => {
+        const id = 'tpl-' + Date.now();
+        const t = { id, name: 'New template', subject: '', body: '' };
+        templates.push(t);
+        loadIntoEditor(t);
+        const status = document.getElementById('tplStatus');
+        status.textContent = 'New template created. Remember to save.';
+        status.className = 'status';
+      });
+
+      document.getElementById('tplDeleteBtn').addEventListener('click', () => {
+        if (!selectedId) return;
+        const idx = templates.findIndex(t => t.id === selectedId);
+        if (idx === -1) return;
+        templates.splice(idx, 1);
+        selectedId = templates.length ? templates[Math.max(0, idx-1)].id : null;
+        const next = selectedId ? templates.find(t => t.id === selectedId) : null;
+        loadIntoEditor(next);
+        saveTemplates();
+      });
+
+      document.getElementById('tplSaveBtn').addEventListener('click', () => {
+        if (!selectedId){
+          const id = 'tpl-' + Date.now();
+          const t = { id, name: '', subject: '', body: '' };
+          templates.push(t);
+          selectedId = id;
+        }
+        const t = templates.find(x => x.id === selectedId);
+        if (!t) return;
+        t.name = document.getElementById('tplName').value.trim() || 'Unnamed template';
+        t.subject = document.getElementById('tplSubject').value.trim();
+        t.body = document.getElementById('tplBody').value;
+        saveTemplates();
+      });
+
+      document.getElementById('tplRevertBtn').addEventListener('click', () => {
+        if (!originalSnapshot){
+          loadIntoEditor(null);
+        } else {
+          const t = templates.find(x => x.id === originalSnapshot.id);
+          if (t){
+            loadIntoEditor({ ...t });
+          } else {
+            loadIntoEditor(null);
+          }
+        }
+      });
+
+      ['tplName','tplSubject','tplBody'].forEach(id => {
+        const el = document.getElementById(id);
+        el.addEventListener('input', () => {
+          updatePreviewStatic();
+        });
+      });
+
+      document.getElementById('previewReloadBtn').addEventListener('click', () => {
+        loadPreview();
+      });
+
+      fetchTemplates();
+    });
+  </script>
+</body>
+</html>

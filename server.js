@@ -1933,6 +1933,102 @@ app.get('/api/subscribers/summary', (req, res) => {
     }
   });
 
+  // Helper: fetch recently added items from enabled Plex servers
+  async function fetchPlexRecentlyAdded({ perServer = 10 } = {}) {
+    const enabledPlex = servers.filter(s => !s.disabled && s.type === 'plex' && s.token);
+    const results = [];
+    for (const server of enabledPlex) {
+      const base = (server.baseUrl || '').replace(/\/$/, '');
+      const url = base + '/library/recentlyAdded';
+      const headers = {};
+      const params = {
+        'X-Plex-Container-Start': 0,
+        'X-Plex-Container-Size': perServer
+      };
+      const tokenLoc = server.tokenLocation || 'query';
+      if (tokenLoc === 'header') {
+        headers['X-Plex-Token'] = server.token;
+      } else {
+        params['X-Plex-Token'] = server.token;
+      }
+      try {
+        const resp = await axios.get(url, { headers, params, timeout: 15000 });
+        const mc = resp.data && resp.data.MediaContainer ? resp.data.MediaContainer : null;
+        const items = mc && Array.isArray(mc.Metadata) ? mc.Metadata : [];
+        items.forEach(m => {
+          const rawType = (m.type || '').toLowerCase();
+          const isMovie = rawType === 'movie';
+          const isEpisode = rawType === 'episode';
+          if (!isMovie && !isEpisode) return;
+          let title;
+          if (isEpisode || m.grandparentTitle) {
+            const series = m.grandparentTitle || '';
+            const epName = m.title || '';
+            const seasonNum = typeof m.parentIndex === 'number' ? m.parentIndex : null;
+            const epNum = typeof m.index === 'number' ? m.index : null;
+            let epLabel = '';
+            if (seasonNum !== null && epNum !== null) {
+              epLabel = `S${String(seasonNum).padStart(2, '0')}E${String(epNum).padStart(2, '0')}`;
+            } else if (epNum !== null) {
+              epLabel = `E${String(epNum).padStart(2, '0')}`;
+            }
+            if (series && epLabel && epName) {
+              title = `${series} - ${epLabel} - ${epName}`;
+            } else if (series && epName) {
+              title = `${series} - ${epName}`;
+            } else {
+              title = epName || series || m.title || m.originalTitle || 'Unknown';
+            }
+          } else {
+            title = m.title || m.originalTitle || 'Unknown';
+          }
+          let addedAtIso;
+          if (typeof m.addedAt === 'number') {
+            addedAtIso = new Date(m.addedAt * 1000).toISOString();
+          } else if (typeof m.addedAt === 'string') {
+            const parsed = Date.parse(m.addedAt);
+            addedAtIso = Number.isNaN(parsed) ? new Date().toISOString() : new Date(parsed).toISOString();
+          } else {
+            addedAtIso = new Date().toISOString();
+          }
+          results.push({
+            serverId: server.id,
+            serverName: server.name || server.baseUrl,
+            type: isMovie ? 'movie' : 'episode',
+            title,
+            year: m.year || null,
+            addedAt: addedAtIso
+          });
+        });
+      } catch (e) {
+        console.error(`[OmniStream] Failed to fetch recently added from Plex server ${server.name || server.baseUrl}:`, e.message);
+      }
+    }
+    // Sort newest first
+    results.sort((a, b) => {
+      const ta = Date.parse(a.addedAt) || 0;
+      const tb = Date.parse(b.addedAt) || 0;
+      return tb - ta;
+    });
+    return results;
+  }
+
+  // Expose recently added Plex items for newsletter/template helpers
+  app.get('/api/newsletter/plex/recently-added', async (req, res) => {
+    try {
+      const limit = Number(req.query.limit) || 20;
+      const perServer = Number(req.query.perServer) || 10;
+      const items = await fetchPlexRecentlyAdded({ perServer });
+      res.json({
+        total: items.length,
+        items: items.slice(0, limit)
+      });
+    } catch (e) {
+      console.error('[OmniStream] /api/newsletter/plex/recently-added failed:', e.message);
+      res.status(500).json({ error: 'Failed to fetch recently added from Plex' });
+    }
+  });
+
 // Compact summary for Home Assistant and other external dashboards
 // Provides a stable, low-noise JSON shape that can be used with
 // Home Assistant REST sensors or templates.

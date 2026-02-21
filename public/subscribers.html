@@ -41,6 +41,10 @@
     th,td{padding:6px 8px;border-bottom:1px solid rgba(148,163,184,0.25);text-align:left;}
     th{color:var(--text-main);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:0.04em;}
     tbody tr:nth-child(even){background:rgba(15,23,42,0.35);}
+    .newsletter-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 14px 0;}
+    .newsletter-tab{padding:4px 10px;border-radius:999px;border:1px solid var(--btn-border);background:transparent;color:var(--text-muted);font-size:12px;cursor:pointer;}
+    .newsletter-tab-active{background:var(--btn-bg);color:var(--btn-text);}
+    .newsletter-panel{display:none;}
   </style>
 </head>
 <body>
@@ -69,10 +73,18 @@
     <main class="main-content">
       <button class="sidebar-toggle" id="sidebarToggle">Hide menu</button>
       <h1>Subscribers</h1>
+      <div class="newsletter-tabs">
+        <button type="button" class="newsletter-tab" data-panel="email">Email settings</button>
+        <button type="button" class="newsletter-tab" data-panel="send">Send newsletter</button>
+        <button type="button" class="newsletter-tab" data-panel="subscribers">Subscriber list</button>
+      </div>
 
-      <div class="card">
+      <div class="card newsletter-panel" data-panel="email">
         <h2>Newsletter email settings</h2>
         <div class="row"><b>Enabled:</b> <span id="nlEnabledLabel">-</span></div>
+        <label>
+          <input type="checkbox" id="nlEnabled"> Enable newsletter email
+        </label>
         <label>
           From address
           <input type="text" id="nlFrom" placeholder="OmniStream &lt;omnistream@example.com&gt;">
@@ -81,10 +93,31 @@
           To (optional, for logs)
           <input type="text" id="nlTo" placeholder="Optional primary recipient; subscribers go in BCC.">
         </label>
-        <div class="hint">These settings are separate from alert notifications. SMTP details can be configured in config.json under <code>newsletterEmail.smtp</code> if needed.</div>
+        <label>
+          SMTP host
+          <input type="text" id="nlSmtpHost" placeholder="smtp.example.com">
+        </label>
+        <label>
+          Port
+          <input type="number" id="nlSmtpPort" placeholder="587" style="max-width:140px;">
+        </label>
+        <label>
+          <input type="checkbox" id="nlSmtpSecure"> Use TLS (secure)
+        </label>
+        <label>
+          SMTP username
+          <input type="text" id="nlSmtpUser" placeholder="smtp user">
+        </label>
+        <label>
+          SMTP password
+          <input type="password" id="nlSmtpPass" placeholder="smtp password">
+        </label>
+        <button class="btn" id="nlSaveBtn">Save email settings</button>
+        <span id="nlSaveStatus" class="row"></span>
+        <div class="hint">These settings are separate from alert notifications. Credentials are stored in config.json under <code>newsletterEmail</code>.</div>
       </div>
 
-      <div class="card">
+      <div class="card newsletter-panel" data-panel="send">
         <h2>Send newsletter</h2>
         <div class="row">
           <label style="display:inline-block;margin-right:8px;">
@@ -102,10 +135,10 @@
         </label>
         <button class="btn" id="nlSendBtn">Send newsletter to active subscribers</button>
         <span id="nlSendStatus" class="row"></span>
-        <div class="hint">Uses the dedicated newsletter email settings above. Recipients are BCC'd and come from the active subscribers list.</div>
+        <div class="hint">Uses the dedicated newsletter email settings. Recipients are BCC'd and come from the active subscribers list.</div>
       </div>
 
-      <div class="card">
+      <div class="card newsletter-panel" data-panel="subscribers">
         <h2>Subscriber list</h2>
         <div class="row" id="subsSummary">Loading subscriber summary...</div>
         <button class="btn" id="subsRefreshBtn">Refresh subscribers</button>
@@ -149,7 +182,26 @@
         });
       }
     })();
+      }
 
+      const tabs = document.querySelectorAll('.newsletter-tab');
+      const panels = document.querySelectorAll('.newsletter-panel');
+      function showPanel(name) {
+        tabs.forEach(tab => {
+          tab.classList.toggle('newsletter-tab-active', tab.dataset.panel === name);
+        });
+        panels.forEach(panel => {
+          panel.style.display = panel.dataset.panel === name ? 'block' : 'none';
+        });
+        localStorage.setItem('omnistreamNewsletterTab', name);
+      }
+      if (tabs.length && panels.length) {
+        const saved = localStorage.getItem('omnistreamNewsletterTab') || 'email';
+        showPanel(saved);
+        tabs.forEach(tab => {
+          tab.addEventListener('click', () => showPanel(tab.dataset.panel));
+        });
+      }
     async function loadNewsletterConfig() {
       try {
         const r = await fetch('/api/config/app');
@@ -161,10 +213,24 @@
         const to = cfg.to || '';
         const lbl = document.getElementById('nlEnabledLabel');
         if (lbl) lbl.textContent = enabled ? 'Yes' : 'No (disabled)';
+        const enabledInput = document.getElementById('nlEnabled');
         const fromInput = document.getElementById('nlFrom');
         const toInput = document.getElementById('nlTo');
+        const smtp = cfg.smtp || {};
+        const auth = smtp.auth || {};
+        if (enabledInput) enabledInput.checked = enabled;
         if (fromInput) fromInput.value = from;
         if (toInput) toInput.value = to;
+        const hostInput = document.getElementById('nlSmtpHost');
+        const portInput = document.getElementById('nlSmtpPort');
+        const secureInput = document.getElementById('nlSmtpSecure');
+        const userInput = document.getElementById('nlSmtpUser');
+        const passInput = document.getElementById('nlSmtpPass');
+        if (hostInput) hostInput.value = smtp.host || '';
+        if (portInput) portInput.value = smtp.port != null ? smtp.port : '';
+        if (secureInput) secureInput.checked = !!smtp.secure;
+        if (userInput) userInput.value = auth.user || '';
+        if (passInput && auth.pass) passInput.value = auth.pass;
 
         const templates = Array.isArray(data.newsletterTemplates) ? data.newsletterTemplates : [];
         const sel = document.getElementById('nlTemplateSelect');
@@ -321,31 +387,45 @@
         statusEl.className = 'row status-error';
       }
     });
-
-    // Persist basic newsletter email settings when inputs blur
-    ['nlFrom','nlTo'].forEach(id => {
-      const el = document.getElementById(id);
-      if (!el) return;
-      el.addEventListener('blur', async () => {
-        try {
-          const fromInput = document.getElementById('nlFrom');
-          const toInput = document.getElementById('nlTo');
-          const payload = {
-            newsletterEmail: {
-              from: fromInput ? fromInput.value.trim() : '',
-              to: toInput ? toInput.value.trim() : ''
+    document.getElementById('nlSaveBtn').addEventListener('click', async () => {
+      const statusEl = document.getElementById('nlSaveStatus');
+      statusEl.textContent = 'Saving...';
+      statusEl.className = 'row';
+      try {
+        const payload = {
+          newsletterEmail: {
+            enabled: document.getElementById('nlEnabled').checked,
+            from: document.getElementById('nlFrom').value.trim(),
+            to: document.getElementById('nlTo').value.trim(),
+            smtp: {
+              host: document.getElementById('nlSmtpHost').value.trim() || undefined,
+              port: Number(document.getElementById('nlSmtpPort').value) || undefined,
+              secure: document.getElementById('nlSmtpSecure').checked,
+              auth: {
+                user: document.getElementById('nlSmtpUser').value.trim() || undefined,
+                pass: document.getElementById('nlSmtpPass').value || undefined
+              }
             }
-          };
-          await fetch('/api/config/app', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
-          loadNewsletterConfig();
-        } catch (e) {
-          console.error('Failed to save newsletter email config:', e);
+          }
+        };
+        const resp = await fetch('/api/config/app', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => '');
+          throw new Error(text || ('HTTP ' + resp.status));
         }
-      });
+        await resp.json().catch(() => ({}));
+        statusEl.textContent = 'Email settings saved.';
+        statusEl.className = 'row status-ok';
+        loadNewsletterConfig();
+      } catch (e) {
+        console.error('Failed to save newsletter email config:', e);
+        statusEl.textContent = 'Save failed. Check server logs.';
+        statusEl.className = 'row status-error';
+      }
     });
 
     loadNewsletterConfig();
