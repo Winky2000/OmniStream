@@ -867,12 +867,16 @@ function summaryFromResponse(resp) {
         const viewOffsetSec = m.viewOffset ? Math.round(m.viewOffset / 1000) : 0;
         const progressPct = m.progress || (durationSec > 0 ? Math.round(viewOffsetSec / durationSec * 100) : 0);
 
+        const media0 = Array.isArray(m.Media) && m.Media.length ? m.Media[0] : {};
+
         // Derive a quality label when Plex does not provide one directly
         let quality = m.quality || '';
         if (!quality) {
           let resolution = '';
           if (m.Video && m.Video[0]) {
             resolution = m.Video[0].resolution || '';
+          } else if (media0.videoResolution) {
+            resolution = media0.videoResolution;
           }
           if (resolution && bandwidth) {
             quality = `${resolution} (${bandwidth.toFixed(1)} Mbps)`;
@@ -882,6 +886,56 @@ function summaryFromResponse(resp) {
             quality = resolution;
           }
         }
+
+        // Stream / container / video / audio details for UI display
+        let stream = m.stream || m.transcodeDecision || '';
+        if (!stream) {
+          stream = transcoding ? 'Transcode' : 'Direct Play';
+        }
+
+        let container = m.container || media0.container || '';
+
+        let video = m.video || '';
+        if (!video) {
+          if (m.Video && m.Video[0]) {
+            const v = m.Video[0];
+            const dec = v.decision || (transcoding ? 'Transcode' : 'Direct Play');
+            const codec = v.codec || '';
+            const res = v.resolution || '';
+            const parts = [];
+            if (dec) parts.push(dec);
+            const right = [codec, res].filter(Boolean).join(' ');
+            if (right) parts.push(`(${right})`);
+            video = parts.join(' ');
+          } else if (media0.videoCodec || media0.videoResolution) {
+            const parts = [];
+            if (media0.videoCodec) parts.push(media0.videoCodec.toString().toUpperCase());
+            if (media0.videoResolution) parts.push(media0.videoResolution);
+            video = parts.join(' ');
+          }
+        }
+
+        let audio = m.audio || '';
+        if (!audio) {
+          if (m.Audio && m.Audio[0]) {
+            const a = m.Audio[0];
+            const dec = a.decision || (transcoding ? 'Transcode' : 'Direct Play');
+            const lang = a.language || '';
+            const codec = a.codec || '';
+            const ch = a.channels || '';
+            const pieces = [];
+            if (dec) pieces.push(dec);
+            const right = [lang, codec, ch ? `${ch}ch` : ''].filter(Boolean).join(' ');
+            if (right) pieces.push(`(${right})`);
+            audio = pieces.join(' ');
+          } else if (media0.audioCodec || media0.audioChannels) {
+            const parts = [];
+            if (media0.audioCodec) parts.push(media0.audioCodec.toString().toUpperCase());
+            if (media0.audioChannels) parts.push(`${media0.audioChannels}ch`);
+            audio = parts.join(' ');
+          }
+        }
+
         return {
           user: m.user || m.User?.title || 'Unknown',
           title: m.media_title || m.title || m.grandparentTitle || 'Unknown',
@@ -898,10 +952,10 @@ function summaryFromResponse(resp) {
           product: m.product || m.Player?.product || '',
           player: m.player || m.Player?.title || '',
           quality,
-          stream: m.stream || m.transcodeDecision || '',
-          container: m.container || '',
-          video: m.video || (m.Video && m.Video[0] ? `${m.Video[0].decision || ''} (${m.Video[0].codec || ''} ${m.Video[0].resolution || ''})` : ''),
-          audio: m.audio || (m.Audio && m.Audio[0] ? `${m.Audio[0].decision || ''} (${m.Audio[0].language || ''} ${m.Audio[0].codec || ''} ${m.Audio[0].channels || ''})` : ''),
+          stream,
+          container,
+          video,
+          audio,
           subtitle: m.subtitle || (m.Subtitle && m.Subtitle[0] ? `${m.Subtitle[0].language || ''}` : 'None'),
           location: m.location || (m.Player?.local ? 'LAN' : 'WAN'),
           ip: m.Player?.address || '',
