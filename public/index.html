@@ -181,7 +181,7 @@
     .session-top-meta > div{display:flex;align-items:center;gap:6px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
     .session-top-meta-label{font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#9ca3af;min-width:60px;flex-shrink:0;}
     .session-top-meta-value{font-size:11px;color:#e5e7eb;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-    .session-info-list{margin-top:4px;display:flex;flex-direction:column;gap:1px;font-size:11px;color:#cbd5f5;}
+    .session-info-list{margin-top:6px;display:flex;flex-direction:column;gap:1px;font-size:11px;color:#cbd5f5;}
     .session-info-list div{display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
     .session-info-list b{display:inline-block;min-width:70px;font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:#9ca3af;font-weight:600;}
     .badge-health-good{border-color:#4caf50;color:#c8e6c9;}
@@ -535,7 +535,7 @@
               if (typeof sess.episodeNumber === 'number') parts.push('Episode ' + sess.episodeNumber);
               seasonEpisodeLabel = parts.join(' • ');
             }
-            // Top meta row: Product / Player / Quality
+            // Top meta column: Product / Player / Quality (stacked)
             const topMeta = document.createElement('div');
             topMeta.className = 'session-top-meta';
             function addTop(label, value) {
@@ -557,38 +557,7 @@
             if (topMeta.childNodes.length > 0) {
               info.appendChild(topMeta);
             }
-            // Badge row: WAN / HDR / 4K / codec / product
-            const badgeRow = document.createElement('div');
-            badgeRow.className = 'badge-row';
-            function addBadge(text, extraClass, titleText) {
-              if (!text) return;
-              const b = document.createElement('span');
-              b.className = 'badge' + (extraClass ? ' ' + extraClass : '');
-              b.textContent = text;
-              if (titleText) b.title = titleText;
-              badgeRow.appendChild(b);
-            }
-            const isWan = sess.location && sess.location.toUpperCase().includes('WAN');
-            if (isWan) addBadge('WAN', 'badge-wan', 'WAN session');
-            const qualityStr = (sess.quality || sess.video || '').toString().toUpperCase();
-            const is4K = qualityStr.includes('4K') || qualityStr.includes('2160');
-            if (is4K) addBadge('4K', 'badge-uhd', 'Ultra HD');
-            const videoInfo = (sess.video || '').toString().toUpperCase();
-            const isHdr = videoInfo.includes('HDR') || videoInfo.includes('DOLBY VISION') || videoInfo.includes('HLG');
-            if (isHdr) addBadge('HDR', 'badge-hdr', 'High Dynamic Range');
-            if (sess.video) {
-              const codecMatch = sess.video.match(/([A-Za-z0-9]+)(?:\s|\/|$)/);
-              if (codecMatch && codecMatch[1]) {
-                addBadge(codecMatch[1].toUpperCase(), 'badge-codec', sess.video);
-              }
-            }
-            if (sess.product) {
-              addBadge(sess.product, 'badge-product', 'Client: ' + sess.product);
-            }
-            if (badgeRow.childNodes.length > 0) {
-              info.appendChild(badgeRow);
-            }
-            // Info list (excluding Product/Player/Quality, which are shown above)
+            // Info list: Stream, Container, Video, Audio, Subtitle (each on its own line)
             const infoList = document.createElement('div');
             infoList.className = 'session-info-list';
             function addInfo(label, value) {
@@ -604,14 +573,6 @@
             addInfo('Video', sess.video);
             addInfo('Audio', sess.audio);
             addInfo('Subtitle', sess.subtitle);
-            addInfo('Location', sess.location);
-            addInfo('Channel', sess.channel);
-            if (sess.location && sess.location.toUpperCase().includes('WAN')) {
-              addInfo('WAN', sess.ip);
-            }
-            if (typeof sess.bandwidth === 'number' && sess.bandwidth > 0) {
-              addInfo('Bandwidth', sess.bandwidth.toFixed(1) + ' Mbps');
-            }
             info.appendChild(infoList);
             row.appendChild(info);
             // Append the combined row for both layouts so sessions never appear empty
