@@ -196,6 +196,44 @@ OmniStream can send basic alerts when something important happens.
 
 ---
 
+## History, reports, and per-server views
+
+OmniStream keeps a lightweight history of what has been playing across your servers and builds reports from that.
+
+- **History storage**
+	- Stored in `history.db` (SQLite) in the app directory.
+	- By default, OmniStream keeps the most recent 500 entries to avoid unbounded growth.
+	- You can change this via `config.json` using `maxHistory`:
+		- `maxHistory: 500` (default) – keep at most 500 rows.
+		- `maxHistory: 0` or any value `< 0` – disable automatic trimming and keep full history.
+	- When trimming is disabled, history grows over time and is retained across restarts (as long as `history.db` is persisted).
+
+- **How reports count plays**
+	- The **Reports** page does not count every raw poll row as a separate play.
+	- Instead, it collapses repeated samples into approximate **play events** to avoid over-counting long sessions.
+	- A new event is counted when a `(user, title)` pair has been idle for 30 minutes or more and then appears again.
+	- All top users/titles, last 24h/7d counts, busiest day, and peak hour metrics are based on these deduplicated events.
+
+- **Per-server reports**
+	- At the top of the **Reports** page there is a **Scope** dropdown.
+	- Choose **All servers** to see aggregate activity across every enabled server.
+	- Choose a specific server to filter:
+		- Current streams
+		- Unique play events (recent)
+		- Plays last 24 hours and last 7 days
+		- Busiest day and peak hour
+		- Top titles and top users
+	- The note next to the dropdown confirms which server (or all servers) you are currently viewing.
+
+- **Importing server-side watch history**
+	- The **Import history** action calls `POST /api/import-history` to pull past plays from your media servers.
+	- **Jellyfin / Emby**: imports played Movies and Episodes per user (ignores library folders/views) and writes them into `history.db`.
+	- **Plex**: imports recent watch history from Plex's history endpoint and writes Movie/Episode plays into `history.db`.
+	- Imported rows are treated the same as live history; they affect the History page and all Reports metrics.
+	- If you want to keep everything your servers report, set `maxHistory` to `0` before importing so OmniStream does not trim older rows.
+
+---
+
 ## Running on unRAID
 
 An example unRAID Docker template is provided at:

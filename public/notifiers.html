@@ -50,12 +50,21 @@
         <a href="reports.html" class="nav-link">Reports</a>
         <a href="notifications.html" class="nav-link">Notifications</a>
         <div class="settings-group">
+          <button type="button" class="nav-link newsletter-toggle">Newsletter</button>
+          <div class="settings-submenu newsletter-submenu">
+            <a href="overseerr.html" class="submenu-link">Overseerr</a>
+            <a href="subscribers.html" class="submenu-link">Subscribers</a>
+            <a href="templates.html" class="submenu-link">Templates</a>
+          </div>
+        </div>
+        <div class="settings-group">
           <button type="button" class="nav-link nav-link-active settings-toggle">Settings</button>
           <div class="settings-submenu open">
             <a href="admin.html" class="submenu-link">Connected servers</a>
             <a href="servers.html" class="submenu-link">Servers</a>
             <a href="display.html" class="submenu-link">Themes &amp; layout</a>
             <a href="notifiers.html" class="submenu-link submenu-link-active">Notifiers</a>
+            <a href="system.html" class="submenu-link">System</a>
           </div>
         </div>
       </nav>
@@ -74,12 +83,24 @@
       <input type="checkbox" id="ruleWanTranscodes"> Notify on WAN transcodes
     </label>
     <label class="inline">
+      <input type="checkbox" id="ruleAnyWan"> Notify when any WAN stream is active
+    </label>
+    <label class="inline">
       <span style="flex:1;min-width:0;">
         Notify on high total bandwidth above (Mbps)
         <input type="number" id="ruleHighBandwidthThreshold" value="50" style="max-width:120px;">
       </span>
       <span class="inline" style="gap:4px;">
         <input type="checkbox" id="ruleHighBandwidth"> Enable high-bandwidth alerts
+      </span>
+    </label>
+    <label class="inline">
+      <span style="flex:1;min-width:0;">
+        Notify on high WAN bandwidth above (Mbps)
+        <input type="number" id="ruleHighWanThreshold" value="30" style="max-width:120px;">
+      </span>
+      <span class="inline" style="gap:4px;">
+        <input type="checkbox" id="ruleHighWan"> Enable high-WAN-bandwidth alerts
       </span>
     </label>
     <div class="hint">These rules control when OmniStream generates alerts that are sent to your notifiers. Defaults are: offline, WAN transcodes, and bandwidth above 50 Mbps.</div>
@@ -273,9 +294,16 @@
       }
       const settingsToggle = document.querySelector('.settings-toggle');
       const settingsSubmenu = document.querySelector('.settings-submenu');
+      const newsletterToggle = document.querySelector('.newsletter-toggle');
+      const newsletterSubmenu = document.querySelector('.newsletter-submenu');
       if (settingsToggle && settingsSubmenu) {
         settingsToggle.addEventListener('click', () => {
           settingsSubmenu.classList.toggle('open');
+        });
+      }
+      if (newsletterToggle && newsletterSubmenu) {
+        newsletterToggle.addEventListener('click', () => {
+          newsletterSubmenu.classList.toggle('open');
         });
       }
 
@@ -327,6 +355,11 @@
         const highRule = rules.highBandwidth || {};
         document.getElementById('ruleHighBandwidth').checked = highRule.enabled !== false;
         document.getElementById('ruleHighBandwidthThreshold').value = highRule.thresholdMbps != null ? highRule.thresholdMbps : 50;
+        const anyWanRule = rules.anyWan || {};
+        document.getElementById('ruleAnyWan').checked = anyWanRule.enabled === true; // opt-in, default off
+        const highWanRule = rules.highWanBandwidth || {};
+        document.getElementById('ruleHighWan').checked = highWanRule.enabled !== false;
+        document.getElementById('ruleHighWanThreshold').value = highWanRule.thresholdMbps != null ? highWanRule.thresholdMbps : 30;
         document.getElementById('discordWebhook').value = discord.webhookUrl || '';
         document.getElementById('emailEnabled').checked = email.enabled === true;
         document.getElementById('emailFrom').value = email.from || '';
@@ -414,6 +447,13 @@
             highBandwidth: {
               enabled: document.getElementById('ruleHighBandwidth').checked,
               thresholdMbps: Number(document.getElementById('ruleHighBandwidthThreshold').value) || 50
+            },
+            anyWan: {
+              enabled: document.getElementById('ruleAnyWan').checked
+            },
+            highWanBandwidth: {
+              enabled: document.getElementById('ruleHighWan').checked,
+              thresholdMbps: Number(document.getElementById('ruleHighWanThreshold').value) || 30
             }
           },
           discord: {

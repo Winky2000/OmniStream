@@ -1,0 +1,364 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>OmniStream System</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="theme.css">
+  <style>
+    body{font-family:Segoe UI,Arial;background:var(--bg);color:var(--text-main);margin:0;padding:0}
+    .app-shell{display:flex;min-height:100vh;}
+    .sidebar{width:220px;background:#050814;border-right:1px solid rgba(15,23,42,0.8);padding:18px 16px;box-sizing:border-box;display:flex;flex-direction:column;gap:18px;}
+    .sidebar-brand{font-size:13px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:var(--text-muted);}
+    .sidebar-nav{display:flex;flex-direction:column;gap:4px;margin-top:8px;}
+    .nav-link{display:block;padding:8px 10px;border-radius:8px;font-size:13px;color:var(--text-muted);text-decoration:none;transition:background 0.15s,color 0.15s;}
+    .nav-link:hover{background:rgba(148,163,184,0.15);color:var(--text-main);}
+    .nav-link-active{background:rgba(59,130,246,0.18);color:#e5edff;border-left:3px solid var(--btn-border);padding-left:7px;}
+    .settings-group{margin-top:4px;}
+    .settings-submenu{display:none;flex-direction:column;gap:2px;padding-left:14px;margin-top:3px;}
+    .settings-submenu.open{display:flex;}
+    .submenu-link{display:block;padding:6px 10px;border-radius:8px;font-size:12px;color:var(--text-muted);text-decoration:none;}
+    .submenu-link:hover{background:rgba(148,163,184,0.15);color:var(--text-main);}
+    .submenu-link-active{background:rgba(59,130,246,0.18);color:#e5edff;}
+    .sidebar-toggle{margin-bottom:10px;padding:4px 10px;border-radius:999px;border:1px solid var(--btn-border);background:var(--btn-bg);color:var(--btn-text);cursor:pointer;font-size:12px;}
+    .sidebar-toggle:hover{background:var(--btn-bg-hover);color:var(--btn-text-hover);}
+    .app-shell.sidebar-collapsed .sidebar{display:none;}
+    .main-content{flex:1;box-sizing:border-box;padding:20px;}
+    h1{margin:0 0 8px 0;color:var(--text-main);letter-spacing:0.5px;font-size:1.8em;font-weight:600;}
+    .card{background:var(--card-bg);border-radius:14px;padding:16px 18px;box-shadow:0 12px 30px rgba(15,23,42,0.85);border:1px solid rgba(148,163,184,0.35);max-width:640px;margin-bottom:18px;}
+    .card h2{margin:0 0 8px 0;font-size:16px;color:var(--text-main);}
+    .row{font-size:13px;margin:4px 0;color:var(--text-muted);}
+    .row b{color:var(--text-main);}
+    .btn{margin-top:10px;padding:6px 14px;border-radius:8px;border:1px solid var(--btn-border);background:var(--btn-bg);color:var(--btn-text);cursor:pointer;font-size:13px;}
+    .btn:hover{background:var(--btn-bg-hover);color:var(--btn-text-hover);}
+    .hint{font-size:12px;color:var(--text-muted);margin-top:4px;}
+    .status-ok{color:#a5d6a7;}
+    .status-warn{color:#ffcc80;}
+    .status-error{color:#ff8a80;}
+    label{display:block;font-size:13px;margin:6px 0;color:var(--text-main);}
+    input[type="text"],input[type="number"],input[type="password"]{width:100%;max-width:420px;padding:6px 10px;border-radius:6px;border:1px solid #444;background:var(--bg);color:var(--text-main);box-sizing:border-box;}
+    .config-row{margin-top:4px;}
+    .config-actions{margin-top:8px;display:flex;align-items:center;gap:10px;font-size:12px;}
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="sidebar-brand">OmniStream</div>
+      <nav class="sidebar-nav">
+        <a href="index.html" class="nav-link">Dashboard</a>
+        <a href="history.html" class="nav-link">History</a>
+        <a href="reports.html" class="nav-link">Reports</a>
+        <a href="notifications.html" class="nav-link">Notifications</a>
+        <div class="settings-group">
+          <button type="button" class="nav-link newsletter-toggle">Newsletter</button>
+          <div class="settings-submenu newsletter-submenu">
+            <a href="overseerr.html" class="submenu-link">Overseerr</a>
+            <a href="subscribers.html" class="submenu-link">Subscribers</a>
+            <a href="templates.html" class="submenu-link">Templates</a>
+          </div>
+        </div>
+        <div class="settings-group">
+          <button type="button" class="nav-link nav-link-active settings-toggle">Settings</button>
+          <div class="settings-submenu open">
+            <a href="admin.html" class="submenu-link">Connected servers</a>
+            <a href="servers.html" class="submenu-link">Servers</a>
+            <a href="display.html" class="submenu-link">Themes &amp; layout</a>
+            <a href="notifiers.html" class="submenu-link">Notifiers</a>
+            <a href="system.html" class="submenu-link submenu-link-active">System</a>
+          </div>
+        </div>
+      </nav>
+    </aside>
+    <main class="main-content">
+      <button class="sidebar-toggle" id="sidebarToggle">Hide menu</button>
+      <h1>System</h1>
+      <div class="card" id="systemCard">
+        <h2>Runtime</h2>
+        <div class="row"><b>Version:</b> <span id="version">-</span></div>
+        <div class="row"><b>Uptime:</b> <span id="uptime">-</span></div>
+        <div class="row"><b>Now:</b> <span id="now">-</span></div>
+        <div class="row"><b>History DB path:</b> <span id="historyPath">-</span></div>
+        <div class="row"><b>Servers file path:</b> <span id="serversPath">-</span></div>
+        <div class="row"><b>History retention (maxHistory):</b> <span id="maxHistory">-</span></div>
+        <div class="hint">History DB and servers.json should both live on a persistent volume for safe upgrades and restarts.</div>
+      </div>
+
+      <div class="card" id="configCard">
+        <h2>Application config</h2>
+        <div class="config-row">
+          <label>
+            History retention (maxHistory)
+            <input type="number" id="cfgMaxHistory" placeholder="500">
+          </label>
+          <div class="hint">Number of history rows to keep. 
+            Use 0 or a negative value for no automatic trimming. Leave blank to use the built-in default (500).</div>
+        </div>
+        <div class="config-actions">
+          <button class="btn" id="configSaveBtn">Save config</button>
+          <span id="configStatus"></span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Polling health</h2>
+        <div class="row"><b>Last poll:</b> <span id="pollLastAt">-</span></div>
+        <div class="row"><b>Duration:</b> <span id="pollDuration">-</span></div>
+        <div class="row"><b>Last poll error:</b> <span id="pollError">None</span></div>
+        <div class="hint">If poll errors occur frequently, OmniStream may be having trouble talking to one or more servers (network, DNS, or token issues).</div>
+      </div>
+
+      <div class="card">
+        <h2>Backups</h2>
+        <div class="row">Download a zip containing <b>servers.json</b> and <b>history.db</b> for quick backup or migration.</div>
+        <button class="btn" id="backupBtn">Download backup (.zip)</button>
+        <div class="row" id="backupStatus" style="margin-top:6px;"></div>
+        <div class="hint">You can also back up the individual files directly from the host filesystem or via your Docker volume.</div>
+      </div>
+
+      <div class="card">
+        <h2>History imports</h2>
+        <div class="row"><b>Last import run:</b> <span id="importLastRun">Never</span></div>
+        <div class="row" id="importSummary">No import results recorded yet.</div>
+        <div class="hint">Use the Import History action on the Reports/History page or via the API to pull lifetime stats from Plex / Jellyfin / Emby.</div>
+      </div>
+
+      <div class="card">
+        <h2>Notifier health</h2>
+        <div class="row"><b>Last notifier error:</b> <span id="notifierError">None</span></div>
+        <div class="row"><b>When:</b> <span id="notifierErrorAt">-</span></div>
+        <div class="row"><b>Channel:</b> <span id="notifierErrorChannel">-</span></div>
+        <div class="hint">If alerts are not reaching their targets, check here for the most recent delivery error and then the server logs for full details.</div>
+      </div>
+
+      <div class="card">
+        <h2>Overseerr users</h2>
+        <div class="row"><b>Configured:</b> <span id="overseerrConfigured">No</span></div>
+        <button class="btn" id="overseerrFetchBtn">Fetch users from Overseerr</button>
+        <div class="row" id="overseerrStatus" style="margin-top:6px;"></div>
+        <div class="hint">Requires Overseerr baseUrl and apiKey in config.json under an <code>overseerr</code> block. Only users with an email address are counted.</div>
+      </div>
+    </main>
+  </div>
+  <script>
+    (function() {
+      const settingsToggle = document.querySelector('.settings-toggle');
+      const settingsSubmenu = document.querySelector('.settings-submenu');
+      const newsletterToggle = document.querySelector('.newsletter-toggle');
+      const newsletterSubmenu = document.querySelector('.newsletter-submenu');
+      const appShell = document.querySelector('.app-shell');
+      const sidebarToggle = document.getElementById('sidebarToggle');
+      const savedTheme = localStorage.getItem('omnistreamTheme') || 'default';
+      if (savedTheme && savedTheme !== 'default') {
+        document.documentElement.setAttribute('data-theme', savedTheme);
+      } else {
+        document.documentElement.removeAttribute('data-theme');
+      }
+      if (settingsToggle && settingsSubmenu) {
+        settingsToggle.addEventListener('click', () => {
+          settingsSubmenu.classList.toggle('open');
+        });
+      }
+      if (newsletterToggle && newsletterSubmenu) {
+        newsletterToggle.addEventListener('click', () => {
+          newsletterSubmenu.classList.toggle('open');
+        });
+      }
+      if (appShell && sidebarToggle) {
+        const savedSidebar = localStorage.getItem('omnistreamSidebar') || 'open';
+        if (savedSidebar === 'collapsed') {
+          appShell.classList.add('sidebar-collapsed');
+          sidebarToggle.textContent = 'Show menu';
+        }
+        sidebarToggle.addEventListener('click', () => {
+          const collapsed = appShell.classList.toggle('sidebar-collapsed');
+          sidebarToggle.textContent = collapsed ? 'Show menu' : 'Hide menu';
+          localStorage.setItem('omnistreamSidebar', collapsed ? 'collapsed' : 'open');
+        });
+      }
+    })();
+
+    function fmtDuration(sec) {
+      if (!sec || !isFinite(sec) || sec < 0) return '-';
+      const h = Math.floor(sec / 3600);
+      const m = Math.floor((sec % 3600) / 60);
+      if (h > 0) return h + 'h ' + m + 'm';
+      return m + 'm';
+    }
+
+    function fmtTime(iso) {
+      if (!iso) return '-';
+      try {
+        return new Date(iso).toLocaleString();
+      } catch {
+        return iso;
+      }
+    }
+
+    async function loadSystemInfo() {
+      try {
+        const r = await fetch('/api/system');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const data = await r.json();
+        document.getElementById('version').textContent = data.version || 'unknown';
+        document.getElementById('uptime').textContent = fmtDuration(data.uptimeSeconds);
+        document.getElementById('now').textContent = fmtTime(data.now);
+        document.getElementById('historyPath').textContent = data.historyDbPath || '-';
+        document.getElementById('serversPath').textContent = data.serversFilePath || '-';
+        document.getElementById('maxHistory').textContent = (typeof data.maxHistory === 'number') ? data.maxHistory : 'default';
+
+        const poll = data.poll || {};
+        document.getElementById('pollLastAt').textContent = poll.lastPollAt ? fmtTime(poll.lastPollAt) : '-';
+        document.getElementById('pollDuration').textContent = (typeof poll.lastPollDurationMs === 'number') ? (poll.lastPollDurationMs + ' ms') : '-';
+        document.getElementById('pollError').textContent = poll.lastPollError || 'None';
+
+        const importInfo = data.importHistory || {};
+        document.getElementById('importLastRun').textContent = importInfo.lastRunAt ? fmtTime(importInfo.lastRunAt) : 'Never';
+        const results = Array.isArray(importInfo.lastResults) ? importInfo.lastResults : [];
+        const importSummaryEl = document.getElementById('importSummary');
+        if (!results.length) {
+          importSummaryEl.textContent = 'No import results recorded yet.';
+        } else {
+          const ok = results.filter(r => !r.error);
+          const failed = results.filter(r => r.error);
+          const totalImported = results.reduce((sum, r) => sum + (r.imported || 0), 0);
+          let text = `Imported ${totalImported} plays from ${results.length} server(s).`;
+          if (failed.length) {
+            text += ` ${failed.length} server(s) reported errors.`;
+          }
+          importSummaryEl.textContent = text;
+        }
+
+        const notif = data.notifiers || {};
+        const lastErr = notif.lastError;
+        document.getElementById('notifierError').textContent = lastErr || 'None';
+        document.getElementById('notifierErrorAt').textContent = lastErr ? fmtTime(notif.lastErrorAt) : '-';
+        document.getElementById('notifierErrorChannel').textContent = lastErr ? (notif.lastErrorChannel || '-') : '-';
+
+        const overseerrInfo = data.overseerr || {};
+        document.getElementById('overseerrConfigured').textContent = overseerrInfo.configured ? 'Yes' : 'No';
+
+        const backupStatus = document.getElementById('backupStatus');
+        if (!data.backupEnabled) {
+          backupStatus.textContent = 'Backup zip not available: archiver module is not installed on the server.';
+          backupStatus.className = 'row status-warn';
+        }
+      } catch (e) {
+        console.error('Failed to load system info:', e);
+        const card = document.getElementById('systemCard');
+        const row = document.createElement('div');
+        row.className = 'row status-error';
+        row.textContent = 'Failed to load system info. Check server logs.';
+        card.appendChild(row);
+      }
+    }
+
+    async function loadAppConfig() {
+      try {
+        const r = await fetch('/api/config/app');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const data = await r.json();
+        const maxHistoryInput = document.getElementById('cfgMaxHistory');
+        if (maxHistoryInput) {
+          if (typeof data.maxHistory === 'number') {
+            maxHistoryInput.value = data.maxHistory;
+          } else {
+            maxHistoryInput.value = '';
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load app config:', e);
+        const status = document.getElementById('configStatus');
+        if (status) {
+          status.textContent = 'Failed to load config.';
+          status.className = 'status-error';
+        }
+      }
+    }
+
+    document.getElementById('backupBtn').addEventListener('click', async () => {
+      const statusEl = document.getElementById('backupStatus');
+      statusEl.textContent = 'Preparing backup...';
+      statusEl.className = 'row';
+      try {
+        // Trigger a file download by navigating directly to the backup endpoint
+        window.location.href = '/api/system/backup';
+        statusEl.textContent = 'Backup requested. Your browser should start downloading the zip file.';
+        statusEl.className = 'row status-ok';
+      } catch (e) {
+        console.error('Backup download failed:', e);
+        statusEl.textContent = 'Backup failed. Check server logs.';
+        statusEl.className = 'row status-error';
+      }
+    });
+
+    document.getElementById('overseerrFetchBtn').addEventListener('click', async () => {
+      const statusEl = document.getElementById('overseerrStatus');
+      statusEl.textContent = 'Contacting Overseerr...';
+      statusEl.className = 'row';
+      try {
+        const resp = await fetch('/api/overseerr/users');
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => '');
+          statusEl.textContent = 'Fetch failed: ' + (text || resp.status + ' ' + resp.statusText);
+          statusEl.className = 'row status-error';
+          return;
+        }
+        const data = await resp.json();
+        const total = typeof data.total === 'number' ? data.total : 0;
+        const withEmail = typeof data.withEmail === 'number' ? data.withEmail : 0;
+        statusEl.textContent = `Found ${withEmail} user${withEmail === 1 ? '' : 's'} with email (out of ${total} total).`;
+        statusEl.className = 'row status-ok';
+      } catch (e) {
+        console.error('Overseerr fetch failed:', e);
+        statusEl.textContent = 'Fetch failed. Check server logs.';
+        statusEl.className = 'row status-error';
+      }
+    });
+    document.getElementById('configSaveBtn').addEventListener('click', async () => {
+      const statusEl = document.getElementById('configStatus');
+      statusEl.textContent = 'Saving...';
+      statusEl.className = '';
+      try {
+        const payload = {};
+        const maxInput = document.getElementById('cfgMaxHistory');
+        if (maxInput) {
+          const raw = (maxInput.value || '').trim();
+          if (raw === '') {
+            payload.maxHistory = null; // reset to default
+          } else {
+            const n = Number(raw);
+            if (Number.isFinite(n)) {
+              payload.maxHistory = n;
+            }
+          }
+        }
+
+        const resp = await fetch('/api/config/app', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => '');
+          throw new Error(text || ('HTTP ' + resp.status));
+        }
+        const data = await resp.json();
+        // Update read-only runtime view and config inputs based on server response
+        if (typeof data.maxHistory === 'number') {
+          document.getElementById('maxHistory').textContent = data.maxHistory;
+        }
+        statusEl.textContent = 'Config saved.';
+        statusEl.className = 'status-ok';
+      } catch (e) {
+        console.error('Failed to save app config:', e);
+        statusEl.textContent = 'Save failed. Check server logs.';
+        statusEl.className = 'status-error';
+      }
+    });
+
+    loadSystemInfo();
+    loadAppConfig();
+  </script>
+</body>
+</html>

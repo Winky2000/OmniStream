@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) starting with v0.1.0.
 
+## [Unreleased]
+
+### Added
+- Per-server scope dropdown on the Reports page to view activity and top titles/users for a single server or all servers.
+
+### Changed
+- Reports now count deduplicated "play events" instead of every poll row, so long-running sessions are not over-counted.
+- History retention is configurable via `config.json` (`maxHistory`), with support for disabling trimming to keep full history.
+
 ## [0.1.0] - 2026-02-18
 
 ### Added
@@ -17,3 +26,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - Sidebar-based UI with Settings subpages (Servers, Themes & layout, Notifiers) and a setup experience when no servers are configured.
 
 [0.1.0]: https://github.com/winky2000/omnistream/releases/tag/v0.1.0
+[Unreleased]: https://github.com/winky2000/omnistream/compare/v0.1.0...HEAD

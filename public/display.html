@@ -1,4 +1,4 @@
-<!doctype html>
+time of day)<!doctype html>
 <html>
 <head>
   <meta charset="utf-8">
@@ -44,12 +44,21 @@
         <a href="reports.html" class="nav-link">Reports</a>
         <a href="notifications.html" class="nav-link">Notifications</a>
         <div class="settings-group">
+          <button type="button" class="nav-link newsletter-toggle">Newsletter</button>
+          <div class="settings-submenu newsletter-submenu">
+            <a href="overseerr.html" class="submenu-link">Overseerr</a>
+            <a href="subscribers.html" class="submenu-link">Subscribers</a>
+            <a href="templates.html" class="submenu-link">Templates</a>
+          </div>
+        </div>
+        <div class="settings-group">
           <button type="button" class="nav-link nav-link-active settings-toggle">Settings</button>
           <div class="settings-submenu open">
             <a href="admin.html" class="submenu-link">Connected servers</a>
             <a href="servers.html" class="submenu-link">Servers</a>
             <a href="display.html" class="submenu-link submenu-link-active">Themes &amp; layout</a>
             <a href="notifiers.html" class="submenu-link">Notifiers</a>
+            <a href="system.html" class="submenu-link">System</a>
           </div>
         </div>
       </nav>
@@ -94,6 +103,8 @@
       const layoutSelect = document.getElementById('layoutSelect');
       const settingsToggle = document.querySelector('.settings-toggle');
       const settingsSubmenu = document.querySelector('.settings-submenu');
+      const newsletterToggle = document.querySelector('.newsletter-toggle');
+      const newsletterSubmenu = document.querySelector('.newsletter-submenu');
       const savedTheme = localStorage.getItem('omnistreamTheme') || 'default';
       if (savedTheme && savedTheme !== 'default') {
         document.documentElement.setAttribute('data-theme', savedTheme);
@@ -124,6 +135,11 @@
       if (settingsToggle && settingsSubmenu) {
         settingsToggle.addEventListener('click', () => {
           settingsSubmenu.classList.toggle('open');
+        });
+      }
+      if (newsletterToggle && newsletterSubmenu) {
+        newsletterToggle.addEventListener('click', () => {
+          newsletterSubmenu.classList.toggle('open');
         });
       }
 
