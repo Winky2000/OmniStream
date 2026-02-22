@@ -6,12 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+_No unreleased changes yet._
+
+## [0.1.1] - 2026-02-21
+
 ### Added
 - Per-server scope dropdown on the Reports page to view activity and top titles/users for a single server or all servers.
+- Lightweight `/api/health` endpoint for external monitors (Home Assistant, Uptime Kuma).
+- Session card enhancements: richer media details, user avatars (Plex + Jellyfin/Emby), and transcode progress overlay on the playback bar.
+- Global header summary now shows aggregate bandwidth across all servers (total + WAN).
 
 ### Changed
 - Reports now count deduplicated "play events" instead of every poll row, so long-running sessions are not over-counted.
 - History retention is configurable via `config.json` (`maxHistory`), with support for disabling trimming to keep full history.
+- Dashboard layout and styling improved for consistency across settings pages and horizontal/vertical layouts.
 
 ## [0.1.0] - 2026-02-18
 
@@ -26,4 +34,5 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - Sidebar-based UI with Settings subpages (Servers, Themes & layout, Notifiers) and a setup experience when no servers are configured.
 
 [0.1.0]: https://github.com/winky2000/omnistream/releases/tag/v0.1.0
-[Unreleased]: https://github.com/winky2000/omnistream/compare/v0.1.0...HEAD
+[0.1.1]: https://github.com/winky2000/omnistream/releases/tag/v0.1.1
+[Unreleased]: https://github.com/winky2000/omnistream/compare/v0.1.1...HEAD

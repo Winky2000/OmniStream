@@ -33,11 +33,13 @@ OmniStream is a dashboard to monitor multiple Plex, Jellyfin, and Emby servers o
 
 - Monitor multiple media servers (Plex, Jellyfin, Emby)
 - Per-server status (online/offline, latency)
-- Live sessions with posters, media details, and progress
+- Live sessions with rich session cards (posters, media details, per-user avatars, playback + transcode progress)
 - Direct Play vs Transcoding highlighting
-- History and basic reports
+- Global and per-server bandwidth summaries
+- History and reports with per-server scope and imported server history
 - Admin UI to add/edit/enable/disable servers
 - Simple notifications (offline servers, WAN transcodes, high bandwidth)
+- Lightweight health endpoint for external monitors (Home Assistant, Uptime Kuma)
 
 ---
 ## What OmniStream does (and doesn't) do
@@ -193,6 +195,53 @@ OmniStream can send basic alerts when something important happens.
 	- High total bandwidth above a configurable Mbps threshold
 - **Per-channel triggers**: each notifier (e.g. Discord vs SMS) can opt in/out of specific events on the Notifiers page.
 - **Test button**: use **Send test notification** on the Notifiers page to confirm your configuration without waiting for a real event.
+
+---
+
+## External monitoring (Home Assistant, Uptime Kuma)
+
+OmniStream exposes a small health endpoint that external tools can poll without scraping the full status JSON:
+
+- URL: `http://YOUR_OMNISTREAM_HOST:3000/api/health`
+- Method: `GET`
+- Response: JSON including `status` (`"ok"`, `"degraded"`, or `"down"`), recent poll info, and basic server counts.
+
+### Uptime Kuma
+
+You can monitor OmniStream itself (and indirectly your media servers) from [Uptime Kuma](https://github.com/louislam/uptime-kuma):
+
+1. In Uptime Kuma, click **Add New Monitor**.
+2. Choose type **HTTP(s)**.
+3. Set **URL** to `http://YOUR_OMNISTREAM_HOST:3000/api/health`.
+4. (Optional) Enable **Keyword** and set it to `"status":"ok"` if you want Uptime Kuma to fail when OmniStream reports `degraded`/`down` even though the HTTP status code is 200.
+5. Adjust interval/notifications as desired and save.
+
+### Home Assistant
+
+Home Assistant can consume the same health endpoint via a REST binary sensor:
+
+```yaml
+binary_sensor:
+	- platform: rest
+		name: OmniStream Health
+		resource: http://YOUR_OMNISTREAM_HOST:3000/api/health
+		value_template: "{{ value_json.status != 'down' }}"
+		scan_interval: 30
+```
+
+You can also create sensors for total/online servers if you want graphs:
+
+```yaml
+sensor:
+	- platform: rest
+		name: OmniStream Online Servers
+		resource: http://YOUR_OMNISTREAM_HOST:3000/api/health
+		value_template: "{{ value_json.servers.online }}"
+		unit_of_measurement: "servers"
+		scan_interval: 60
+```
+
+Restart Home Assistant after editing `configuration.yaml`, then add these entities to dashboards/automations as desired.
 
 ---
 
@@ -359,6 +408,10 @@ Contributions and feedback are welcome.
 - **UI/UX**
 	- Optional compact/mobile layout.
 	- Icon-based client badges for popular players.
+- **Newsletter (upcoming)**
+	- Subscriber management + templates polished for general use.
+	- Optional Overseerr integration to pull subscribers.
+	- Safer defaults and better docs before promoting as a main feature.
 - **Technical**
 	- More tests around history import and notifiers.
 	- Configurable polling interval and history retention.
