@@ -866,6 +866,22 @@ function summaryFromResponse(resp) {
         const durationSec = m.duration ? Math.round(m.duration / 1000) : 0;
         const viewOffsetSec = m.viewOffset ? Math.round(m.viewOffset / 1000) : 0;
         const progressPct = m.progress || (durationSec > 0 ? Math.round(viewOffsetSec / durationSec * 100) : 0);
+
+        // Derive a quality label when Plex does not provide one directly
+        let quality = m.quality || '';
+        if (!quality) {
+          let resolution = '';
+          if (m.Video && m.Video[0]) {
+            resolution = m.Video[0].resolution || '';
+          }
+          if (resolution && bandwidth) {
+            quality = `${resolution} (${bandwidth.toFixed(1)} Mbps)`;
+          } else if (bandwidth) {
+            quality = `${bandwidth.toFixed(1)} Mbps`;
+          } else if (resolution) {
+            quality = resolution;
+          }
+        }
         return {
           user: m.user || m.User?.title || 'Unknown',
           title: m.media_title || m.title || m.grandparentTitle || 'Unknown',
@@ -881,7 +897,7 @@ function summaryFromResponse(resp) {
           progress: progressPct,
           product: m.product || m.Player?.product || '',
           player: m.player || m.Player?.title || '',
-          quality: m.quality || '',
+          quality,
           stream: m.stream || m.transcodeDecision || '',
           container: m.container || '',
           video: m.video || (m.Video && m.Video[0] ? `${m.Video[0].decision || ''} (${m.Video[0].codec || ''} ${m.Video[0].resolution || ''})` : ''),
