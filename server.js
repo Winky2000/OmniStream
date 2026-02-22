@@ -819,6 +819,7 @@ function summaryFromResponse(resp) {
     if (d.MediaContainer) {
       const sessions = (d.MediaContainer.Metadata || []).map(m => {
         let posterUrl;
+        let backgroundUrl;
         // Prefer season/show poster for TV episodes so we avoid episode stills
         let rawThumb;
         if (m.type === 'episode' || m.grandparentTitle) {
@@ -836,6 +837,21 @@ function summaryFromResponse(resp) {
           // browser doesn't need direct access to the Plex baseUrl/token.
           posterUrl = `/api/poster?serverId=${encodeURIComponent(serverId)}&path=${encodeURIComponent(rawThumb)}`;
         }
+
+        // Background artwork – prefer "art" when available, fall back to poster
+        const rawArt = m.art || '';
+        if (rawArt && typeof rawArt === 'string') {
+          if (/^https?:\/\//i.test(rawArt)) {
+            backgroundUrl = rawArt;
+          } else if (resp.config && resp.config.serverConfig) {
+            const serverId = resp.config.serverConfig.id;
+            backgroundUrl = `/api/poster?serverId=${encodeURIComponent(serverId)}&path=${encodeURIComponent(rawArt)}`;
+          }
+        }
+        if (!backgroundUrl) {
+          backgroundUrl = posterUrl || undefined;
+        }
+
         // Fallback placeholder for live TV if no artwork is available
         const normalizedPoster = posterUrl || (m.type === 'live' ? '/live_tv_placeholder.svg' : undefined);
 
@@ -1056,6 +1072,7 @@ function summaryFromResponse(resp) {
           platform: m.platform || m.Player?.platform || m.Player?.product || '',
           state: m.state || m.Player?.state || '',
           poster: m.poster || normalizedPoster,
+          background: backgroundUrl || undefined,
           duration: durationSec,
           viewOffset: viewOffsetSec,
           progress: progressPct,
@@ -1147,12 +1164,14 @@ function summaryFromResponse(resp) {
             episodeNumber: typeof s.episodeNumber === 'number' ? s.episodeNumber
               : (typeof s.IndexNumber === 'number' ? s.IndexNumber : undefined),
             transcoding: s.transcoding,
+            background: s.background || s.backdrop || undefined,
             userAvatar: s.userAvatar || undefined,
           };
         }
         // Standard Jellyfin/Emby API: treat any session with NowPlayingItem and PlayState as active
         if (s.NowPlayingItem && s.PlayState) {
           let posterUrl;
+          let backgroundUrl;
           if (resp.config && resp.config.serverConfig) {
             const serverId = resp.config.serverConfig.id;
             let itemId = s.NowPlayingItem.Id;
@@ -1163,6 +1182,8 @@ function summaryFromResponse(resp) {
             if (itemId) {
               const embyPath = `/Items/${itemId}/Images/Primary`;
               posterUrl = `/api/poster?serverId=${encodeURIComponent(serverId)}&path=${encodeURIComponent(embyPath)}`;
+              const backdropPath = `/Items/${itemId}/Images/Backdrop`;
+              backgroundUrl = `/api/poster?serverId=${encodeURIComponent(serverId)}&path=${encodeURIComponent(backdropPath)}`;
             }
           }
           // Fallback placeholder for LiveTv sessions without artwork
@@ -1273,6 +1294,7 @@ function summaryFromResponse(resp) {
             platform: s.Client || s.DeviceName || '',
             state: s.PlayState?.PlayMethod || '',
             poster: posterUrl,
+            background: backgroundUrl || posterUrl,
             duration: s.NowPlayingItem?.RunTimeTicks ? Math.round(s.NowPlayingItem.RunTimeTicks / 10000 / 1000) : 0,
             viewOffset: s.PlayState?.PositionTicks ? Math.round(s.PlayState.PositionTicks / 10000 / 1000) : 0,
             progress: (s.PlayState?.PositionTicks && s.NowPlayingItem?.RunTimeTicks) 

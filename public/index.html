@@ -126,6 +126,8 @@
     .sessions{font-size:11px;border-top:1px solid #222;padding-top:8px;margin-top:8px;display:flex;flex-direction:column;gap:8px;}
     .sessions.flex-sessions{flex-direction:row;flex-wrap:wrap;gap:18px;align-items:flex-start;}
     .session{
+      position:relative;
+      overflow:hidden;
       background:radial-gradient(circle at top left, rgba(248,250,252,0.06), transparent 55%),
                  linear-gradient(135deg, rgba(15,23,42,0.98), rgba(15,23,42,0.9));
       padding:10px 12px 9px 10px;
@@ -137,6 +139,17 @@
       flex-direction:column;
       gap:5px;
       transition:transform 0.14s ease-out, box-shadow 0.14s ease-out, background 0.14s ease-out, border-color 0.14s ease-out;
+    }
+    .session-bg{
+      position:absolute;
+      inset:-12px;
+      background-size:cover;
+      background-position:center;
+      filter:blur(18px);
+      opacity:0.38;
+      transform:scale(1.08);
+      z-index:0;
+      pointer-events:none;
     }
     .session:hover{
       transform:translateY(-2px);
@@ -448,6 +461,13 @@
           const visibleSessions = st.sessions.filter(sess => sess && (sess.poster || sess.title || sess.user || sess.userName));
           visibleSessions.forEach(sess => {
             const session = document.createElement('div');
+            // Optional blurred background matching the playing item
+            if (sess.background) {
+              const bg = document.createElement('div');
+              bg.className = 'session-bg';
+              bg.style.backgroundImage = 'url("' + sess.background + '")';
+              session.appendChild(bg);
+            }
             // Classify direct play vs transcode for border color
             let isTranscoding = false;
             if (typeof sess.transcoding === 'boolean') {
@@ -463,6 +483,8 @@
             // Always use a flex row for session content so poster and text line up
             row.style.display = 'flex';
             row.style.alignItems = 'stretch';
+            row.style.position = 'relative';
+            row.style.zIndex = '1';
             // Poster (with OTA / fallback placeholder when artwork is missing)
             function createPosterPlaceholder() {
               const ph = document.createElement('div');
@@ -640,6 +662,8 @@
 
             const progressMeta = document.createElement('div');
             progressMeta.className = 'progress-meta';
+            progressMeta.style.position = 'relative';
+            progressMeta.style.zIndex = '1';
             const leftSpan = document.createElement('div');
             leftSpan.className = 'progress-meta-left';
 
