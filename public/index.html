@@ -182,8 +182,8 @@
     .session-top-meta-label{font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#9ca3af;min-width:60px;flex-shrink:0;}
     .session-top-meta-value{font-size:11px;color:#e5e7eb;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
     .session-info-list{margin-top:6px;display:flex;flex-direction:column;gap:1px;font-size:11px;color:#cbd5f5;}
-    .session-info-list div{display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-    .session-info-list b{display:inline-block;min-width:70px;font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:#9ca3af;font-weight:600;}
+    .session-info-list div{display:grid;grid-template-columns:minmax(70px,auto) 1fr auto;align-items:center;column-gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .session-info-list b{display:block;font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:#9ca3af;font-weight:600;}
     .badge-health-good{border-color:#4caf50;color:#c8e6c9;}
     .badge-health-warn{border-color:#ffb300;color:#ffe082;}
     .badge-health-bad{border-color:#e53935;color:#ffab91;}
@@ -549,19 +549,26 @@
             // Info list: Stream, Container, Video, Audio, Subtitle, Location, Bandwidth (each on its own line)
             const infoList = document.createElement('div');
             infoList.className = 'session-info-list';
-            function addInfo(label, value) {
-              if (value) {
-                const div = document.createElement('div');
-                div.innerHTML = `<b>${label}:</b> ${value}`;
-                div.title = `${label}: ${value}`;
-                infoList.appendChild(div);
-              }
+            function addInfo(label, value, extra) {
+              if (!value && !extra) return;
+              const div = document.createElement('div');
+              const b = document.createElement('b');
+              b.textContent = label.toUpperCase() + ':';
+              const mainSpan = document.createElement('span');
+              mainSpan.textContent = value || '';
+              const extraSpan = document.createElement('span');
+              extraSpan.textContent = extra || '';
+              if (value) div.title = `${label}: ${value}`;
+              div.appendChild(b);
+              div.appendChild(mainSpan);
+              div.appendChild(extraSpan);
+              infoList.appendChild(div);
             }
-            addInfo('Stream', sess.stream);
-            addInfo('Container', sess.container);
-            addInfo('Video', sess.video);
-            addInfo('Audio', sess.audio);
-            addInfo('Subtitle', sess.subtitle);
+            addInfo('Stream', sess.stream, '');
+            addInfo('Container', sess.container, '');
+            addInfo('Video', sess.video, '');
+            addInfo('Audio', sess.audio, '');
+            addInfo('Subtitle', sess.subtitle, '');
             // Location and bandwidth, shown under Subtitle, with ETA / timer on the right
             (function() {
               const durationSec = typeof sess.duration === 'number' ? sess.duration : 0;
@@ -592,36 +599,12 @@
                 locationValue = sess.location;
               }
               if (locationValue) {
-                const locRow = document.createElement('div');
-                locRow.style.display = 'flex';
-                locRow.style.justifyContent = 'space-between';
-                locRow.style.gap = '8px';
-                const locLeft = document.createElement('span');
-                locLeft.innerHTML = `<b>Location:</b> ${locationValue}`;
-                locLeft.title = `Location: ${locationValue}`;
-                locRow.appendChild(locLeft);
-                if (endTimeStr) {
-                  const etaSpan = document.createElement('span');
-                  etaSpan.textContent = `ETA: ${endTimeStr}`;
-                  locRow.appendChild(etaSpan);
-                }
-                infoList.appendChild(locRow);
+                addInfo('Location', locationValue, endTimeStr ? `ETA: ${endTimeStr}` : '');
               }
 
               if (typeof sess.bandwidth === 'number' && sess.bandwidth > 0) {
-                const bwRow = document.createElement('div');
-                bwRow.style.display = 'flex';
-                bwRow.style.justifyContent = 'space-between';
-                bwRow.style.gap = '8px';
-                const bwLeft = document.createElement('span');
                 const bwStr = `${sess.bandwidth.toFixed(1)} Mbps`;
-                bwLeft.innerHTML = `<b>Bandwidth:</b> ${bwStr}`;
-                bwLeft.title = `Bandwidth: ${bwStr}`;
-                bwRow.appendChild(bwLeft);
-                const timerSpan = document.createElement('span');
-                timerSpan.textContent = `${playedStr} / ${totalStr}`;
-                bwRow.appendChild(timerSpan);
-                infoList.appendChild(bwRow);
+                addInfo('Bandwidth', bwStr, `${playedStr} / ${totalStr}`);
               }
             })();
 
