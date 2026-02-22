@@ -1147,6 +1147,7 @@ function summaryFromResponse(resp) {
             episodeNumber: typeof s.episodeNumber === 'number' ? s.episodeNumber
               : (typeof s.IndexNumber === 'number' ? s.IndexNumber : undefined),
             transcoding: s.transcoding,
+            userAvatar: s.userAvatar || undefined,
           };
         }
         // Standard Jellyfin/Emby API: treat any session with NowPlayingItem and PlayState as active
@@ -1167,6 +1168,17 @@ function summaryFromResponse(resp) {
           // Fallback placeholder for LiveTv sessions without artwork
           if (!posterUrl && s.NowPlayingItem?.Type === 'LiveTv') {
             posterUrl = '/live_tv_placeholder.svg';
+          }
+
+          // Jellyfin/Emby user avatar when user id is available
+          let userAvatar;
+          if (resp.config && resp.config.serverConfig) {
+            const serverId = resp.config.serverConfig.id;
+            const userId = s.UserId || (s.User && (s.User.Id || s.User.id));
+            if (userId) {
+              const avatarPath = `/Users/${userId}/Images/Primary`;
+              userAvatar = `/api/poster?serverId=${encodeURIComponent(serverId)}&path=${encodeURIComponent(avatarPath)}`;
+            }
           }
           let streamType = '';
           if (s.PlayState?.PlayMethod) {
@@ -1278,6 +1290,7 @@ function summaryFromResponse(resp) {
             ip,
             bandwidth,
             transcodeProgress,
+            userAvatar,
             channel: s.NowPlayingItem?.ChannelName || '',
             isLive: (s.NowPlayingItem?.Type === 'LiveTv') || (s.NowPlayingItem?.IsLive === true),
             // Season / episode numbers for Jellyfin/Emby standard API
