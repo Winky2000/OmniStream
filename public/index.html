@@ -155,7 +155,7 @@
     .session-user a:hover{text-decoration:underline;}
     .session-title{color:var(--text-main);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
     .session-meta{font-size:11px;color:var(--text-muted);margin-bottom:2px}
-    .session-poster{width:130px;object-fit:cover;margin-right:12px;border-radius:6px;box-shadow:0 6px 18px rgba(15,23,42,0.9);align-self:stretch}
+    .session-poster{width:130px;object-fit:cover;margin-right:12px;border-radius:6px;box-shadow:0 6px 18px rgba(15,23,42,0.9);align-self:stretch;flex-shrink:0}
     .session-poster-placeholder{
       display:flex;
       align-items:center;
@@ -563,17 +563,11 @@
             addInfo('Audio', sess.audio);
             addInfo('Subtitle', sess.subtitle);
             info.appendChild(infoList);
+            // We want the progress bar directly below the bandwidth line, which lives in the footer,
+            // so keep the bar creation after bandwidth and before play/type lines (see below).
             row.appendChild(info);
             // Append the combined row for both layouts so sessions never appear empty
             session.appendChild(row);
-            // Progress bar + meta (▶ Playing, elapsed/total, ETA)
-            const bar = document.createElement('div');
-            bar.className = 'progress-bar';
-            const fill = document.createElement('div');
-            fill.className = 'progress-fill';
-            fill.style.width = (sess.progress || 0) + '%';
-            bar.appendChild(fill);
-            session.appendChild(bar);
 
             const progressMeta = document.createElement('div');
             progressMeta.className = 'progress-meta';
@@ -629,7 +623,16 @@
               leftSpan.appendChild(bwLine);
             }
 
-            // Progress/playing line under the location block
+            // Progress bar directly under the Bandwidth line
+            const bar = document.createElement('div');
+            bar.className = 'progress-bar';
+            const fill = document.createElement('div');
+            fill.className = 'progress-fill';
+            fill.style.width = (sess.progress || 0) + '%';
+            bar.appendChild(fill);
+            session.appendChild(bar);
+
+            // Progress/playing line under the progress bar
             const playLine = document.createElement('div');
             playLine.textContent = displayTitle ? `▶ ${displayTitle}` : '▶ Playing';
             leftSpan.appendChild(playLine);
@@ -657,20 +660,21 @@
               userSpan.style.alignItems = 'center';
               userSpan.style.gap = '4px';
               if (userName) {
-                if (sess.userAvatar) {
-                  const avatar = document.createElement('img');
-                  avatar.src = sess.userAvatar;
-                  avatar.alt = userName;
-                  avatar.style.width = '18px';
-                  avatar.style.height = '18px';
-                  avatar.style.borderRadius = '50%';
-                  avatar.style.objectFit = 'cover';
-                  userSpan.appendChild(avatar);
-                }
                 const userLink = document.createElement('a');
                 userLink.href = 'user.html?user=' + encodeURIComponent(userName);
                 userLink.textContent = userName;
                 userSpan.appendChild(userLink);
+                if (sess.userAvatar) {
+                  const avatar = document.createElement('img');
+                  avatar.src = sess.userAvatar;
+                  avatar.alt = userName;
+                  avatar.style.width = '22px';
+                  avatar.style.height = '22px';
+                  avatar.style.borderRadius = '50%';
+                  avatar.style.objectFit = 'cover';
+                  avatar.style.marginLeft = '4px';
+                  userSpan.appendChild(avatar);
+                }
               }
 
               typeRow.appendChild(typeSpan);
