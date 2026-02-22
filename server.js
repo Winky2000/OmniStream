@@ -832,6 +832,25 @@ function summaryFromResponse(resp) {
         }
         // Fallback placeholder for live TV if no artwork is available
         const normalizedPoster = posterUrl || (m.type === 'live' ? '/live_tv_placeholder.svg' : undefined);
+
+        // User avatar (Plex account thumb)
+        let userAvatar;
+        let rawUserThumb =
+          (m.User && (m.User.thumb || m.User.avatar)) ||
+          (Array.isArray(m.Account) && m.Account[0] && (m.Account[0].thumb || m.Account[0].avatar)) ||
+          (m.Account && (m.Account.thumb || m.Account.avatar)) ||
+          (Array.isArray(m.account) && m.account[0] && (m.account[0].thumb || m.account[0].avatar)) ||
+          (m.account && (m.account.thumb || m.account.avatar)) ||
+          null;
+
+        if (rawUserThumb && typeof rawUserThumb === 'string') {
+          if (/^https?:\/\//i.test(rawUserThumb)) {
+            userAvatar = rawUserThumb;
+          } else if (resp.config && resp.config.serverConfig) {
+            const serverId = resp.config.serverConfig.id;
+            userAvatar = `/api/poster?serverId=${encodeURIComponent(serverId)}&path=${encodeURIComponent(rawUserThumb)}`;
+          }
+        }
         // Robust transcoding detection for Plex
         let transcoding = false;
         if (m.Media && Array.isArray(m.Media)) {
@@ -1043,6 +1062,7 @@ function summaryFromResponse(resp) {
           channel: m.channelTitle || '',
           episodeTitle: m.episodeTitle || '',
           userName: m.user || m.User?.title || '',
+          userAvatar,
           isLive: m.type === 'live',
           transcoding
         };

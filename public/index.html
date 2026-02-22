@@ -499,19 +499,8 @@
             info.style.display = 'flex';
             info.style.flexDirection = 'column';
             info.style.marginLeft = layoutMode === 'flex' ? '10px' : '0';
-            // User and title
-            const title = document.createElement('div');
-            title.className = 'session-user';
+            // Username is shown in the footer area next to type; keep it here for later use
             const userName = sess.user || sess.userName || 'Unknown';
-            if (userName) {
-              const userLink = document.createElement('a');
-              userLink.href = 'user.html?user=' + encodeURIComponent(userName);
-              userLink.textContent = userName;
-              title.appendChild(userLink);
-            } else {
-              title.textContent = userName;
-            }
-            info.appendChild(title);
             // Title line: treat live/OTA differently from library episodes
             let displayTitle;
             let seasonEpisodeLabel = '';
@@ -534,19 +523,6 @@
               if (typeof sess.seasonNumber === 'number') parts.push('Season ' + sess.seasonNumber);
               if (typeof sess.episodeNumber === 'number') parts.push('Episode ' + sess.episodeNumber);
               seasonEpisodeLabel = parts.join(' • ');
-            }
-            // Render content title + season/episode under the user name
-            if (displayTitle) {
-              const titleLine = document.createElement('div');
-              titleLine.className = 'session-title';
-              titleLine.textContent = displayTitle;
-              info.appendChild(titleLine);
-            }
-            if (seasonEpisodeLabel) {
-              const seLine = document.createElement('div');
-              seLine.className = 'session-meta';
-              seLine.textContent = seasonEpisodeLabel;
-              info.appendChild(seLine);
             }
             // Top meta column: Product / Player / Quality (stacked)
             const topMeta = document.createElement('div');
@@ -622,25 +598,84 @@
             const leftSpan = document.createElement('div');
             leftSpan.className = 'progress-meta-left';
 
-            // Location / WAN IP / Bandwidth block
-            const locLabel = document.createElement('div');
-            locLabel.textContent = 'Location';
-            leftSpan.appendChild(locLabel);
-
+            // Location row: "Location" label with value to the right
             const isWan = sess.location && typeof sess.location === 'string' && sess.location.toUpperCase().includes('WAN');
             const ip = sess.ip || '';
-            const locLine = document.createElement('div');
+            let locationValue = '';
             if (isWan) {
-              locLine.textContent = ip ? `WAN: ${ip}` : 'WAN';
+              locationValue = ip ? `WAN: ${ip}` : 'WAN';
             } else if (sess.location) {
-              locLine.textContent = sess.location;
+              locationValue = sess.location;
             }
-            if (locLine.textContent) leftSpan.appendChild(locLine);
+            if (locationValue) {
+              const locRow = document.createElement('div');
+              locRow.style.display = 'flex';
+              locRow.style.justifyContent = 'space-between';
+              locRow.style.gap = '6px';
+
+              const locLabel = document.createElement('span');
+              locLabel.textContent = 'Location';
+              const locVal = document.createElement('span');
+              locVal.textContent = locationValue;
+
+              locRow.appendChild(locLabel);
+              locRow.appendChild(locVal);
+              leftSpan.appendChild(locRow);
+            }
 
             if (typeof sess.bandwidth === 'number' && sess.bandwidth > 0) {
               const bwLine = document.createElement('div');
               bwLine.textContent = `Bandwidth: ${sess.bandwidth.toFixed(1)} Mbps`;
               leftSpan.appendChild(bwLine);
+            }
+
+            // Progress/playing line under the location block
+            const playLine = document.createElement('div');
+            playLine.textContent = displayTitle ? `▶ ${displayTitle}` : '▶ Playing';
+            leftSpan.appendChild(playLine);
+
+            // Type (TV season/episode or Movie) with username to the right
+            let typeLabel = '';
+            if (isLive) {
+              typeLabel = 'Live TV';
+            } else if (hasEpisode && seasonEpisodeLabel) {
+              typeLabel = seasonEpisodeLabel;
+            } else if (displayTitle) {
+              typeLabel = 'Movie';
+            }
+            if (typeLabel || userName) {
+              const typeRow = document.createElement('div');
+              typeRow.style.display = 'flex';
+              typeRow.style.justifyContent = 'space-between';
+              typeRow.style.gap = '6px';
+
+              const typeSpan = document.createElement('span');
+              typeSpan.textContent = typeLabel;
+
+              const userSpan = document.createElement('span');
+              userSpan.style.display = 'inline-flex';
+              userSpan.style.alignItems = 'center';
+              userSpan.style.gap = '4px';
+              if (userName) {
+                if (sess.userAvatar) {
+                  const avatar = document.createElement('img');
+                  avatar.src = sess.userAvatar;
+                  avatar.alt = userName;
+                  avatar.style.width = '18px';
+                  avatar.style.height = '18px';
+                  avatar.style.borderRadius = '50%';
+                  avatar.style.objectFit = 'cover';
+                  userSpan.appendChild(avatar);
+                }
+                const userLink = document.createElement('a');
+                userLink.href = 'user.html?user=' + encodeURIComponent(userName);
+                userLink.textContent = userName;
+                userSpan.appendChild(userLink);
+              }
+
+              typeRow.appendChild(typeSpan);
+              typeRow.appendChild(userSpan);
+              leftSpan.appendChild(typeRow);
             }
 
             const rightBox = document.createElement('div');
