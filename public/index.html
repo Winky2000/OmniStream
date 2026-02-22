@@ -696,10 +696,9 @@
               userSpan.style.gap = '6px';
               userSpan.style.fontSize = '12px';
               if (userName) {
-                const userLink = document.createElement('a');
-                userLink.href = 'user.html?user=' + encodeURIComponent(userName);
-                userLink.textContent = userName;
-                userSpan.appendChild(userLink);
+                const userLabel = document.createElement('span');
+                userLabel.textContent = userName;
+                userSpan.appendChild(userLabel);
                 if (sess.userAvatar) {
                   const avatar = document.createElement('img');
                   avatar.src = sess.userAvatar;
