@@ -869,6 +869,45 @@ function summaryFromResponse(resp) {
 
         const media0 = Array.isArray(m.Media) && m.Media.length ? m.Media[0] : {};
 
+        // Work out what exactly is being transcoded (video/audio/subtitles)
+        let transcodingVideo = false;
+        let transcodingAudio = false;
+        let transcodingSubtitle = false;
+
+        if (m.TranscodeSession) {
+          const t = m.TranscodeSession;
+          const vDec = (t.videoDecision || '').toString().toLowerCase();
+          const aDec = (t.audioDecision || '').toString().toLowerCase();
+          const sDec = (t.subtitleDecision || '').toString().toLowerCase();
+          if (vDec === 'transcode') transcodingVideo = true;
+          if (aDec === 'transcode') transcodingAudio = true;
+          if (sDec === 'transcode' || sDec === 'burn') transcodingSubtitle = true;
+        }
+
+        if (!transcodingVideo && m.Video && m.Video[0] && typeof m.Video[0].decision === 'string') {
+          const vDecTrack = m.Video[0].decision.toLowerCase();
+          if (vDecTrack === 'transcode') transcodingVideo = true;
+        }
+
+        if (!transcodingAudio && m.Audio && m.Audio[0] && typeof m.Audio[0].decision === 'string') {
+          const aDecTrack = m.Audio[0].decision.toLowerCase();
+          if (aDecTrack === 'transcode') transcodingAudio = true;
+        }
+
+        if (!transcodingSubtitle && m.Subtitle && m.Subtitle[0] && typeof m.Subtitle[0].decision === 'string') {
+          const sDecTrack = m.Subtitle[0].decision.toLowerCase();
+          if (sDecTrack === 'transcode' || sDecTrack === 'burn') transcodingSubtitle = true;
+        }
+
+        let transcodeDetails = '';
+        if (transcoding) {
+          const parts = [];
+          if (transcodingVideo) parts.push('Video');
+          if (transcodingAudio) parts.push('Audio');
+          if (transcodingSubtitle) parts.push('Subtitles');
+          transcodeDetails = parts.join(' + ');
+        }
+
         // Derive a quality label when Plex does not provide one directly
         let quality = m.quality || '';
         if (!quality) {
@@ -890,7 +929,12 @@ function summaryFromResponse(resp) {
         // Stream / container / video / audio details for UI display
         let stream = m.stream || m.transcodeDecision || '';
         if (!stream) {
-          stream = transcoding ? 'Transcode' : 'Direct Play';
+          if (transcoding) {
+            stream = 'Transcode';
+            if (transcodeDetails) stream += ` (${transcodeDetails})`;
+          } else {
+            stream = 'Direct Play';
+          }
         }
 
         let container = m.container || media0.container || '';
@@ -956,6 +1000,7 @@ function summaryFromResponse(resp) {
           container,
           video,
           audio,
+          transcodeDetails,
           subtitle: m.subtitle || (m.Subtitle && m.Subtitle[0] ? `${m.Subtitle[0].language || ''}` : 'None'),
           location: m.location || (m.Player?.local ? 'LAN' : 'WAN'),
           ip: m.Player?.address || '',
