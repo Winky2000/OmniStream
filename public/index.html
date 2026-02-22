@@ -48,9 +48,9 @@
     }
     .sessions.horizontal-grid {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 18px;
-      align-items: flex-start;
+      align-items: stretch;
     }
     /* Card layout */
     .card {
@@ -562,21 +562,69 @@
             addInfo('Video', sess.video);
             addInfo('Audio', sess.audio);
             addInfo('Subtitle', sess.subtitle);
-            // Location and bandwidth, shown under Subtitle like Plex
-            const isWan = sess.location && typeof sess.location === 'string' && sess.location.toUpperCase().includes('WAN');
-            const ip = sess.ip || '';
-            let locationValue = '';
-            if (isWan) {
-              locationValue = ip ? `WAN: ${ip}` : 'WAN';
-            } else if (sess.location) {
-              locationValue = sess.location;
-            }
-            if (locationValue) {
-              addInfo('Location', locationValue);
-            }
-            if (typeof sess.bandwidth === 'number' && sess.bandwidth > 0) {
-              addInfo('Bandwidth', `${sess.bandwidth.toFixed(1)} Mbps`);
-            }
+            // Location and bandwidth, shown under Subtitle, with ETA / timer on the right
+            (function() {
+              const durationSec = typeof sess.duration === 'number' ? sess.duration : 0;
+              const offsetSec = typeof sess.viewOffset === 'number' ? sess.viewOffset : 0;
+              function fmtHM(sec) {
+                if (!sec || sec <= 0 || !isFinite(sec)) return '0:00';
+                const h = Math.floor(sec / 3600);
+                const m = Math.floor((sec % 3600) / 60).toString().padStart(2, '0');
+                return h + ':' + m;
+              }
+              const playedStr = durationSec > 0 ? fmtHM(offsetSec) : '--:--';
+              const totalStr = durationSec > 0 ? fmtHM(durationSec) : '--:--';
+              const remainingSec = durationSec > 0 && offsetSec >= 0 && offsetSec < durationSec
+                ? (durationSec - offsetSec)
+                : 0;
+              let endTimeStr = '';
+              if (remainingSec > 0) {
+                const endDate = new Date(Date.now() + remainingSec * 1000);
+                endTimeStr = endDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+              }
+
+              const isWan = sess.location && typeof sess.location === 'string' && sess.location.toUpperCase().includes('WAN');
+              const ip = sess.ip || '';
+              let locationValue = '';
+              if (isWan) {
+                locationValue = ip ? `WAN: ${ip}` : 'WAN';
+              } else if (sess.location) {
+                locationValue = sess.location;
+              }
+              if (locationValue) {
+                const locRow = document.createElement('div');
+                locRow.style.display = 'flex';
+                locRow.style.justifyContent = 'space-between';
+                locRow.style.gap = '8px';
+                const locLeft = document.createElement('span');
+                locLeft.innerHTML = `<b>Location:</b> ${locationValue}`;
+                locLeft.title = `Location: ${locationValue}`;
+                locRow.appendChild(locLeft);
+                if (endTimeStr) {
+                  const etaSpan = document.createElement('span');
+                  etaSpan.textContent = `ETA: ${endTimeStr}`;
+                  locRow.appendChild(etaSpan);
+                }
+                infoList.appendChild(locRow);
+              }
+
+              if (typeof sess.bandwidth === 'number' && sess.bandwidth > 0) {
+                const bwRow = document.createElement('div');
+                bwRow.style.display = 'flex';
+                bwRow.style.justifyContent = 'space-between';
+                bwRow.style.gap = '8px';
+                const bwLeft = document.createElement('span');
+                const bwStr = `${sess.bandwidth.toFixed(1)} Mbps`;
+                bwLeft.innerHTML = `<b>Bandwidth:</b> ${bwStr}`;
+                bwLeft.title = `Bandwidth: ${bwStr}`;
+                bwRow.appendChild(bwLeft);
+                const timerSpan = document.createElement('span');
+                timerSpan.textContent = `${playedStr} / ${totalStr}`;
+                bwRow.appendChild(timerSpan);
+                infoList.appendChild(bwRow);
+              }
+            })();
+
             info.appendChild(infoList);
             // Progress bar directly under the Bandwidth line, within the text column
             const bar = document.createElement('div');
@@ -592,24 +640,6 @@
 
             const progressMeta = document.createElement('div');
             progressMeta.className = 'progress-meta';
-            const durationSec = typeof sess.duration === 'number' ? sess.duration : 0;
-            const offsetSec = typeof sess.viewOffset === 'number' ? sess.viewOffset : 0;
-            function fmtHM(sec) {
-              if (!sec || sec <= 0 || !isFinite(sec)) return '0:00';
-              const h = Math.floor(sec / 3600);
-              const m = Math.floor((sec % 3600) / 60).toString().padStart(2, '0');
-              return h + ':' + m;
-            }
-            const playedStr = durationSec > 0 ? fmtHM(offsetSec) : '--:--';
-            const totalStr = durationSec > 0 ? fmtHM(durationSec) : '--:--';
-            const remainingSec = durationSec > 0 && offsetSec >= 0 && offsetSec < durationSec
-              ? (durationSec - offsetSec)
-              : 0;
-            let endTimeStr = '';
-            if (remainingSec > 0) {
-              const endDate = new Date(Date.now() + remainingSec * 1000);
-              endTimeStr = endDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-            }
             const leftSpan = document.createElement('div');
             leftSpan.className = 'progress-meta-left';
 
@@ -663,23 +693,8 @@
               leftSpan.appendChild(typeRow);
             }
 
-            const rightBox = document.createElement('div');
-            rightBox.style.display = 'flex';
-            rightBox.style.flexDirection = 'column';
-            rightBox.style.alignItems = 'flex-end';
-
-            if (endTimeStr) {
-              const etaSpan = document.createElement('span');
-              etaSpan.textContent = `Ends at ${endTimeStr}`;
-              rightBox.appendChild(etaSpan);
-            }
-
-            const lengthSpan = document.createElement('span');
-            lengthSpan.textContent = `${playedStr} / ${totalStr}`;
-            rightBox.appendChild(lengthSpan);
-
+            // Footer now only needs the left side (play/type + user/avatar)
             progressMeta.appendChild(leftSpan);
-            progressMeta.appendChild(rightBox);
             session.appendChild(progressMeta);
             sessionsDiv.appendChild(session);
           });
