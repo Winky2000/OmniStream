@@ -557,7 +557,7 @@
             if (topMeta.childNodes.length > 0) {
               info.appendChild(topMeta);
             }
-            // Info list: Stream, Container, Video, Audio, Subtitle, Transcoding (each on its own line)
+            // Info list: Stream, Container, Video, Audio, Subtitle (each on its own line)
             const infoList = document.createElement('div');
             infoList.className = 'session-info-list';
             function addInfo(label, value) {
@@ -573,9 +573,6 @@
             addInfo('Video', sess.video);
             addInfo('Audio', sess.audio);
             addInfo('Subtitle', sess.subtitle);
-            if (sess.transcoding && sess.transcodeDetails) {
-              addInfo('Transcoding', sess.transcodeDetails);
-            }
             info.appendChild(infoList);
             row.appendChild(info);
             // Append the combined row for both layouts so sessions never appear empty

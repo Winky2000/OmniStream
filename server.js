@@ -927,23 +927,51 @@ function summaryFromResponse(resp) {
         }
 
         // Stream / container / video / audio details for UI display
-        let stream = m.stream || m.transcodeDecision || '';
-        if (!stream) {
-          if (transcoding) {
-            stream = 'Transcode';
-            if (transcodeDetails) stream += ` (${transcodeDetails})`;
+        let stream = '';
+        if (transcoding) {
+          // If Plex exposes a more detailed decision text, prefer it
+          if (m.transcodeDecision) {
+            stream = m.transcodeDecision;
+          } else if (m.TranscodeSession && m.TranscodeSession.throttled) {
+            // Match Plex-style "Transcode (Throttled)" when transcode is throttled
+            stream = 'Transcode (Throttled)';
           } else {
-            stream = 'Direct Play';
+            stream = 'Transcode';
           }
+        } else {
+          stream = 'Direct Play';
         }
 
-        let container = m.container || media0.container || '';
+        const plexContainer = m.container || media0.container || '';
+        let container = '';
+        if (transcoding) {
+          // Example: "Converting (MKV  MKV)" – source and target container when known
+          const source = media0.container || plexContainer || '';
+          const target = (m.TranscodeSession && m.TranscodeSession.container) || source;
+          if (source || target) {
+            container = `Converting (${source || ''}  ${target || ''})`;
+          } else {
+            container = 'Converting';
+          }
+        } else if (plexContainer) {
+          container = `Direct Play (${plexContainer.toUpperCase()})`;
+        } else {
+          container = '';
+        }
+
+        function mapDecision(decision) {
+          const d = (decision || '').toString().toLowerCase();
+          if (d === 'copy' || d === 'directstream' || d === 'direct stream') return 'Direct Stream';
+          if (d === 'directplay' || d === 'direct play') return 'Direct Play';
+          if (d === 'transcode') return 'Transcode';
+          return decision || '';
+        }
 
         let video = m.video || '';
         if (!video) {
           if (m.Video && m.Video[0]) {
             const v = m.Video[0];
-            const dec = v.decision || (transcoding ? 'Transcode' : 'Direct Play');
+            const dec = mapDecision(v.decision || (transcoding ? 'Transcode' : 'Direct Play'));
             const codec = v.codec || '';
             const res = v.resolution || '';
             const parts = [];
@@ -963,19 +991,23 @@ function summaryFromResponse(resp) {
         if (!audio) {
           if (m.Audio && m.Audio[0]) {
             const a = m.Audio[0];
-            const dec = a.decision || (transcoding ? 'Transcode' : 'Direct Play');
+            const dec = mapDecision(a.decision || (transcoding ? 'Transcode' : 'Direct Play'));
             const lang = a.language || '';
             const codec = a.codec || '';
             const ch = a.channels || '';
             const pieces = [];
             if (dec) pieces.push(dec);
-            const right = [lang, codec, ch ? `${ch}ch` : ''].filter(Boolean).join(' ');
+            const rightParts = [];
+            if (lang) rightParts.push(lang);
+            if (codec) rightParts.push(codec);
+            if (ch) rightParts.push(`${ch}`);
+            const right = rightParts.join(' - ');
             if (right) pieces.push(`(${right})`);
             audio = pieces.join(' ');
           } else if (media0.audioCodec || media0.audioChannels) {
             const parts = [];
             if (media0.audioCodec) parts.push(media0.audioCodec.toString().toUpperCase());
-            if (media0.audioChannels) parts.push(`${media0.audioChannels}ch`);
+            if (media0.audioChannels) parts.push(`${media0.audioChannels}`);
             audio = parts.join(' ');
           }
         }
