@@ -258,25 +258,21 @@
     let layoutMode = 'grid';
     document.addEventListener('DOMContentLoaded', () => {
       const grid = document.getElementById('grid');
-      const settingsToggle = document.querySelector('.settings-toggle');
-      const settingsSubmenu = document.querySelector('.settings-submenu');
-      const newsletterToggle = document.querySelector('.newsletter-toggle');
-      const newsletterSubmenu = document.querySelector('.newsletter-submenu');
       // Apply saved layout mode from Settings (default to grid)
       const savedLayout = localStorage.getItem('omnistreamLayout') || 'grid';
       layoutMode = savedLayout === 'flex' ? 'flex' : 'grid';
       grid.className = layoutMode === 'grid' ? 'grid-layout' : 'flex-layout';
 
-      if (settingsToggle && settingsSubmenu) {
-        settingsToggle.addEventListener('click', () => {
-          settingsSubmenu.classList.toggle('open');
-        });
-      }
-      if (newsletterToggle && newsletterSubmenu) {
-        newsletterToggle.addEventListener('click', () => {
-          newsletterSubmenu.classList.toggle('open');
-        });
-      }
+      // Expand/collapse submenus for both Newsletter and Settings groups
+      document.querySelectorAll('.settings-group').forEach(group => {
+        const toggle = group.querySelector('.newsletter-toggle, .settings-toggle');
+        const submenu = group.querySelector('.settings-submenu');
+        if (toggle && submenu) {
+          toggle.addEventListener('click', () => {
+            submenu.classList.toggle('open');
+          });
+        }
+      });
 
       const appShell = document.querySelector('.app-shell');
       const sidebarToggle = document.getElementById('sidebarToggle');
