@@ -167,8 +167,9 @@
       font-size:24px;
       text-transform:uppercase;
     }
-    .progress-bar{background:#020617;height:4px;border-radius:999px;margin-top:4px;overflow:hidden;box-shadow:0 0 0 1px rgba(15,23,42,0.9);}
-    .progress-fill{background:var(--progress-fill);height:100%;transition:width 0.25s ease-out}
+    .progress-bar{background:#020617;height:4px;border-radius:999px;margin-top:4px;overflow:hidden;box-shadow:0 0 0 1px rgba(15,23,42,0.9);position:relative;}
+    .progress-fill{background:var(--progress-fill);height:100%;transition:width 0.25s ease-out;position:absolute;left:0;top:0;}
+    .progress-fill-transcode{background:var(--session-transcode);opacity:0.4;}
     .progress-meta{margin-top:3px;font-size:10px;color:var(--text-faint);display:flex;justify-content:space-between;align-items:flex-start;gap:6px;}
     .progress-meta-left{flex:1;min-width:0;overflow:hidden;color:var(--text-main);font-weight:600;font-size:11px;}
     .badge-row{margin-top:4px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;}
@@ -609,9 +610,22 @@
             // Progress bar directly under the Bandwidth line, within the text column
             const bar = document.createElement('div');
             bar.className = 'progress-bar';
+            // If a transcode is active and exposes its own progress, draw
+            // a background track for the transcode ahead of playback.
+            const tProgress = typeof sess.transcodeProgress === 'number' ? sess.transcodeProgress : 0;
+            if (tProgress > 0) {
+              const tFill = document.createElement('div');
+              tFill.className = 'progress-fill progress-fill-transcode';
+              const clampedT = Math.max(0, Math.min(100, tProgress));
+              tFill.style.width = clampedT + '%';
+              tFill.title = `Transcode ${clampedT}%`;
+              bar.appendChild(tFill);
+            }
             const fill = document.createElement('div');
             fill.className = 'progress-fill';
-            fill.style.width = (sess.progress || 0) + '%';
+            const pProgress = typeof sess.progress === 'number' ? sess.progress : 0;
+            const clampedP = Math.max(0, Math.min(100, pProgress));
+            fill.style.width = clampedP + '%';
             bar.appendChild(fill);
             info.appendChild(bar);
             row.appendChild(info);

@@ -819,7 +819,13 @@ function summaryFromResponse(resp) {
     if (d.MediaContainer) {
       const sessions = (d.MediaContainer.Metadata || []).map(m => {
         let posterUrl;
-        let rawThumb = m.thumb || m.grandparentThumb || m.parentThumb || m.art || '';
+        // Prefer season/show poster for TV episodes so we avoid episode stills
+        let rawThumb;
+        if (m.type === 'episode' || m.grandparentTitle) {
+          rawThumb = m.parentThumb || m.grandparentThumb || m.thumb || m.art || '';
+        } else {
+          rawThumb = m.thumb || m.grandparentThumb || m.parentThumb || m.art || '';
+        }
         if (rawThumb && typeof rawThumb === 'string' && /^https?:\/\//i.test(rawThumb)) {
           // Absolute URL (e.g. Plex metadata-static or provider-static) –
           // use it directly so OTA/live TV artwork can load correctly.
@@ -925,6 +931,15 @@ function summaryFromResponse(resp) {
           if (transcodingAudio) parts.push('Audio');
           if (transcodingSubtitle) parts.push('Subtitles');
           transcodeDetails = parts.join(' + ');
+        }
+
+        // Plex sometimes exposes an explicit transcode progress percentage
+        let transcodeProgress = 0;
+        if (m.TranscodeSession && typeof m.TranscodeSession.progress === 'number') {
+          const p = m.TranscodeSession.progress;
+          if (!Number.isNaN(p)) {
+            transcodeProgress = Math.max(0, Math.min(100, Math.round(p)));
+          }
         }
 
         // Derive a quality label when Plex does not provide one directly
@@ -1052,6 +1067,7 @@ function summaryFromResponse(resp) {
           video,
           audio,
           transcodeDetails,
+          transcodeProgress,
           subtitle: m.subtitle || (m.Subtitle && m.Subtitle[0] ? `${m.Subtitle[0].language || ''}` : 'None'),
           location: m.location || (m.Player?.local ? 'LAN' : 'WAN'),
           ip: m.Player?.address || '',
@@ -1220,6 +1236,21 @@ function summaryFromResponse(resp) {
           } else if (videoStream && videoStream.Bitrate) {
             bandwidth = Number(videoStream.Bitrate) / 1000000;
           }
+
+          // Jellyfin/Emby transcode progress when available
+          let transcodeProgress = 0;
+          if (s.TranscodingInfo) {
+            if (typeof s.TranscodingInfo.CompletionPercentage === 'number') {
+              transcodeProgress = s.TranscodingInfo.CompletionPercentage;
+            } else if (typeof s.TranscodingInfo.Progress === 'number') {
+              transcodeProgress = s.TranscodingInfo.Progress;
+            }
+            if (!Number.isNaN(transcodeProgress)) {
+              transcodeProgress = Math.max(0, Math.min(100, Math.round(transcodeProgress)));
+            } else {
+              transcodeProgress = 0;
+            }
+          }
           return {
             user: s.UserName || 'Unknown',
             title: s.NowPlayingItem?.Name || 'Idle',
@@ -1246,6 +1277,7 @@ function summaryFromResponse(resp) {
             location,
             ip,
             bandwidth,
+            transcodeProgress,
             channel: s.NowPlayingItem?.ChannelName || '',
             isLive: (s.NowPlayingItem?.Type === 'LiveTv') || (s.NowPlayingItem?.IsLive === true),
             // Season / episode numbers for Jellyfin/Emby standard API
