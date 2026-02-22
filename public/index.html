@@ -528,12 +528,25 @@
             } else {
               displayTitle = sess.title || sess.channel || 'Idle';
             }
-            // Build season/episode label (rendered below the title/timer later)
+            // Build season/episode label
             if (typeof sess.seasonNumber === 'number' || typeof sess.episodeNumber === 'number') {
               const parts = [];
               if (typeof sess.seasonNumber === 'number') parts.push('Season ' + sess.seasonNumber);
               if (typeof sess.episodeNumber === 'number') parts.push('Episode ' + sess.episodeNumber);
               seasonEpisodeLabel = parts.join(' • ');
+            }
+            // Render content title + season/episode under the user name
+            if (displayTitle) {
+              const titleLine = document.createElement('div');
+              titleLine.className = 'session-title';
+              titleLine.textContent = displayTitle;
+              info.appendChild(titleLine);
+            }
+            if (seasonEpisodeLabel) {
+              const seLine = document.createElement('div');
+              seLine.className = 'session-meta';
+              seLine.textContent = seasonEpisodeLabel;
+              info.appendChild(seLine);
             }
             // Top meta column: Product / Player / Quality (stacked)
             const topMeta = document.createElement('div');
@@ -606,20 +619,28 @@
               const endDate = new Date(Date.now() + remainingSec * 1000);
               endTimeStr = endDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
             }
-            const leftSpan = document.createElement('span');
+            const leftSpan = document.createElement('div');
             leftSpan.className = 'progress-meta-left';
-            if (displayTitle) {
-              const titleSpan = document.createElement('div');
-              titleSpan.textContent = `▶ ${displayTitle}`;
-              leftSpan.appendChild(titleSpan);
-              if (seasonEpisodeLabel) {
-                const seSpan = document.createElement('div');
-                seSpan.className = 'session-meta';
-                seSpan.textContent = seasonEpisodeLabel;
-                leftSpan.appendChild(seSpan);
-              }
-            } else {
-              leftSpan.textContent = '▶ Playing';
+
+            // Location / WAN IP / Bandwidth block
+            const locLabel = document.createElement('div');
+            locLabel.textContent = 'Location';
+            leftSpan.appendChild(locLabel);
+
+            const isWan = sess.location && typeof sess.location === 'string' && sess.location.toUpperCase().includes('WAN');
+            const ip = sess.ip || '';
+            const locLine = document.createElement('div');
+            if (isWan) {
+              locLine.textContent = ip ? `WAN: ${ip}` : 'WAN';
+            } else if (sess.location) {
+              locLine.textContent = sess.location;
+            }
+            if (locLine.textContent) leftSpan.appendChild(locLine);
+
+            if (typeof sess.bandwidth === 'number' && sess.bandwidth > 0) {
+              const bwLine = document.createElement('div');
+              bwLine.textContent = `Bandwidth: ${sess.bandwidth.toFixed(1)} Mbps`;
+              leftSpan.appendChild(bwLine);
             }
 
             const rightBox = document.createElement('div');
