@@ -546,7 +546,7 @@
             if (topMeta.childNodes.length > 0) {
               info.appendChild(topMeta);
             }
-            // Info list: Stream, Container, Video, Audio, Subtitle (each on its own line)
+            // Info list: Stream, Container, Video, Audio, Subtitle, Location, Bandwidth (each on its own line)
             const infoList = document.createElement('div');
             infoList.className = 'session-info-list';
             function addInfo(label, value) {
@@ -562,9 +562,30 @@
             addInfo('Video', sess.video);
             addInfo('Audio', sess.audio);
             addInfo('Subtitle', sess.subtitle);
+            // Location and bandwidth, shown under Subtitle like Plex
+            const isWan = sess.location && typeof sess.location === 'string' && sess.location.toUpperCase().includes('WAN');
+            const ip = sess.ip || '';
+            let locationValue = '';
+            if (isWan) {
+              locationValue = ip ? `WAN: ${ip}` : 'WAN';
+            } else if (sess.location) {
+              locationValue = sess.location;
+            }
+            if (locationValue) {
+              addInfo('Location', locationValue);
+            }
+            if (typeof sess.bandwidth === 'number' && sess.bandwidth > 0) {
+              addInfo('Bandwidth', `${sess.bandwidth.toFixed(1)} Mbps`);
+            }
             info.appendChild(infoList);
-            // We want the progress bar directly below the bandwidth line, which lives in the footer,
-            // so keep the bar creation after bandwidth and before play/type lines (see below).
+            // Progress bar directly under the Bandwidth line, within the text column
+            const bar = document.createElement('div');
+            bar.className = 'progress-bar';
+            const fill = document.createElement('div');
+            fill.className = 'progress-fill';
+            fill.style.width = (sess.progress || 0) + '%';
+            bar.appendChild(fill);
+            info.appendChild(bar);
             row.appendChild(info);
             // Append the combined row for both layouts so sessions never appear empty
             session.appendChild(row);
@@ -592,47 +613,7 @@
             const leftSpan = document.createElement('div');
             leftSpan.className = 'progress-meta-left';
 
-            // Location row: "Location" label with value to the right
-            const isWan = sess.location && typeof sess.location === 'string' && sess.location.toUpperCase().includes('WAN');
-            const ip = sess.ip || '';
-            let locationValue = '';
-            if (isWan) {
-              locationValue = ip ? `WAN: ${ip}` : 'WAN';
-            } else if (sess.location) {
-              locationValue = sess.location;
-            }
-            if (locationValue) {
-              const locRow = document.createElement('div');
-              locRow.style.display = 'flex';
-              locRow.style.justifyContent = 'space-between';
-              locRow.style.gap = '6px';
-
-              const locLabel = document.createElement('span');
-              locLabel.textContent = 'Location';
-              const locVal = document.createElement('span');
-              locVal.textContent = locationValue;
-
-              locRow.appendChild(locLabel);
-              locRow.appendChild(locVal);
-              leftSpan.appendChild(locRow);
-            }
-
-            if (typeof sess.bandwidth === 'number' && sess.bandwidth > 0) {
-              const bwLine = document.createElement('div');
-              bwLine.textContent = `Bandwidth: ${sess.bandwidth.toFixed(1)} Mbps`;
-              leftSpan.appendChild(bwLine);
-            }
-
-            // Progress bar directly under the Bandwidth line
-            const bar = document.createElement('div');
-            bar.className = 'progress-bar';
-            const fill = document.createElement('div');
-            fill.className = 'progress-fill';
-            fill.style.width = (sess.progress || 0) + '%';
-            bar.appendChild(fill);
-            session.appendChild(bar);
-
-            // Progress/playing line under the progress bar
+            // Progress/playing line in the footer area
             const playLine = document.createElement('div');
             playLine.textContent = displayTitle ? `▶ ${displayTitle}` : '▶ Playing';
             leftSpan.appendChild(playLine);
