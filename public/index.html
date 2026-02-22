@@ -15,9 +15,6 @@
     .nav-link:hover{background:rgba(148,163,184,0.15);color:var(--text-main);}
     .nav-link-active{background:rgba(59,130,246,0.18);color:#e5edff;border-left:3px solid var(--btn-border);padding-left:7px;}
     .settings-group{margin-top:4px;}
-    /* Make Newsletter / Settings headers behave like simple toggles without highlight blocks */
-    .settings-group > .nav-link{background:transparent;border-left:none;padding-left:10px;cursor:pointer;}
-    .settings-group > .nav-link:hover{background:transparent;color:var(--text-main);}
     .settings-submenu{display:none;flex-direction:column;gap:2px;padding-left:14px;margin-top:3px;}
     .settings-submenu.open{display:flex;}
     .submenu-link{display:block;padding:6px 10px;border-radius:8px;font-size:12px;color:var(--text-muted);text-decoration:none;}
@@ -50,8 +47,8 @@
       width: 100%;
     }
     .sessions.horizontal-grid {
-      display: flex;
-      flex-direction: column;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 18px;
       align-items: stretch;
       width: 100%;
