@@ -325,8 +325,9 @@
       if (sidebar) sidebar.style.display = '';
       if (layoutToggle) layoutToggle.style.display = '';
 
-      // Compute global summary (servers/streams) for the header
+      // Compute global summary (servers/streams/bandwidth) for the header
       let online = 0, offline = 0, totalStreams = 0, wanStreams = 0, transcodeStreams = 0;
+      let totalBandwidthAll = 0, wanBandwidthAll = 0;
       servers.forEach(s => {
         const st = statuses && statuses[s.id] ? statuses[s.id] : null;
         if (!st) {
@@ -339,6 +340,10 @@
           totalStreams++;
           const isWan = sess.location && typeof sess.location === 'string' && sess.location.toUpperCase().includes('WAN');
           if (isWan) wanStreams++;
+          if (typeof sess.bandwidth === 'number') {
+            totalBandwidthAll += sess.bandwidth;
+            if (isWan) wanBandwidthAll += sess.bandwidth;
+          }
           let isTranscode = false;
           if (typeof sess.transcoding === 'boolean') {
             isTranscode = sess.transcoding;
@@ -355,7 +360,8 @@
         const lastAt = poll.lastPollAt ? new Date(poll.lastPollAt).toLocaleTimeString() : '-';
         const parts = [];
         parts.push(`${totalServers} server${totalServers === 1 ? '' : 's'} (${online} online${offline ? ", " + offline + " offline" : ''})`);
-        parts.push(`${totalStreams} stream${totalStreams === 1 ? '' : 's'}${wanStreams ? ", " + wanStreams + " WAN" : ''}${transcodeStreams ? ", " + transcodeStreams + " transcode" + (transcodeStreams === 1 ? '' : 's') : ''}`);
+        const bwLabel = totalBandwidthAll > 0 ? `, ${totalBandwidthAll.toFixed(1)} Mbps total${wanBandwidthAll > 0 ? ", " + wanBandwidthAll.toFixed(1) + " Mbps WAN" : ''}` : '';
+        parts.push(`${totalStreams} stream${totalStreams === 1 ? '' : 's'}${wanStreams ? ", " + wanStreams + " WAN" : ''}${transcodeStreams ? ", " + transcodeStreams + " transcode" + (transcodeStreams === 1 ? '' : 's') : ''}${bwLabel}`);
         parts.push(`last updated ${lastAt}`);
         globalSummary.textContent = parts.join('  •  ');
       }
