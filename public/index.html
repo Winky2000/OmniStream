@@ -663,7 +663,8 @@
               const userSpan = document.createElement('span');
               userSpan.style.display = 'inline-flex';
               userSpan.style.alignItems = 'center';
-              userSpan.style.gap = '4px';
+              userSpan.style.gap = '6px';
+              userSpan.style.fontSize = '12px';
               if (userName) {
                 const userLink = document.createElement('a');
                 userLink.href = 'user.html?user=' + encodeURIComponent(userName);
@@ -673,8 +674,8 @@
                   const avatar = document.createElement('img');
                   avatar.src = sess.userAvatar;
                   avatar.alt = userName;
-                  avatar.style.width = '22px';
-                  avatar.style.height = '22px';
+                  avatar.style.width = '26px';
+                  avatar.style.height = '26px';
                   avatar.style.borderRadius = '50%';
                   avatar.style.objectFit = 'cover';
                   avatar.style.marginLeft = '4px';
