@@ -657,9 +657,67 @@ async function runNewsletterScheduleIfDue() {
 }
 
 function buildRecentlyAddedBlocks(items, { publicBaseUrl } = {}) {
-  const rows = Array.isArray(items) ? items : [];
-  const movies = rows.filter(r => r && r.type === 'movie');
-  const episodes = rows.filter(r => r && r.type === 'episode');
+  const options = arguments.length > 1 && arguments[1] && typeof arguments[1] === 'object' ? arguments[1] : {};
+  const rowsAll = Array.isArray(items) ? items : [];
+  const startDate = typeof options.startDate === 'string' ? options.startDate.trim() : '';
+  const endDate = typeof options.endDate === 'string' ? options.endDate.trim() : '';
+  const displayLimit = Number.isFinite(Number(options.displayLimit)) ? Number(options.displayLimit) : 20;
+
+  const parseRangeMs = () => {
+    const startMs = startDate ? Date.parse(`${startDate}T00:00:00.000Z`) : NaN;
+    const endMs = endDate ? Date.parse(`${endDate}T23:59:59.999Z`) : NaN;
+    if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return null;
+    return { startMs, endMs };
+  };
+
+  const range = parseRangeMs();
+  const rows = range
+    ? rowsAll.filter(r => {
+      if (!r || !r.addedAt) return false;
+      const t = Date.parse(r.addedAt);
+      if (!Number.isFinite(t)) return false;
+      return t >= range.startMs && t <= range.endMs;
+    })
+    : rowsAll;
+
+  // Totals are computed across the full (optionally date-filtered) result set.
+  const totalMovies = rows.filter(r => r && r.type === 'movie').length;
+
+  const tvRows = rows.filter(r => r && (r.type === 'episode' || r.type === 'season' || r.type === 'show'));
+  const showKeyFor = (r) => {
+    if (!r) return '';
+    if (r.showTitle) return String(r.showTitle).trim();
+    // Fallback: try to infer from the formatted title "Show - S01E01 - Episode".
+    const t = String(r.title || '').trim();
+    const idx = t.indexOf(' - ');
+    if (idx > 0) return t.slice(0, idx).trim();
+    return '';
+  };
+
+  const showSet = new Set();
+  const seasonSet = new Set();
+  for (const r of tvRows) {
+    const show = showKeyFor(r);
+    if (show) showSet.add(show);
+
+    const seasonNum = (r && typeof r.seasonNumber === 'number' && Number.isFinite(r.seasonNumber)) ? r.seasonNumber : null;
+    const seasonTitle = r && r.seasonTitle ? String(r.seasonTitle).trim() : '';
+    if (show) {
+      if (seasonNum !== null) {
+        seasonSet.add(`${show}::${seasonNum}`);
+      } else if (seasonTitle) {
+        seasonSet.add(`${show}::${seasonTitle}`);
+      }
+    }
+  }
+
+  const totalShows = showSet.size;
+  const totalSeasons = seasonSet.size;
+
+  // Display lists are limited so emails don't explode in size.
+  const displayRows = rows.slice(0, Math.max(0, displayLimit));
+  const movies = displayRows.filter(r => r && r.type === 'movie');
+  const episodes = displayRows.filter(r => r && r.type === 'episode');
 
   const formatLine = (it) => {
     let line = it.title || '';
@@ -670,12 +728,12 @@ function buildRecentlyAddedBlocks(items, { publicBaseUrl } = {}) {
 
   const textParts = [];
   if (movies.length) {
-    textParts.push('Movies');
+    textParts.push(`Movies (${totalMovies})`);
     movies.forEach(m => textParts.push('- ' + formatLine(m)));
     textParts.push('');
   }
   if (episodes.length) {
-    textParts.push('TV Episodes');
+    textParts.push(`TV (${totalShows} shows · ${totalSeasons} seasons)`);
     episodes.forEach(e => textParts.push('- ' + formatLine(e)));
     textParts.push('');
   }
@@ -739,15 +797,20 @@ function buildRecentlyAddedBlocks(items, { publicBaseUrl } = {}) {
       htmlParts.push(cardHtml(it));
     });
   };
-  section('Recently Added Movies', movies);
-  section('Recently Added TV Episodes', episodes);
+  section(`Recently Added Movies (${totalMovies})`, movies);
+  section(`Recently Added TV (${totalShows} shows · ${totalSeasons} seasons)`, episodes);
   if (!movies.length && !episodes.length) {
     htmlParts.push('<div style="color:#94a3b8;" class="dark-mode-muted">No recently added items found.</div>');
   }
 
   return {
     text: textParts.join('\n').trim(),
-    html: htmlParts.join('')
+    html: htmlParts.join(''),
+    stats: {
+      movies: totalMovies,
+      shows: totalShows,
+      seasons: totalSeasons
+    }
   };
 }
 
@@ -812,8 +875,9 @@ async function renderNewsletterSubjectAndBody(subject, body, fetchRecentlyAdded,
   if (needsRecent) {
     try {
       if (typeof fetchRecentlyAdded === 'function') {
-        const items = await fetchRecentlyAdded({ perServer: 10 });
-        recentlyAddedBlocks = buildRecentlyAddedBlocks((items || []).slice(0, 20), { publicBaseUrl });
+        // Fetch more than we display so counts reflect the full date window.
+        const items = await fetchRecentlyAdded({ perServer: 50 });
+        recentlyAddedBlocks = buildRecentlyAddedBlocks((items || []), { publicBaseUrl, startDate, endDate, displayLimit: 20 });
       } else {
         recentlyAddedBlocks = { text: 'Recently added list unavailable.', html: '<div>Recently added list unavailable.</div>' };
       }
@@ -823,10 +887,15 @@ async function renderNewsletterSubjectAndBody(subject, body, fetchRecentlyAdded,
     }
   }
 
+  const recentStats = recentlyAddedBlocks && recentlyAddedBlocks.stats ? recentlyAddedBlocks.stats : { movies: 0, shows: 0, seasons: 0 };
+
   const replacements = {
     '{{START_DATE}}': startDate,
     '{{END_DATE}}': endDate,
     '{{RECENTLY_ADDED}}': recentlyAddedBlocks.text,
+    '{{RECENTLY_ADDED_MOVIES_COUNT}}': String(recentStats.movies || 0),
+    '{{RECENTLY_ADDED_SHOWS_COUNT}}': String(recentStats.shows || 0),
+    '{{RECENTLY_ADDED_SEASONS_COUNT}}': String(recentStats.seasons || 0),
     '{{CUSTOM_SECTIONS}}': customSectionsBlocks.text,
     // Back-compat with some existing templates people copy in
     "${parameters['start_date']}": startDate,
@@ -3437,12 +3506,34 @@ app.get('/api/subscribers/summary', (req, res) => {
       const isSeason = rawType === 'season';
       if (!isMovie && !isEpisode && !isShow && !isSeason) return null;
 
+      const seasonNumber = isEpisode
+        ? (typeof m.parentIndex === 'number' ? m.parentIndex : null)
+        : (isSeason
+          ? (typeof m.index === 'number' ? m.index : (typeof m.parentIndex === 'number' ? m.parentIndex : null))
+          : null);
+
+      const episodeNumber = isEpisode
+        ? (typeof m.index === 'number' ? m.index : null)
+        : null;
+
+      const showTitle = isEpisode
+        ? (m.grandparentTitle || null)
+        : (isSeason
+          ? (m.parentTitle || m.grandparentTitle || null)
+          : (isShow
+            ? (m.title || m.originalTitle || null)
+            : null));
+
+      const seasonTitle = isEpisode
+        ? (m.parentTitle || null)
+        : (isSeason ? (m.title || null) : null);
+
       let title;
       if (isEpisode || m.grandparentTitle) {
         const series = m.grandparentTitle || '';
         const epName = m.title || '';
-        const seasonNum = typeof m.parentIndex === 'number' ? m.parentIndex : null;
-        const epNum = typeof m.index === 'number' ? m.index : null;
+        const seasonNum = seasonNumber;
+        const epNum = episodeNumber;
         let epLabel = '';
         if (seasonNum !== null && epNum !== null) {
           epLabel = `S${String(seasonNum).padStart(2, '0')}E${String(epNum).padStart(2, '0')}`;
@@ -3457,12 +3548,11 @@ app.get('/api/subscribers/summary', (req, res) => {
           title = epName || series || m.title || m.originalTitle || 'Unknown';
         }
       } else if (isSeason) {
-        const showName = m.parentTitle || m.grandparentTitle || '';
-        const seasonNum = typeof m.index === 'number' ? m.index : (typeof m.parentIndex === 'number' ? m.parentIndex : null);
-        if (showName && seasonNum !== null) {
-          title = `${showName} - Season ${seasonNum}`;
-        } else if (showName && m.title) {
-          title = `${showName} - ${m.title}`;
+        const showName = showTitle ? String(showTitle) : (m.parentTitle || m.grandparentTitle || '');
+        if (showName && seasonNumber !== null) {
+          title = `${showName} - Season ${seasonNumber}`;
+        } else if (showName && seasonTitle) {
+          title = `${showName} - ${seasonTitle}`;
         } else {
           title = m.title || showName || m.originalTitle || 'Unknown';
         }
@@ -3481,6 +3571,10 @@ app.get('/api/subscribers/summary', (req, res) => {
         serverName: server.name || server.baseUrl,
         type: rawType,
         title,
+        showTitle,
+        seasonTitle,
+        seasonNumber,
+        episodeNumber,
         year: m.year || null,
         durationMinutes: typeof m.duration === 'number' ? (m.duration / 60000) : null,
         genres: Array.isArray(m.Genre) ? m.Genre.map(g => g && g.tag ? String(g.tag) : '').filter(Boolean) : [],
