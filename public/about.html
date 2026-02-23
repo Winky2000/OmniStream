@@ -1,8 +1,8 @@
-time of day)<!doctype html>
+<!doctype html>
 <html>
 <head>
   <meta charset="utf-8">
-  <title>OmniStream Display Settings</title>
+  <title>OmniStream About</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link rel="stylesheet" href="theme.css">
   <style>
@@ -27,13 +27,15 @@ time of day)<!doctype html>
     .app-shell.sidebar-collapsed .sidebar{display:none;}
     .main-content{flex:1;box-sizing:border-box;padding:20px;}
     h1{margin:0 0 8px 0;color:var(--text-main);letter-spacing:0.5px;font-size:1.8em;font-weight:600;}
-    .settings-subnav{display:flex;gap:8px;margin:10px 0 16px 0;font-size:13px;flex-wrap:wrap;}
-    .settings-subnav a{padding:4px 10px;border-radius:999px;border:1px solid rgba(148,163,184,0.4);color:var(--text-muted);text-decoration:none;}
-    .settings-subnav a.active{background:var(--btn-border);border-color:var(--btn-border);color:#ffffff;}
-    .card{background:var(--card-bg);border-radius:14px;padding:16px 18px;box-shadow:0 12px 30px rgba(15,23,42,0.85);border:1px solid rgba(148,163,184,0.35);max-width:520px;}
-    label{display:block;font-size:13px;margin:6px 0;}
-    select{padding:6px 10px;border-radius:8px;border:1px solid var(--btn-border);background:var(--btn-bg);color:var(--btn-text);font-size:13px;}
-    .hint{font-size:12px;color:var(--text-muted);margin-top:4px;}
+    .card{background:var(--card-bg);border-radius:14px;padding:16px 18px;box-shadow:0 12px 30px rgba(15,23,42,0.85);border:1px solid rgba(148,163,184,0.35);max-width:760px;margin-bottom:18px;}
+    .card h2{margin:0 0 8px 0;font-size:16px;color:var(--text-main);}
+    .row{font-size:13px;margin:6px 0;color:var(--text-muted);}
+    .row b{color:var(--text-main);}
+    .status-ok{color:#a5d6a7;}
+    .status-warn{color:#ffd180;}
+    .status-error{color:#ff8a80;}
+    a{color:var(--link);text-decoration:none;}
+    a:hover{text-decoration:underline;}
   </style>
 </head>
 <body>
@@ -51,6 +53,7 @@ time of day)<!doctype html>
             <a href="overseerr.html" class="submenu-link">Overseerr</a>
             <a href="subscribers.html" class="submenu-link">Subscribers</a>
             <a href="templates.html" class="submenu-link">Templates</a>
+            <a href="custom-header.html" class="submenu-link">Custom header</a>
           </div>
         </div>
         <div class="settings-group">
@@ -58,96 +61,59 @@ time of day)<!doctype html>
           <div class="settings-submenu open">
             <a href="admin.html" class="submenu-link">Connected servers</a>
             <a href="servers.html" class="submenu-link">Servers</a>
-            <a href="display.html" class="submenu-link submenu-link-active">Themes &amp; layout</a>
+            <a href="display.html" class="submenu-link">Themes &amp; layout</a>
             <a href="notifiers.html" class="submenu-link">Notifiers</a>
             <a href="system.html" class="submenu-link">System</a>
-            <a href="about.html" class="submenu-link">About</a>
+            <a href="about.html" class="submenu-link submenu-link-active">About</a>
           </div>
         </div>
       </nav>
     </aside>
     <main class="main-content">
       <button class="sidebar-toggle" id="sidebarToggle">Hide menu</button>
-      <h1>Settings</h1>
+      <h1>About</h1>
+
       <div class="card">
-        <h2 style="margin:0 0 10px 0;font-size:16px;">Display preferences</h2>
-        <label>
-          Theme
-          <select id="themeSelect">
-            <option value="default">Default dark</option>
-            <option value="minimal">Minimal</option>
-            <option value="high-contrast">High contrast</option>
-            <option value="light">Light</option>
-            <option value="light-borderless">Light (borderless)</option>
-            <option value="ocean">Ocean</option>
-            <option value="winter">Winter</option>
-            <option value="purple">Purple</option>
-            <option value="yellow">Yellow</option>
-            <option value="orange">Orange</option>
-            <option value="forest">Forest</option>
-          </select>
-          <div class="hint">Controls the overall color palette. Default dark is tuned for low-light rooms; other themes keep the same layout with different colors.</div>
-        </label>
-        <label style="margin-top:10px;">
-          Layout
-          <select id="layoutSelect">
-            <option value="grid">Vertical layout</option>
-            <option value="flex">Horizontal layout</option>
-          </select>
-          <div class="hint">Vertical layout stacks server cards in columns. Horizontal layout shows wider rows with sessions flowing across, better for ultra-wide screens.</div>
-        </label>
+        <h2>Version</h2>
+        <div class="row"><b>OmniStream:</b> <span id="aboutVersion">Loading…</span></div>
+        <div class="row"><b>Server time:</b> <span id="aboutServerTime">-</span></div>
+      </div>
+
+      <div class="card">
+        <h2>Project</h2>
+        <div class="row"><b>GitHub:</b> <a id="aboutGitHub" href="#" target="_blank" rel="noreferrer">Loading…</a></div>
+        <div class="row"><b>Releases:</b> <a id="aboutReleases" href="#" target="_blank" rel="noreferrer">Loading…</a></div>
+      </div>
+
+      <div class="card">
+        <h2>Update status</h2>
+        <div class="row" id="aboutUpdateLine">Checking…</div>
+        <div class="row"><b>Last checked:</b> <span id="aboutCheckedAt">-</span></div>
+        <div class="row" id="aboutUpdateError" style="display:none;"></div>
       </div>
     </main>
   </div>
+
   <script>
-    // Apply saved theme and layout, wire selectors and Settings + sidebar toggle
     (function() {
-      const themeSelect = document.getElementById('themeSelect');
-      const layoutSelect = document.getElementById('layoutSelect');
       const settingsToggle = document.querySelector('.settings-toggle');
       const settingsSubmenu = document.querySelector('.settings-submenu');
       const newsletterToggle = document.querySelector('.newsletter-toggle');
       const newsletterSubmenu = document.querySelector('.newsletter-submenu');
+      const appShell = document.querySelector('.app-shell');
+      const sidebarToggle = document.getElementById('sidebarToggle');
       const savedTheme = localStorage.getItem('omnistreamTheme') || 'default';
       if (savedTheme && savedTheme !== 'default') {
         document.documentElement.setAttribute('data-theme', savedTheme);
       } else {
         document.documentElement.removeAttribute('data-theme');
       }
-      if (themeSelect) {
-        themeSelect.value = savedTheme;
-        themeSelect.addEventListener('change', () => {
-          const v = themeSelect.value;
-          if (v === 'default') {
-            document.documentElement.removeAttribute('data-theme');
-          } else {
-            document.documentElement.setAttribute('data-theme', v);
-          }
-          localStorage.setItem('omnistreamTheme', v);
-        });
-      }
-      const savedLayout = localStorage.getItem('omnistreamLayout') || 'grid';
-      if (layoutSelect) {
-        layoutSelect.value = savedLayout === 'flex' ? 'flex' : 'grid';
-        layoutSelect.addEventListener('change', () => {
-          const mode = layoutSelect.value === 'flex' ? 'flex' : 'grid';
-          localStorage.setItem('omnistreamLayout', mode);
-        });
-      }
-
       if (settingsToggle && settingsSubmenu) {
-        settingsToggle.addEventListener('click', () => {
-          settingsSubmenu.classList.toggle('open');
-        });
+        settingsToggle.addEventListener('click', () => settingsSubmenu.classList.toggle('open'));
       }
       if (newsletterToggle && newsletterSubmenu) {
-        newsletterToggle.addEventListener('click', () => {
-          newsletterSubmenu.classList.toggle('open');
-        });
+        newsletterToggle.addEventListener('click', () => newsletterSubmenu.classList.toggle('open'));
       }
-
-      const appShell = document.querySelector('.app-shell');
-      const sidebarToggle = document.getElementById('sidebarToggle');
       if (appShell && sidebarToggle) {
         const savedSidebar = localStorage.getItem('omnistreamSidebar') || 'open';
         if (savedSidebar === 'collapsed') {
@@ -161,6 +127,63 @@ time of day)<!doctype html>
         });
       }
     })();
+
+    async function loadAbout() {
+      try {
+        const r = await fetch('/api/about', { headers: { 'Cache-Control': 'no-cache' } });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const data = await r.json();
+
+        document.getElementById('aboutVersion').textContent = data.version || 'dev';
+        document.getElementById('aboutServerTime').textContent = data.serverTime || '-';
+
+        const githubUrl = data.githubUrl || '#';
+        const releasesUrl = data.releasesUrl || githubUrl;
+        const gh = document.getElementById('aboutGitHub');
+        gh.href = githubUrl;
+        gh.textContent = githubUrl;
+        const rel = document.getElementById('aboutReleases');
+        rel.href = releasesUrl;
+        rel.textContent = releasesUrl;
+
+        const upd = data.update || {};
+        const checkedAt = upd.checkedAt || null;
+        document.getElementById('aboutCheckedAt').textContent = checkedAt ? checkedAt : 'Not checked yet';
+
+        const updateLine = document.getElementById('aboutUpdateLine');
+        const latest = upd.latestVersion || null;
+        const available = upd.updateAvailable;
+
+        if (available === true && latest) {
+          updateLine.innerHTML = `Update available: <b>${latest}</b> — see <a href="${releasesUrl}" target="_blank" rel="noreferrer">GitHub releases</a>`;
+          updateLine.className = 'row status-warn';
+        } else if (available === false) {
+          updateLine.textContent = latest ? `Up to date (latest: ${latest})` : 'Up to date';
+          updateLine.className = 'row status-ok';
+        } else {
+          updateLine.textContent = latest ? `Latest release: ${latest}` : 'Update status not available yet';
+          updateLine.className = 'row';
+        }
+
+        const err = upd.error || '';
+        const errEl = document.getElementById('aboutUpdateError');
+        if (err) {
+          errEl.style.display = 'block';
+          errEl.textContent = 'Update check error: ' + err;
+          errEl.className = 'row status-error';
+        } else {
+          errEl.style.display = 'none';
+        }
+      } catch (e) {
+        console.error('Failed to load about:', e);
+        document.getElementById('aboutVersion').textContent = 'Unknown';
+        const updateLine = document.getElementById('aboutUpdateLine');
+        updateLine.textContent = 'Failed to load update status.';
+        updateLine.className = 'row status-error';
+      }
+    }
+
+    loadAbout();
   </script>
 </body>
 </html>

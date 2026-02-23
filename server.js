@@ -25,11 +25,107 @@ try {
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Help avoid confusion from cached HTML and make it easy to confirm which build is serving a page.
+app.use((req, res, next) => {
+  try {
+    res.setHeader('X-OmniStream-Version', appVersion || 'dev');
+  } catch (_) {
+    // ignore
+  }
+
+  // For HTML pages, be extra strict about caching to reduce "old UI" reports.
+  const accept = String(req.headers.accept || '');
+  const isHtmlRequest = accept.includes('text/html') || req.path === '/' || req.path.endsWith('.html');
+  if (isHtmlRequest) {
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  }
+  next();
+});
 app.use(express.static('public'));
 
 const SERVERS_FILE = path.join(__dirname, 'servers.json');
 const CONFIG_FILE = path.join(__dirname, 'config.json');
 const PKG_FILE = path.join(__dirname, 'package.json');
+
+const DEFAULT_GITHUB_REPO = 'winky2000/omnistream';
+const DEFAULT_GITHUB_URL = `https://github.com/${DEFAULT_GITHUB_REPO}`;
+const DEFAULT_GITHUB_RELEASES_URL = `${DEFAULT_GITHUB_URL}/releases`;
+const DEFAULT_GITHUB_LATEST_RELEASE_API = `https://api.github.com/repos/${DEFAULT_GITHUB_REPO}/releases/latest`;
+
+const updateState = {
+  lastCheckedAtMs: 0,
+  latestVersion: null,
+  updateAvailable: null,
+  error: null
+};
+
+function parseSemver(input) {
+  const raw = String(input || '').trim();
+  if (!raw) return null;
+  const s = raw.startsWith('v') || raw.startsWith('V') ? raw.slice(1) : raw;
+  const m = s.match(/^(\d+)\.(\d+)\.(\d+)/);
+  if (!m) return null;
+  const major = Number(m[1]);
+  const minor = Number(m[2]);
+  const patch = Number(m[3]);
+  if (![major, minor, patch].every(Number.isFinite)) return null;
+  return [major, minor, patch];
+}
+
+function compareSemver(a, b) {
+  if (!a || !b) return 0;
+  for (let i = 0; i < 3; i++) {
+    if (a[i] > b[i]) return 1;
+    if (a[i] < b[i]) return -1;
+  }
+  return 0;
+}
+
+async function checkForUpdatesOnGitHub() {
+  const resp = await axios.get(DEFAULT_GITHUB_LATEST_RELEASE_API, {
+    timeout: 8000,
+    headers: {
+      'User-Agent': `OmniStream/${appVersion || 'dev'}`,
+      'Accept': 'application/vnd.github+json'
+    }
+  });
+  const tag = resp && resp.data ? (resp.data.tag_name || resp.data.name || '') : '';
+  return String(tag || '').trim();
+}
+
+async function maybeCheckForUpdates({ force } = {}) {
+  const now = Date.now();
+  const minIntervalMs = 6 * 60 * 60 * 1000; // 6 hours
+  if (!force && updateState.lastCheckedAtMs && (now - updateState.lastCheckedAtMs) < minIntervalMs) {
+    return;
+  }
+
+  // Random gate so we don't check predictably or too often.
+  const probability = 0.35;
+  if (!force && Math.random() > probability) {
+    return;
+  }
+
+  try {
+    const latestTag = await checkForUpdatesOnGitHub();
+    const latestParsed = parseSemver(latestTag);
+    const currentParsed = parseSemver(appVersion);
+    updateState.latestVersion = latestParsed ? `v${latestParsed.join('.')}` : (latestTag || null);
+    if (currentParsed && latestParsed) {
+      updateState.updateAvailable = compareSemver(latestParsed, currentParsed) === 1;
+    } else {
+      updateState.updateAvailable = null;
+    }
+    updateState.error = null;
+  } catch (e) {
+    updateState.error = e && e.message ? String(e.message) : 'Update check failed';
+  } finally {
+    updateState.lastCheckedAtMs = now;
+  }
+}
 
 let appVersion = null;
 try {
@@ -110,6 +206,666 @@ if (!appConfig.newsletterEmail) {
 if (!appConfig.newsletterTemplates) {
   appConfig.newsletterTemplates = [];
 }
+if (!appConfig.newsletterCustomSections) {
+  appConfig.newsletterCustomSections = [];
+}
+if (!appConfig.newsletterSchedule) {
+  appConfig.newsletterSchedule = {
+    enabled: false,
+    templateId: 'tpl-default-recently-added',
+    dayOfWeek: 0,
+    time: '09:00',
+    lastSentDate: ''
+  };
+}
+
+function saveAppConfigToDisk() {
+  try {
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify(appConfig, null, 2));
+    return true;
+  } catch (e) {
+    console.error('[OmniStream] Failed to write config.json:', e.message);
+    return false;
+  }
+}
+
+const DEFAULT_NEWSLETTER_TEMPLATE_ID = 'tpl-default-recently-added';
+const DEFAULT_NEWSLETTER_TEMPLATE_FILE = path.join(__dirname, 'newsletter_templates', 'recently_added_default.html');
+const SENT_NEWSLETTERS_DIR = path.join(__dirname, 'sent_newsletters');
+
+function readDefaultNewsletterTemplateBody() {
+  try {
+    if (fs.existsSync(DEFAULT_NEWSLETTER_TEMPLATE_FILE)) {
+      const stat = fs.statSync(DEFAULT_NEWSLETTER_TEMPLATE_FILE);
+      if (stat && stat.isFile()) {
+        return fs.readFileSync(DEFAULT_NEWSLETTER_TEMPLATE_FILE, 'utf8') || '';
+      }
+    }
+  } catch (e) {
+    console.error('[OmniStream] Failed to read default newsletter template:', e.message);
+  }
+  return '';
+}
+
+function ensureDefaultNewsletterTemplate() {
+  try {
+    if (!Array.isArray(appConfig.newsletterTemplates)) {
+      appConfig.newsletterTemplates = [];
+    }
+
+    const bodyFromDisk = readDefaultNewsletterTemplateBody();
+
+    // If there are no templates at all, seed the default.
+    if (!appConfig.newsletterTemplates.length) {
+      appConfig.newsletterTemplates = [
+        {
+          id: DEFAULT_NEWSLETTER_TEMPLATE_ID,
+          name: 'Recently Added (default)',
+          subject: 'Recently Added: {{START_DATE}} - {{END_DATE}}',
+          body: bodyFromDisk || 'Recently added this week:\n\n{{RECENTLY_ADDED}}'
+        }
+      ];
+
+      // Persist so it survives restarts.
+      try {
+        fs.writeFileSync(CONFIG_FILE, JSON.stringify(appConfig, null, 2));
+        console.log('[OmniStream] Seeded default newsletter template into config.json');
+      } catch (e) {
+        console.error('[OmniStream] Failed to persist default newsletter template:', e.message);
+      }
+      return;
+    }
+
+    // If the default template already exists, only auto-refresh it when it
+    // still looks like an unmodified older built-in version.
+    if (bodyFromDisk) {
+      const idx = appConfig.newsletterTemplates.findIndex(t => t && String(t.id) === DEFAULT_NEWSLETTER_TEMPLATE_ID);
+      if (idx !== -1) {
+        const existing = appConfig.newsletterTemplates[idx] || {};
+        const existingBody = String(existing.body || '');
+        const looksLikeOldBright = existingBody.includes('background-color: #F1E5AC');
+        const looksLikeHardcodedSection = /<figure\s+class="table"/i.test(existingBody)
+          && /Useful\s+Links/i.test(existingBody)
+          && /Donate\s+to\s+my\s+hard\s+drive\s+fund/i.test(existingBody)
+          && !/\{\{\s*CUSTOM_SECTIONS\s*\}\}/i.test(existingBody);
+
+        if (looksLikeOldBright || looksLikeHardcodedSection) {
+          appConfig.newsletterTemplates[idx] = {
+            ...existing,
+            body: bodyFromDisk
+          };
+          try {
+            fs.writeFileSync(CONFIG_FILE, JSON.stringify(appConfig, null, 2));
+            console.log('[OmniStream] Refreshed default newsletter template body from disk');
+          } catch (e) {
+            console.error('[OmniStream] Failed to persist refreshed default newsletter template:', e.message);
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.error('[OmniStream] ensureDefaultNewsletterTemplate failed:', e.message);
+  }
+}
+
+function escapeHtml(input) {
+  return String(input || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function formatIsoDateShort(d) {
+  try {
+    return new Date(d).toISOString().slice(0, 10);
+  } catch (_) {
+    return '';
+  }
+}
+
+function computeDefaultDateRange() {
+  const end = new Date();
+  const start = new Date(end.getTime() - 7 * 24 * 60 * 60 * 1000);
+  return {
+    startDate: formatIsoDateShort(start),
+    endDate: formatIsoDateShort(end)
+  };
+}
+
+function applyBasicNewsletterReplacements(text, replacements) {
+  let out = String(text || '');
+  const pairs = Object.entries(replacements || {});
+  for (const [key, value] of pairs) {
+    const token = String(key);
+    out = out.split(token).join(String(value));
+  }
+  return out;
+}
+
+function linkifyAndPreserveLines(text) {
+  // Escape HTML, then turn bare URLs into links, then preserve newlines.
+  const escaped = escapeHtml(text || '');
+  const withLinks = escaped.replace(/\bhttps?:\/\/[^\s<]+/gi, (m) => {
+    return `<a href="${m}" target="_blank" rel="noopener noreferrer" style="color:#E5A00D;text-decoration:none;">${m}</a>`;
+  });
+  return withLinks.replace(/\r\n|\r|\n/g, '<br>');
+}
+
+function buildCustomSectionsBlocks(sections) {
+  const list = Array.isArray(sections) ? sections : [];
+  const cleaned = list
+    .map((s) => {
+      const header = s && typeof s.header === 'string' ? s.header.trim() : '';
+      const cols = s && Array.isArray(s.columns) ? s.columns : [];
+      const c1 = typeof cols[0] === 'string' ? cols[0].trim() : '';
+      const c2 = typeof cols[1] === 'string' ? cols[1].trim() : '';
+      const c3 = typeof cols[2] === 'string' ? cols[2].trim() : '';
+      const hasAny = !!(header || c1 || c2 || c3);
+      return hasAny ? { header, columns: [c1, c2, c3] } : null;
+    })
+    .filter(Boolean);
+
+  if (!cleaned.length) return { text: '', html: '' };
+
+  const textParts = [];
+  const htmlParts = [];
+
+  cleaned.forEach((sec) => {
+    const header = sec.header || '';
+    const [c1, c2, c3] = sec.columns;
+    const hasAnyColumnData = Boolean((c1 && c1.trim()) || (c2 && c2.trim()) || (c3 && c3.trim()));
+
+    if (header) {
+      textParts.push(header);
+      textParts.push('-'.repeat(Math.min(40, Math.max(6, header.length))));
+    }
+    if (hasAnyColumnData) {
+      const lines1 = (c1 || '').split(/\r\n|\r|\n/).filter(Boolean);
+      const lines2 = (c2 || '').split(/\r\n|\r|\n/).filter(Boolean);
+      const lines3 = (c3 || '').split(/\r\n|\r|\n/).filter(Boolean);
+      const max = Math.max(lines1.length, lines2.length, lines3.length);
+      for (let i = 0; i < max; i++) {
+        const a = lines1[i] || '';
+        const b = lines2[i] || '';
+        const c = lines3[i] || '';
+        const row = [a, b, c].filter(Boolean).join(' | ');
+        if (row) textParts.push(row);
+      }
+    }
+    textParts.push('');
+
+    htmlParts.push(
+      `<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width:600px;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">` +
+      `<tr><td style="padding: 10px 20px ${hasAnyColumnData ? '0' : '18px'} 20px;">` +
+      `<div style="border-top: 2px solid #E5A00D; margin: 10px 0 14px 0;" class="dark-mode-border"></div>` +
+      (header
+        ? `<div style="margin:0 0 10px 0;font-weight:700;font-size:22px;letter-spacing:0.3px;color:#e5e7eb;text-align:center;" class="dark-mode-text">${escapeHtml(header)}</div>`
+        : '') +
+      `</td></tr>` +
+      (hasAnyColumnData
+        ? (`<tr>` +
+          `<td style="padding: 0 20px 18px 20px;">` +
+          `<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="border-radius:10px;overflow:hidden;border:1px solid rgba(148,163,184,0.25);">` +
+          `<tr>` +
+          `<td width="33%" valign="top" style="padding:12px 10px;background:#0b1226;color:#e5e7eb;font-size:13px;line-height:1.5;" class="dark-mode-card">${linkifyAndPreserveLines(c1)}</td>` +
+          `<td width="33%" valign="top" style="padding:12px 10px;background:#0b1226;color:#e5e7eb;font-size:13px;line-height:1.5;border-left:1px solid rgba(148,163,184,0.18);" class="dark-mode-card">${linkifyAndPreserveLines(c2)}</td>` +
+          `<td width="34%" valign="top" style="padding:12px 10px;background:#0b1226;color:#e5e7eb;font-size:13px;line-height:1.5;border-left:1px solid rgba(148,163,184,0.18);" class="dark-mode-card">${linkifyAndPreserveLines(c3)}</td>` +
+          `</tr>` +
+          `</table>` +
+          `</td>` +
+          `</tr>`)
+        : '') +
+      `</table>`
+    );
+  });
+
+  return {
+    text: textParts.join('\n').trim(),
+    html: htmlParts.join('')
+  };
+}
+
+function stripHtmlToText(html) {
+  // Very lightweight fallback; avoids pulling in extra dependencies.
+  return String(html || '')
+    .replace(/<\s*br\s*\/?>/gi, '\n')
+    .replace(/<\s*\/p\s*>/gi, '\n\n')
+    .replace(/<\s*p\b[^>]*>/gi, '')
+    .replace(/<\s*li\b[^>]*>/gi, '- ')
+    .replace(/<\s*\/li\s*>/gi, '\n')
+    .replace(/<\s*\/ul\s*>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function safeFilename(input) {
+  const s = String(input || '').trim();
+  const cleaned = s
+    .replace(/[\\/:*?"<>|]+/g, '_')
+    .replace(/\s+/g, ' ')
+    .slice(0, 120)
+    .trim();
+  return cleaned || 'newsletter';
+}
+
+function formatTimestampForFilename(date) {
+  const d = date instanceof Date ? date : new Date();
+  const yyyy = String(d.getFullYear());
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mi = String(d.getMinutes()).padStart(2, '0');
+  const ss = String(d.getSeconds()).padStart(2, '0');
+  return `${yyyy}${mm}${dd}-${hh}${mi}${ss}`;
+}
+
+function saveSentNewsletterToDisk(rendered) {
+  try {
+    const ts = formatTimestampForFilename(new Date());
+    const subject = rendered && rendered.subject ? String(rendered.subject) : 'newsletter';
+    const base = `${ts}_${safeFilename(subject)}`;
+    fs.mkdirSync(SENT_NEWSLETTERS_DIR, { recursive: true });
+    const files = [];
+
+    const meta = {
+      savedAt: new Date().toISOString(),
+      subject: rendered && rendered.subject ? rendered.subject : '',
+      hasHtml: !!(rendered && rendered.html),
+      placeholders: {
+        startDate: (rendered && rendered._startDate) || null,
+        endDate: (rendered && rendered._endDate) || null
+      }
+    };
+
+    const metaPath = path.join(SENT_NEWSLETTERS_DIR, base + '.json');
+    fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2), 'utf8');
+    files.push(metaPath);
+
+    const textPath = path.join(SENT_NEWSLETTERS_DIR, base + '.txt');
+    fs.writeFileSync(textPath, String((rendered && rendered.text) || ''), 'utf8');
+    files.push(textPath);
+
+    if (rendered && rendered.html) {
+      const htmlPath = path.join(SENT_NEWSLETTERS_DIR, base + '.html');
+      fs.writeFileSync(htmlPath, String(rendered.html), 'utf8');
+      files.push(htmlPath);
+    }
+
+    return files;
+  } catch (e) {
+    console.error('[OmniStream] Failed to save sent newsletter:', e.message);
+    return [];
+  }
+}
+
+function normalizeDateInput(input) {
+  const s = String(input || '').trim();
+  if (!s) return '';
+  // Accept YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const t = Date.parse(s);
+  if (!Number.isFinite(t)) return '';
+  return formatIsoDateShort(new Date(t));
+}
+
+function buildPublicBaseUrl(req) {
+  try {
+    const cfg = appConfig || {};
+    const configured = String(cfg.publicBaseUrl || cfg.httpBaseUrl || '').trim();
+    if (configured) return configured.replace(/\/$/, '');
+  } catch (_) {
+    // ignore
+  }
+  try {
+    const proto = (req && req.headers && req.headers['x-forwarded-proto']) ? String(req.headers['x-forwarded-proto']).split(',')[0].trim() : (req && req.protocol ? req.protocol : 'http');
+    const host = req && typeof req.get === 'function' ? req.get('host') : '';
+    if (host) return `${proto}://${host}`;
+  } catch (_) {
+    // ignore
+  }
+  return '';
+}
+
+function normalizeDayOfWeek(input) {
+  const n = Number(input);
+  if (!Number.isFinite(n)) return 0;
+  const i = Math.floor(n);
+  if (i < 0 || i > 6) return 0;
+  return i;
+}
+
+function normalizeTimeHHMM(input) {
+  const s = String(input || '').trim();
+  const m = s.match(/^([01]?\d|2[0-3]):([0-5]\d)$/);
+  if (!m) return '';
+  const hh = String(m[1]).padStart(2, '0');
+  const mm = String(m[2]).padStart(2, '0');
+  return `${hh}:${mm}`;
+}
+
+async function sendNewsletterBroadcast({ subject, body, startDate, endDate, publicBaseUrl } = {}) {
+  if (!historyDb) {
+    throw new Error('history DB not available');
+  }
+  if (!nodemailer) {
+    throw new Error('Email sending not available (nodemailer not installed).');
+  }
+  const emailCfg = appConfig?.newsletterEmail;
+  if (!emailCfg || emailCfg.enabled === false) {
+    throw new Error('Newsletter email is not configured or disabled.');
+  }
+  const subj = String(subject || '').trim();
+  const rawBody = String(body || '').trim();
+  if (!subj || !rawBody) {
+    throw new Error('subject and body are required');
+  }
+
+  const rendered = await renderNewsletterSubjectAndBody(subj, rawBody, fetchPlexRecentlyAdded, {
+    startDate,
+    endDate,
+    publicBaseUrl: String(publicBaseUrl || '').trim()
+  });
+
+  const rows = await new Promise((resolve, reject) => {
+    historyDb.all(
+      'SELECT DISTINCT email, name FROM newsletter_subscribers WHERE active = 1 AND email IS NOT NULL',
+      [],
+      (err, rows) => {
+        if (err) return reject(err);
+        resolve(rows || []);
+      }
+    );
+  });
+
+  const emails = rows
+    .map(r => (r && r.email ? String(r.email).trim() : ''))
+    .filter(e => !!e);
+  const uniqueEmails = Array.from(new Set(emails));
+  if (!uniqueEmails.length) {
+    return { sent: 0, saved: [] };
+  }
+
+  const transport = nodemailer.createTransport(emailCfg.smtp || {});
+  const mailOptions = {
+    from: emailCfg.from,
+    to: emailCfg.to || emailCfg.from,
+    bcc: uniqueEmails,
+    subject: rendered.subject || subj,
+    text: rendered.text || rawBody
+  };
+  if (rendered.html) {
+    mailOptions.html = rendered.html;
+  }
+
+  await transport.sendMail(mailOptions);
+  const savedFiles = saveSentNewsletterToDisk(rendered);
+  return { sent: uniqueEmails.length, saved: savedFiles.length ? savedFiles.map(p => path.basename(p)) : [] };
+}
+
+async function runNewsletterScheduleIfDue() {
+  try {
+    const sched = appConfig && appConfig.newsletterSchedule ? appConfig.newsletterSchedule : null;
+    if (!sched || sched.enabled !== true) return;
+
+    const dayOfWeek = normalizeDayOfWeek(sched.dayOfWeek);
+    const time = normalizeTimeHHMM(sched.time);
+    const templateId = sched.templateId != null ? String(sched.templateId) : '';
+    if (!time || !templateId) return;
+
+    const now = new Date();
+    if (now.getDay() !== dayOfWeek) return;
+
+    const today = formatIsoDateShort(now);
+    if (sched.lastSentDate && String(sched.lastSentDate) === today) return;
+
+    const parts = time.split(':');
+    const schedMin = Number(parts[0]) * 60 + Number(parts[1]);
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const windowMins = 10;
+    if (nowMin < schedMin || nowMin >= (schedMin + windowMins)) return;
+
+    const tpl = Array.isArray(appConfig.newsletterTemplates)
+      ? appConfig.newsletterTemplates.find(t => t && String(t.id) === templateId)
+      : null;
+    if (!tpl) {
+      console.warn('[OmniStream] Newsletter schedule: template not found:', templateId);
+      return;
+    }
+
+    const baseUrl = String(appConfig.publicBaseUrl || appConfig.httpBaseUrl || '').trim();
+    const result = await sendNewsletterBroadcast({
+      subject: tpl.subject || '',
+      body: tpl.body || '',
+      publicBaseUrl: baseUrl
+    });
+
+    if (result && typeof result.sent === 'number' && result.sent > 0) {
+      // Mark as sent for today to prevent duplicates.
+      appConfig.newsletterSchedule.lastSentDate = today;
+      saveAppConfigToDisk();
+      console.log(`[OmniStream] Newsletter schedule sent to ${result.sent} subscriber(s) using template ${templateId} (${today} ${time}).`);
+    } else {
+      console.log(`[OmniStream] Newsletter schedule due, but no active subscribers were emailed (template ${templateId}).`);
+    }
+  } catch (e) {
+    console.error('[OmniStream] Newsletter schedule failed:', e.message);
+    recordNotifierError('newsletter-schedule', e.message);
+  }
+}
+
+function buildRecentlyAddedBlocks(items, { publicBaseUrl } = {}) {
+  const rows = Array.isArray(items) ? items : [];
+  const movies = rows.filter(r => r && r.type === 'movie');
+  const episodes = rows.filter(r => r && r.type === 'episode');
+
+  const formatLine = (it) => {
+    let line = it.title || '';
+    if (it.year) line += ` (${it.year})`;
+    if (it.serverName) line += ` · ${it.serverName}`;
+    return line;
+  };
+
+  const textParts = [];
+  if (movies.length) {
+    textParts.push('Movies');
+    movies.forEach(m => textParts.push('- ' + formatLine(m)));
+    textParts.push('');
+  }
+  if (episodes.length) {
+    textParts.push('TV Episodes');
+    episodes.forEach(e => textParts.push('- ' + formatLine(e)));
+    textParts.push('');
+  }
+  if (!movies.length && !episodes.length) {
+    textParts.push('No recently added items found.');
+  }
+
+  const thumbUrlFor = (it) => {
+    const base = String(publicBaseUrl || '').replace(/\/$/, '');
+    if (!base) return '';
+    if (!it || !it.serverId || !it.thumb) return '';
+    return `${base}/api/newsletter/plex/thumb?serverId=${encodeURIComponent(String(it.serverId))}&thumb=${encodeURIComponent(String(it.thumb))}`;
+  };
+
+  const metaPartsFor = (it) => {
+    const parts = [];
+    if (it.year) parts.push(String(it.year));
+    if (typeof it.durationMinutes === 'number' && Number.isFinite(it.durationMinutes) && it.durationMinutes > 0) {
+      parts.push(`${Math.round(it.durationMinutes)} mins`);
+    }
+    if (it.serverName) parts.push(String(it.serverName));
+    return parts.join(' · ');
+  };
+
+  const genresFor = (it) => {
+    if (!it || !Array.isArray(it.genres) || !it.genres.length) return '';
+    return it.genres.slice(0, 3).join(' · ');
+  };
+
+  const cardHtml = (it) => {
+    const thumbUrl = thumbUrlFor(it);
+    const meta = metaPartsFor(it);
+    const genres = genresFor(it);
+    const summary = it && it.summary ? String(it.summary) : '';
+    const img = thumbUrl
+      ? `<img src="${escapeHtml(thumbUrl)}" width="100" height="150" alt="" style="display:block;width:100px;height:150px;border-radius:4px;object-fit:cover;background:#3F4245;" />`
+      : `<div style="width:100px;height:150px;border-radius:4px;background:#3F4245;"></div>`;
+
+    return (
+      `<div style="background:#0b1226;border-radius:8px;padding:15px;box-shadow:0 2px 4px rgba(0,0,0,0.25);margin:10px 0;" class="dark-mode-card">` +
+        `<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">` +
+          `<tr>` +
+            `<td style="vertical-align:top;width:110px;padding-right:12px;">${img}</td>` +
+            `<td style="vertical-align:top;">` +
+              `<div style="font-size:18px;line-height:1.2;font-weight:700;color:#e5e7eb;text-align:left;" class="dark-mode-text">${escapeHtml(it.title || '')}</div>` +
+              (meta ? `<div style="margin:6px 0 0 0;font-size:14px;color:#94a3b8;" class="dark-mode-muted">${escapeHtml(meta)}</div>` : '') +
+              (genres ? `<div style="margin:6px 0 0 0;font-size:14px;color:#94a3b8;" class="dark-mode-muted">${escapeHtml(genres)}</div>` : '') +
+              (summary ? `<div style="margin:10px 0 0 0;font-size:14px;color:#94a3b8;" class="dark-mode-muted">${escapeHtml(summary)}</div>` : '') +
+            `</td>` +
+          `</tr>` +
+        `</table>` +
+      `</div>`
+    );
+  };
+
+  const htmlParts = [];
+  const section = (title, arr) => {
+    if (!arr.length) return;
+    htmlParts.push(`<div style="margin: 18px 0 10px 0; font-weight: 600; font-size: 16px; color:#e5e7eb;" class="dark-mode-text">${escapeHtml(title)}</div>`);
+    arr.forEach(it => {
+      htmlParts.push(cardHtml(it));
+    });
+  };
+  section('Recently Added Movies', movies);
+  section('Recently Added TV Episodes', episodes);
+  if (!movies.length && !episodes.length) {
+    htmlParts.push('<div style="color:#94a3b8;" class="dark-mode-muted">No recently added items found.</div>');
+  }
+
+  return {
+    text: textParts.join('\n').trim(),
+    html: htmlParts.join('')
+  };
+}
+
+async function renderNewsletterSubjectAndBody(subject, body, fetchRecentlyAdded, options = {}) {
+  const requestedStart = normalizeDateInput(options.startDate);
+  const requestedEnd = normalizeDateInput(options.endDate);
+  const fallback = computeDefaultDateRange();
+  const startDate = requestedStart || fallback.startDate;
+  const endDate = requestedEnd || fallback.endDate;
+  const publicBaseUrl = String(options.publicBaseUrl || '').trim();
+
+  function autoInsertCustomSectionsTokenIntoHtml(html) {
+    try {
+      const token = '{{CUSTOM_SECTIONS}}';
+      if (!html) return html;
+      if (/\{\{\s*CUSTOM_SECTIONS\s*\}\}/i.test(html)) return html;
+
+      // Heuristic: put custom sections just below the header/logo area.
+      // For most email templates the first table is the header wrapper.
+      const lower = html.toLowerCase();
+      let insertAt = -1;
+
+      const imgIdx = lower.indexOf('<img');
+      if (imgIdx !== -1) {
+        const tableCloseAfterImg = lower.indexOf('</table>', imgIdx);
+        if (tableCloseAfterImg !== -1) {
+          insertAt = tableCloseAfterImg + '</table>'.length;
+        }
+      }
+
+      if (insertAt === -1) {
+        const firstTableClose = lower.indexOf('</table>');
+        if (firstTableClose !== -1) {
+          insertAt = firstTableClose + '</table>'.length;
+        }
+      }
+
+      if (insertAt === -1) {
+        const bodyOpen = html.match(/<body\b[^>]*>/i);
+        if (bodyOpen && typeof bodyOpen.index === 'number') {
+          insertAt = bodyOpen.index + bodyOpen[0].length;
+        }
+      }
+
+      if (insertAt === -1) {
+        insertAt = 0;
+      }
+
+      return html.slice(0, insertAt) + `\n\n${token}\n\n` + html.slice(insertAt);
+    } catch (e) {
+      // If anything goes wrong, fall back to leaving the template untouched.
+      return html;
+    }
+  }
+
+  const customSectionsBlocks = buildCustomSectionsBlocks(
+    appConfig && Array.isArray(appConfig.newsletterCustomSections) ? appConfig.newsletterCustomSections : []
+  );
+
+  const needsRecent = /\{\{\s*RECENTLY_ADDED\s*\}\}/i.test(String(subject || '')) || /\{\{\s*RECENTLY_ADDED\s*\}\}/i.test(String(body || ''));
+  let recentlyAddedBlocks = { text: '', html: '' };
+  if (needsRecent) {
+    try {
+      if (typeof fetchRecentlyAdded === 'function') {
+        const items = await fetchRecentlyAdded({ perServer: 10 });
+        recentlyAddedBlocks = buildRecentlyAddedBlocks((items || []).slice(0, 20), { publicBaseUrl });
+      } else {
+        recentlyAddedBlocks = { text: 'Recently added list unavailable.', html: '<div>Recently added list unavailable.</div>' };
+      }
+    } catch (e) {
+      console.error('[OmniStream] Failed to build recently added blocks:', e.message);
+      recentlyAddedBlocks = { text: 'Recently added list unavailable.', html: '<div>Recently added list unavailable.</div>' };
+    }
+  }
+
+  const replacements = {
+    '{{START_DATE}}': startDate,
+    '{{END_DATE}}': endDate,
+    '{{RECENTLY_ADDED}}': recentlyAddedBlocks.text,
+    '{{CUSTOM_SECTIONS}}': customSectionsBlocks.text,
+    // Back-compat with some existing templates people copy in
+    "${parameters['start_date']}": startDate,
+    "${parameters['end_date']}": endDate
+  };
+
+  const rawSubject = applyBasicNewsletterReplacements(subject || '', replacements);
+  let rawBody = String(body || '');
+
+  const isHtml = /<!doctype\s+html|<html\b/i.test(rawBody);
+
+  // If a template doesn't explicitly place {{CUSTOM_SECTIONS}}, auto-place it
+  // near the top (under the header/logo) when sections exist.
+  const hasCustomSections = Boolean((customSectionsBlocks && (customSectionsBlocks.html || customSectionsBlocks.text)));
+  const bodyHasCustomToken = /\{\{\s*CUSTOM_SECTIONS\s*\}\}/i.test(rawBody);
+  if (hasCustomSections && !bodyHasCustomToken) {
+    if (isHtml) {
+      rawBody = autoInsertCustomSectionsTokenIntoHtml(rawBody);
+    } else {
+      rawBody = `{{CUSTOM_SECTIONS}}\n\n${rawBody}`;
+    }
+  }
+
+  if (isHtml) {
+    const htmlReplacements = {
+      ...replacements,
+      '{{RECENTLY_ADDED}}': recentlyAddedBlocks.html,
+      '{{CUSTOM_SECTIONS}}': customSectionsBlocks.html
+    };
+    const renderedHtml = applyBasicNewsletterReplacements(rawBody, htmlReplacements);
+    const renderedText = stripHtmlToText(renderedHtml) || applyBasicNewsletterReplacements(rawBody, replacements);
+    return { subject: rawSubject, text: renderedText, html: renderedHtml, _startDate: startDate, _endDate: endDate };
+  }
+
+  const renderedText = applyBasicNewsletterReplacements(rawBody, replacements);
+  return { subject: rawSubject, text: renderedText, html: null, _startDate: startDate, _endDate: endDate };
+}
+
+ensureDefaultNewsletterTemplate();
 
 // Track last derived notifications so we only fire notifiers on changes
 let lastNotificationIds = new Set();
@@ -118,6 +874,10 @@ let lastNotificationIds = new Set();
 let lastPollAt = null;           // ISO string of last completed pollAll
 let lastPollDurationMs = null;   // Duration of last pollAll in milliseconds
 let lastPollError = null;        // Last top-level pollAll error message, if any
+
+// Track currently active sessions so history can record one row per session
+// (insert on first sight, update while active, and mark ended when it disappears).
+const activeHistorySessions = new Map(); // key -> { rowId, serverId, lastSeenAt }
 
 // Track system-level insights for reliability/debugging
 let lastImportRunAt = null;         // ISO string of last /api/import-history run
@@ -464,6 +1224,7 @@ function sendGotifyNotification(notification) {
 // SQLite-backed history
 const HISTORY_DB_FILE = path.join(__dirname, 'history.db');
 let historyDb;
+let historyDbReady = false;
 try {
   historyDb = new sqlite3.Database(HISTORY_DB_FILE);
   historyDb.serialize(() => {
@@ -471,18 +1232,101 @@ try {
       'CREATE TABLE IF NOT EXISTS history (\n' +
       '  id INTEGER PRIMARY KEY AUTOINCREMENT,\n' +
       '  time TEXT NOT NULL,\n' +
+      '  sessionKey TEXT,\n' +
+      '  endedAt TEXT,\n' +
+      '  lastSeenAt TEXT,\n' +
       '  serverId TEXT,\n' +
       '  serverName TEXT,\n' +
       '  type TEXT,\n' +
       '  user TEXT,\n' +
+      '  userAvatar TEXT,\n' +
       '  title TEXT,\n' +
+      '  mediaType TEXT,\n' +
+      '  seriesTitle TEXT,\n' +
+      '  episodeTitle TEXT,\n' +
+      '  year INTEGER,\n' +
+      '  channel TEXT,\n' +
+      '  isLive INTEGER,\n' +
+      '  poster TEXT,\n' +
+      '  background TEXT,\n' +
       '  stream TEXT,\n' +
       '  transcoding INTEGER,\n' +
       '  location TEXT,\n' +
-      '  bandwidth REAL\n' +
+      '  bandwidth REAL,\n' +
+      '  platform TEXT,\n' +
+      '  product TEXT,\n' +
+      '  player TEXT,\n' +
+      '  quality TEXT,\n' +
+      '  duration INTEGER,\n' +
+      '  progress INTEGER,\n' +
+      '  ip TEXT,\n' +
+      '  completed INTEGER\n' +
       ')'
     );
     historyDb.run('CREATE INDEX IF NOT EXISTS idx_history_time ON history(time)');
+
+    // Lightweight schema migrations for existing DBs
+    historyDb.all('PRAGMA table_info(history)', (err, rows) => {
+      if (err) {
+        console.error('[OmniStream] Failed to inspect history schema:', err.message);
+        historyDbReady = true;
+        return;
+      }
+      const existing = new Set((rows || []).map(r => r && r.name).filter(Boolean));
+      const toAdd = [
+        { name: 'sessionKey', ddl: 'ALTER TABLE history ADD COLUMN sessionKey TEXT' },
+        { name: 'endedAt', ddl: 'ALTER TABLE history ADD COLUMN endedAt TEXT' },
+        { name: 'lastSeenAt', ddl: 'ALTER TABLE history ADD COLUMN lastSeenAt TEXT' },
+        { name: 'mediaType', ddl: 'ALTER TABLE history ADD COLUMN mediaType TEXT' },
+        { name: 'seriesTitle', ddl: 'ALTER TABLE history ADD COLUMN seriesTitle TEXT' },
+        { name: 'episodeTitle', ddl: 'ALTER TABLE history ADD COLUMN episodeTitle TEXT' },
+        { name: 'year', ddl: 'ALTER TABLE history ADD COLUMN year INTEGER' },
+        { name: 'channel', ddl: 'ALTER TABLE history ADD COLUMN channel TEXT' },
+        { name: 'isLive', ddl: 'ALTER TABLE history ADD COLUMN isLive INTEGER' },
+        { name: 'poster', ddl: 'ALTER TABLE history ADD COLUMN poster TEXT' },
+        { name: 'background', ddl: 'ALTER TABLE history ADD COLUMN background TEXT' },
+        { name: 'platform', ddl: 'ALTER TABLE history ADD COLUMN platform TEXT' },
+        { name: 'product', ddl: 'ALTER TABLE history ADD COLUMN product TEXT' },
+        { name: 'player', ddl: 'ALTER TABLE history ADD COLUMN player TEXT' },
+        { name: 'quality', ddl: 'ALTER TABLE history ADD COLUMN quality TEXT' },
+        { name: 'duration', ddl: 'ALTER TABLE history ADD COLUMN duration INTEGER' },
+        { name: 'progress', ddl: 'ALTER TABLE history ADD COLUMN progress INTEGER' },
+        { name: 'ip', ddl: 'ALTER TABLE history ADD COLUMN ip TEXT' },
+        { name: 'completed', ddl: 'ALTER TABLE history ADD COLUMN completed INTEGER' },
+        { name: 'userAvatar', ddl: 'ALTER TABLE history ADD COLUMN userAvatar TEXT' }
+      ].filter(c => !existing.has(c.name));
+
+      const finalizeReady = () => {
+        // sessionKey index is only valid after the column exists
+        if (existing.has('sessionKey') || !toAdd.find(c => c.name === 'sessionKey')) {
+          historyDb.run('CREATE INDEX IF NOT EXISTS idx_history_sessionKey ON history(sessionKey)', () => {
+            historyDbReady = true;
+          });
+        } else {
+          // sessionKey was attempted but might not exist; still mark ready.
+          historyDbReady = true;
+        }
+      };
+
+      if (!toAdd.length) {
+        finalizeReady();
+        return;
+      }
+
+      let remaining = toAdd.length;
+      toAdd.forEach(c => {
+        historyDb.run(c.ddl, (e) => {
+          if (e) {
+            // Don't fail startup on migration errors; just log.
+            console.error(`[OmniStream] Failed to migrate history schema (add ${c.name}):`, e.message);
+          } else {
+            existing.add(c.name);
+          }
+          remaining--;
+          if (remaining <= 0) finalizeReady();
+        });
+      });
+    });
 
     // Table for newsletter / subscriber emails imported from external sources (e.g. Overseerr)
     historyDb.run(
@@ -504,6 +1348,7 @@ try {
 } catch (e) {
   console.error('Failed to initialize history database:', e.message);
   historyDb = null;
+  historyDbReady = false;
 }
 
 const defaultPathForType = (t) => {
@@ -789,17 +1634,18 @@ async function importPlexHistory(server, { limit = 2000 } = {}) {
 function summaryFromResponse(resp) {
   try {
     const d = resp.data;
-    // Log session extraction for debugging
-    if (d && d.MediaContainer && d.MediaContainer.Metadata) {
-      d.MediaContainer.Metadata.forEach(m => {
-        console.log('Session:', m.title, 'Type:', m.type, 'Thumb:', m.thumb);
-      });
-      // Debug: log poster URLs for all sessions
-      d.MediaContainer.Metadata.forEach(m => {
-        if (m.type === 'live') {
-          console.log('Live TV session:', m.title, 'Poster:', m.thumb);
-        }
-      });
+    // Optional Plex session debug logging (very noisy in production)
+    if (process.env.DEBUG_PLEX_SESSIONS === '1') {
+      if (d && d.MediaContainer && d.MediaContainer.Metadata) {
+        d.MediaContainer.Metadata.forEach(m => {
+          console.log('Session:', m.title, 'Type:', m.type, 'Thumb:', m.thumb);
+        });
+        d.MediaContainer.Metadata.forEach(m => {
+          if (m.type === 'live') {
+            console.log('Live TV session:', m.title, 'Poster:', m.thumb);
+          }
+        });
+      }
     }
     if (!d) {
       // Always return a summary object, even if no data
@@ -818,6 +1664,8 @@ function summaryFromResponse(resp) {
     }
     if (d.MediaContainer) {
       const sessions = (d.MediaContainer.Metadata || []).map(m => {
+        const mediaType = (m.type || '').toString().toLowerCase();
+        const isLive = mediaType === 'live';
         let posterUrl;
         let backgroundUrl;
         // Prefer season/show poster for TV episodes so we avoid episode stills
@@ -852,8 +1700,11 @@ function summaryFromResponse(resp) {
           backgroundUrl = posterUrl || undefined;
         }
 
-        // Fallback placeholder for live TV if no artwork is available
-        const normalizedPoster = posterUrl || (m.type === 'live' ? '/live_tv_placeholder.svg' : undefined);
+        // Fallback placeholder when no artwork is available
+        const normalizedPoster = posterUrl || '/live_tv_placeholder.svg';
+        if (!backgroundUrl) {
+          backgroundUrl = normalizedPoster;
+        }
 
         // User avatar (Plex account thumb)
         let userAvatar;
@@ -1069,10 +1920,13 @@ function summaryFromResponse(resp) {
           seriesTitle: m.grandparentTitle || undefined,
           episode: m.episode || (m.grandparentTitle ? m.title : undefined),
           year: m.year,
+          mediaType,
+          isLive,
+          channel: isLive ? (m.grandparentTitle || m.parentTitle || m.title || '') : undefined,
           platform: m.platform || m.Player?.platform || m.Player?.product || '',
           state: m.state || m.Player?.state || '',
           poster: m.poster || normalizedPoster,
-          background: backgroundUrl || undefined,
+          background: backgroundUrl || normalizedPoster,
           duration: durationSec,
           viewOffset: viewOffsetSec,
           progress: progressPct,
@@ -1127,6 +1981,7 @@ function summaryFromResponse(resp) {
       const sessions = d.map(s => {
         // Flat format (custom API): must have state=playing
         if (s.state && s.state.toLowerCase() === 'playing' && s.media_title) {
+          const derivedMediaType = (s.mediaType || (s.isLive ? 'live' : (s.episode || s.series || s.SeriesTitle ? 'episode' : 'movie'))).toString().toLowerCase();
           // Parse bandwidth as number (Mbps)
           let bandwidth = 0;
           if (typeof s.bandwidth === 'number') bandwidth = s.bandwidth;
@@ -1141,9 +1996,12 @@ function summaryFromResponse(resp) {
             seriesTitle: s.series || s.SeriesTitle || undefined,
             episode: s.episode,
             year: s.year,
+            mediaType: derivedMediaType,
+            isLive: !!s.isLive,
+            channel: s.channel || '',
             platform: s.platform || s.Client || s.DeviceName || '',
             state: s.state,
-            poster: s.poster,
+            poster: s.poster || '/live_tv_placeholder.svg',
             duration: s.duration || 0,
             viewOffset: s.viewOffset || 0,
             progress: typeof s.progress === 'number' ? Math.round(s.progress * 100) : 0,
@@ -1164,7 +2022,7 @@ function summaryFromResponse(resp) {
             episodeNumber: typeof s.episodeNumber === 'number' ? s.episodeNumber
               : (typeof s.IndexNumber === 'number' ? s.IndexNumber : undefined),
             transcoding: s.transcoding,
-            background: s.background || s.backdrop || undefined,
+            background: s.background || s.backdrop || s.poster || '/live_tv_placeholder.svg',
             userAvatar: s.userAvatar || undefined,
           };
         }
@@ -1172,6 +2030,11 @@ function summaryFromResponse(resp) {
         if (s.NowPlayingItem && s.PlayState) {
           let posterUrl;
           let backgroundUrl;
+          const rawType = (s.NowPlayingItem?.Type || '').toString().toLowerCase();
+          const isLive = rawType === 'livetv' || rawType === 'live' || s.NowPlayingItem?.IsLive === true;
+          const mediaType = rawType === 'movie'
+            ? 'movie'
+            : (rawType === 'episode' ? 'episode' : (isLive ? 'live' : (rawType === 'audio' ? 'track' : rawType)));
           if (resp.config && resp.config.serverConfig) {
             const serverId = resp.config.serverConfig.id;
             let itemId = s.NowPlayingItem.Id;
@@ -1189,6 +2052,12 @@ function summaryFromResponse(resp) {
           // Fallback placeholder for LiveTv sessions without artwork
           if (!posterUrl && s.NowPlayingItem?.Type === 'LiveTv') {
             posterUrl = '/live_tv_placeholder.svg';
+          }
+          if (!posterUrl) {
+            posterUrl = '/live_tv_placeholder.svg';
+          }
+          if (!backgroundUrl) {
+            backgroundUrl = posterUrl;
           }
 
           // Jellyfin/Emby user avatar when user id is available
@@ -1291,10 +2160,11 @@ function summaryFromResponse(resp) {
             seriesTitle: s.NowPlayingItem?.SeriesName || undefined,
             episode: s.NowPlayingItem?.EpisodeTitle,
             year: s.NowPlayingItem?.ProductionYear,
+            mediaType,
             platform: s.Client || s.DeviceName || '',
             state: s.PlayState?.PlayMethod || '',
             poster: posterUrl,
-            background: backgroundUrl || posterUrl,
+            background: backgroundUrl,
             duration: s.NowPlayingItem?.RunTimeTicks ? Math.round(s.NowPlayingItem.RunTimeTicks / 10000 / 1000) : 0,
             viewOffset: s.PlayState?.PositionTicks ? Math.round(s.PlayState.PositionTicks / 10000 / 1000) : 0,
             progress: (s.PlayState?.PositionTicks && s.NowPlayingItem?.RunTimeTicks) 
@@ -1314,7 +2184,7 @@ function summaryFromResponse(resp) {
             transcodeProgress,
             userAvatar,
             channel: s.NowPlayingItem?.ChannelName || '',
-            isLive: (s.NowPlayingItem?.Type === 'LiveTv') || (s.NowPlayingItem?.IsLive === true),
+            isLive: isLive,
             // Season / episode numbers for Jellyfin/Emby standard API
             seasonNumber: typeof s.NowPlayingItem?.ParentIndexNumber === 'number'
               ? s.NowPlayingItem.ParentIndexNumber
@@ -1508,37 +2378,149 @@ async function pollAll() {
   lastPollAt = new Date().toISOString();
   lastPollDurationMs = duration;
 
-  // After polling all servers, snapshot current sessions into history database
-  if (historyDb) {
+  // After polling all servers, record one row per session in history database.
+  // We insert when a session is first seen, update while active, and mark ended when it disappears.
+  if (historyDb && historyDbReady) {
     const timestamp = new Date().toISOString();
-    historyDb.serialize(() => {
-      const stmt = historyDb.prepare(
-        'INSERT INTO history (time, serverId, serverName, type, user, title, stream, transcoding, location, bandwidth) VALUES (?,?,?,?,?,?,?,?,?,?)'
-      );
-      Object.values(statuses).forEach(st => {
-        if (!st.online || !Array.isArray(st.sessions)) return;
-        st.sessions.forEach(sess => {
-          const user = sess.user || sess.userName || 'Unknown';
-          const title = sess.grandparentTitle || sess.title || sess.channel || 'Idle';
-          const stream = sess.stream || '';
-          const transcoding = typeof sess.transcoding === 'boolean' ? (sess.transcoding ? 1 : 0) : null;
-          const location = sess.location || '';
-          const bandwidth = typeof sess.bandwidth === 'number' ? sess.bandwidth : 0;
-          stmt.run(
-            timestamp,
-            st.id,
-            st.name,
-            st.type,
-            user,
-            title,
-            stream,
-            transcoding,
-            location,
-            bandwidth
-          );
-        });
+    const currentlyActiveKeys = new Set();
+    const currentSessions = [];
+
+    Object.values(statuses).forEach(st => {
+      if (!st.online || !Array.isArray(st.sessions)) return;
+      st.sessions.forEach(sess => {
+        // Prefer stable session id if available; fall back to a best-effort derived key.
+        const rawSessionId = sess.sessionId || sess.sessionKey || sess.id || '';
+        const derived = [
+          st.id,
+          rawSessionId || '',
+          sess.user || sess.userName || '',
+          sess.title || '',
+          sess.player || '',
+          sess.ip || ''
+        ].map(v => String(v || '').toLowerCase()).join('|');
+        const sessionKey = derived;
+        currentlyActiveKeys.add(sessionKey);
+        currentSessions.push({ st, sess, sessionKey });
       });
-      stmt.finalize();
+    });
+
+    historyDb.serialize(() => {
+      // Mark ended sessions
+      for (const [key, meta] of activeHistorySessions.entries()) {
+        if (currentlyActiveKeys.has(key)) continue;
+        try {
+          historyDb.run(
+            'UPDATE history SET endedAt = ?, lastSeenAt = COALESCE(lastSeenAt, ?), completed = CASE WHEN progress >= 95 THEN 1 ELSE completed END WHERE id = ?',
+            [timestamp, timestamp, meta.rowId],
+            () => {}
+          );
+        } catch (_) {}
+        activeHistorySessions.delete(key);
+      }
+
+      // Upsert active sessions
+      currentSessions.forEach(({ st, sess, sessionKey }) => {
+        const user = sess.user || sess.userName || 'Unknown';
+        const userAvatar = (sess.userAvatar || '').toString();
+        const isLive = !!sess.isLive;
+        const mediaType = (sess.mediaType || '').toString().toLowerCase();
+        const seriesTitle = (sess.seriesTitle || '').toString();
+        const episodeTitle = (sess.episode || sess.episodeTitle || '').toString();
+        const year = typeof sess.year === 'number' ? sess.year : null;
+        const channel = (sess.channel || '').toString();
+        const poster = (sess.poster || '/live_tv_placeholder.svg').toString();
+        const background = (sess.background || sess.poster || '/live_tv_placeholder.svg').toString();
+
+        const title = seriesTitle ? `${seriesTitle} - ${episodeTitle || sess.title || ''}`.replace(/\s+-\s*$/, '') : (sess.title || channel || 'Idle');
+        const stream = sess.stream || '';
+        const transcoding = typeof sess.transcoding === 'boolean' ? (sess.transcoding ? 1 : 0) : null;
+        const location = sess.location || '';
+        const bandwidth = typeof sess.bandwidth === 'number' ? sess.bandwidth : 0;
+        const platform = sess.platform || '';
+        const product = sess.product || '';
+        const player = sess.player || '';
+        const quality = sess.quality || '';
+        const duration = typeof sess.duration === 'number' ? sess.duration : null;
+        const progress = typeof sess.progress === 'number' ? sess.progress : null;
+        const ip = sess.ip || '';
+
+        const existing = activeHistorySessions.get(sessionKey);
+        if (!existing) {
+          historyDb.run(
+            'INSERT INTO history (time, sessionKey, lastSeenAt, serverId, serverName, type, user, userAvatar, title, mediaType, seriesTitle, episodeTitle, year, channel, isLive, poster, background, stream, transcoding, location, bandwidth, platform, product, player, quality, duration, progress, ip, completed) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+            [
+              timestamp,
+              sessionKey,
+              timestamp,
+              st.id,
+              st.name,
+              st.type,
+              user,
+              userAvatar,
+              title,
+              mediaType,
+              seriesTitle,
+              episodeTitle,
+              year,
+              channel,
+              isLive ? 1 : 0,
+              poster,
+              background,
+              stream,
+              transcoding,
+              location,
+              bandwidth,
+              platform,
+              product,
+              player,
+              quality,
+              duration,
+              progress,
+              ip,
+              null
+            ],
+            function (err) {
+              if (!err && this && typeof this.lastID === 'number') {
+                activeHistorySessions.set(sessionKey, { rowId: this.lastID, serverId: st.id, lastSeenAt: timestamp });
+              }
+            }
+          );
+        } else {
+          historyDb.run(
+            'UPDATE history SET lastSeenAt = ?, serverName = ?, user = ?, userAvatar = ?, title = ?, mediaType = ?, seriesTitle = ?, episodeTitle = ?, year = ?, channel = ?, isLive = ?, poster = ?, background = ?, stream = ?, transcoding = ?, location = ?, bandwidth = ?, platform = ?, product = ?, player = ?, quality = ?, duration = ?, progress = ?, ip = ? WHERE id = ?',
+            [
+              timestamp,
+              st.name,
+              user,
+              userAvatar,
+              title,
+              mediaType,
+              seriesTitle,
+              episodeTitle,
+              year,
+              channel,
+              isLive ? 1 : 0,
+              poster,
+              background,
+              stream,
+              transcoding,
+              location,
+              bandwidth,
+              platform,
+              product,
+              player,
+              quality,
+              duration,
+              progress,
+              ip,
+              existing.rowId
+            ],
+            () => {}
+          );
+          existing.lastSeenAt = timestamp;
+        }
+      });
+
       // Trim to MAX_HISTORY rows to keep DB small (if configured)
       if (MAX_HISTORY > 0) {
         historyDb.run(
@@ -1575,8 +2557,221 @@ app.get('/api/status', (req, res) => {
       lastPollDurationMs,
       lastPollError
     },
-    version: appVersion || null
+    version: appVersion || null,
+    update: {
+      checkedAt: updateState.lastCheckedAtMs ? new Date(updateState.lastCheckedAtMs).toISOString() : null,
+      latestVersion: updateState.latestVersion,
+      updateAvailable: updateState.updateAvailable,
+      releasesUrl: DEFAULT_GITHUB_RELEASES_URL
+    }
   });
+});
+
+app.get('/api/about', (req, res) => {
+  const checkedAt = updateState.lastCheckedAtMs ? new Date(updateState.lastCheckedAtMs).toISOString() : null;
+  res.json({
+    name: 'OmniStream',
+    version: appVersion || null,
+    githubUrl: DEFAULT_GITHUB_URL,
+    releasesUrl: DEFAULT_GITHUB_RELEASES_URL,
+    update: {
+      checkedAt,
+      latestVersion: updateState.latestVersion,
+      updateAvailable: updateState.updateAvailable,
+      error: updateState.error
+    },
+    serverTime: new Date().toISOString()
+  });
+});
+
+app.get('/api/reports/watch-statistics', async (req, res) => {
+  try {
+    if (!historyDb || !historyDbReady) {
+      return res.status(503).json({ error: 'History database not ready' });
+    }
+
+    const metricRaw = (req.query.metric || 'count').toString().toLowerCase();
+    const metric = metricRaw === 'duration' ? 'duration' : 'count';
+    const daysRaw = Number(req.query.days ?? 1000);
+    const days = Number.isFinite(daysRaw) ? Math.max(1, Math.min(5000, Math.floor(daysRaw))) : 1000;
+
+    const now = Date.now();
+    const startIso = new Date(now - days * 24 * 60 * 60 * 1000).toISOString();
+    const eventTimeExpr = 'COALESCE(endedAt, lastSeenAt, time)';
+    const watchSecondsExpr = `CASE
+      WHEN duration IS NULL THEN 0
+      WHEN progress IS NULL THEN duration
+      WHEN progress < 0 THEN 0
+      WHEN progress > 100 THEN duration
+      ELSE CAST(duration * (progress / 100.0) AS INTEGER)
+    END`;
+
+    const valueExpr = metric === 'duration' ? `SUM(${watchSecondsExpr})` : 'COUNT(*)';
+
+    const dbAll = (sql, params) => new Promise((resolve, reject) => {
+      historyDb.all(sql, params, (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      });
+    });
+
+    const topLimit = 5;
+
+    const [
+      mostWatchedMovies,
+      mostPopularMovies,
+      mostWatchedTvShows,
+      mostPopularTvShows,
+      mostPlayedArtists,
+      mostPopularArtists,
+      recentlyWatched,
+      mostActiveLibraries,
+      mostActiveUsers,
+      mostActivePlatforms
+    ] = await Promise.all([
+      dbAll(
+        `SELECT title AS name, year, MAX(poster) AS poster, MAX(background) AS background, ${valueExpr} AS value
+         FROM history
+         WHERE mediaType = 'movie' AND ${eventTimeExpr} >= ?
+         GROUP BY title, year
+         ORDER BY value DESC
+         LIMIT ?`,
+        [startIso, topLimit]
+      ),
+      dbAll(
+        `SELECT title AS name, year, MAX(poster) AS poster, MAX(background) AS background, COUNT(DISTINCT user) AS value
+         FROM history
+         WHERE mediaType = 'movie' AND ${eventTimeExpr} >= ?
+         GROUP BY title, year
+         ORDER BY value DESC
+         LIMIT ?`,
+        [startIso, topLimit]
+      ),
+      dbAll(
+        `SELECT COALESCE(NULLIF(seriesTitle,''), title) AS name, MAX(poster) AS poster, MAX(background) AS background, ${valueExpr} AS value
+         FROM history
+         WHERE mediaType = 'episode' AND ${eventTimeExpr} >= ?
+         GROUP BY name
+         ORDER BY value DESC
+         LIMIT ?`,
+        [startIso, topLimit]
+      ),
+      dbAll(
+        `SELECT COALESCE(NULLIF(seriesTitle,''), title) AS name, MAX(poster) AS poster, MAX(background) AS background, COUNT(DISTINCT user) AS value
+         FROM history
+         WHERE mediaType = 'episode' AND ${eventTimeExpr} >= ?
+         GROUP BY name
+         ORDER BY value DESC
+         LIMIT ?`,
+        [startIso, topLimit]
+      ),
+      dbAll(
+        `SELECT COALESCE(NULLIF(seriesTitle,''), 'Unknown') AS name, MAX(poster) AS poster, MAX(background) AS background, ${valueExpr} AS value
+         FROM history
+         WHERE mediaType = 'track' AND ${eventTimeExpr} >= ?
+         GROUP BY name
+         ORDER BY value DESC
+         LIMIT ?`,
+        [startIso, topLimit]
+      ),
+      dbAll(
+        `SELECT COALESCE(NULLIF(seriesTitle,''), 'Unknown') AS name, MAX(poster) AS poster, MAX(background) AS background, COUNT(DISTINCT user) AS value
+         FROM history
+         WHERE mediaType = 'track' AND ${eventTimeExpr} >= ?
+         GROUP BY name
+         ORDER BY value DESC
+         LIMIT ?`,
+        [startIso, topLimit]
+      ),
+      dbAll(
+        `SELECT ${eventTimeExpr} AS eventTime, user, userAvatar, title, mediaType, seriesTitle, episodeTitle, year, poster, background
+         FROM history
+         WHERE ${eventTimeExpr} >= ?
+         ORDER BY ${eventTimeExpr} DESC
+         LIMIT ?`,
+        [startIso, topLimit]
+      ),
+      dbAll(
+        `SELECT
+           CASE
+             WHEN isLive = 1 THEN 'Live TV'
+             WHEN mediaType = 'episode' THEN 'TV Shows'
+             WHEN mediaType = 'movie' THEN 'Movies'
+             WHEN mediaType = 'track' THEN 'Music'
+             ELSE 'Other'
+           END AS name,
+           ${valueExpr} AS value
+         FROM history
+         WHERE ${eventTimeExpr} >= ?
+         GROUP BY name
+         ORDER BY value DESC
+         LIMIT ?`,
+        [startIso, topLimit]
+      ),
+      dbAll(
+        `SELECT COALESCE(NULLIF(user,''), 'Unknown') AS name, MAX(userAvatar) AS avatar, ${valueExpr} AS value
+         FROM history
+         WHERE ${eventTimeExpr} >= ?
+         GROUP BY name
+         ORDER BY value DESC
+         LIMIT ?`,
+        [startIso, topLimit]
+      ),
+      dbAll(
+        `SELECT COALESCE(NULLIF(platform,''), 'Unknown') AS name, ${valueExpr} AS value
+         FROM history
+         WHERE ${eventTimeExpr} >= ?
+         GROUP BY name
+         ORDER BY value DESC
+         LIMIT ?`,
+        [startIso, topLimit]
+      )
+    ]);
+
+    // Current concurrency (live)
+    let concurrentStreams = 0;
+    let concurrentTranscodes = 0;
+    let concurrentDirectPlays = 0;
+    Object.values(statuses || {}).forEach(st => {
+      if (!st || !st.online || !Array.isArray(st.sessions)) return;
+      st.sessions.forEach(sess => {
+        concurrentStreams++;
+        const stream = (sess.stream || sess.state || '').toString().toLowerCase();
+        const isTranscoding = (typeof sess.transcoding === 'boolean')
+          ? sess.transcoding
+          : (stream.includes('transcode'));
+        if (isTranscoding) concurrentTranscodes++;
+        else concurrentDirectPlays++;
+      });
+    });
+
+    res.json({
+      metric,
+      days,
+      startIso,
+      generatedAt: new Date().toISOString(),
+      sections: {
+        mostWatchedMovies,
+        mostPopularMovies,
+        mostWatchedTvShows,
+        mostPopularTvShows,
+        mostPlayedArtists,
+        mostPopularArtists,
+        recentlyWatched,
+        mostActiveLibraries,
+        mostActiveUsers,
+        mostActivePlatforms,
+        mostConcurrentStreams: {
+          streams: concurrentStreams,
+          transcodes: concurrentTranscodes,
+          directPlays: concurrentDirectPlays
+        }
+      }
+    });
+  } catch (e) {
+    console.error('[OmniStream] Reports watch-statistics failed:', e.message);
+    res.status(500).json({ error: 'Failed to build reports', detail: e.message });
+  }
 });
 
 // Lightweight health endpoint for external monitors (e.g., Home Assistant, Uptime Kuma)
@@ -1677,7 +2872,7 @@ app.get('/api/poster', async (req, res) => {
 // Simple history API - backed by SQLite
 app.get('/api/history', (req, res) => {
   if (!historyDb) return res.json({ history: [] });
-  let sql = 'SELECT time, serverId, serverName, type, user, title, stream, transcoding, location, bandwidth FROM history ORDER BY id ASC';
+  let sql = 'SELECT time, endedAt, lastSeenAt, sessionKey, serverId, serverName, type, user, title, stream, transcoding, location, bandwidth, platform, product, player, quality, duration, progress, ip, completed FROM history ORDER BY id DESC';
   const params = [];
   if (MAX_HISTORY > 0) {
     sql += ' LIMIT ?';
@@ -1690,6 +2885,9 @@ app.get('/api/history', (req, res) => {
     }
     const history = rows.map(r => ({
       time: r.time,
+      endedAt: r.endedAt,
+      lastSeenAt: r.lastSeenAt,
+      sessionKey: r.sessionKey,
       serverId: r.serverId,
       serverName: r.serverName,
       type: r.type,
@@ -1698,7 +2896,15 @@ app.get('/api/history', (req, res) => {
       stream: r.stream,
       transcoding: typeof r.transcoding === 'number' ? !!r.transcoding : undefined,
       location: r.location,
-      bandwidth: typeof r.bandwidth === 'number' ? r.bandwidth : 0
+      bandwidth: typeof r.bandwidth === 'number' ? r.bandwidth : 0,
+      platform: r.platform,
+      product: r.product,
+      player: r.player,
+      quality: r.quality,
+      duration: typeof r.duration === 'number' ? r.duration : 0,
+      progress: typeof r.progress === 'number' ? r.progress : 0,
+      ip: r.ip,
+      completed: typeof r.completed === 'number' ? !!r.completed : undefined
     }));
     res.json({ history });
   });
@@ -2112,54 +3318,23 @@ app.get('/api/subscribers/summary', (req, res) => {
   // Send a simple newsletter/broadcast email to all active subscribers
   app.post('/api/newsletter/send', async (req, res) => {
     try {
-      if (!historyDb) {
-        return res.status(500).json({ error: 'history DB not available' });
-      }
-      if (!nodemailer) {
-        return res.status(500).json({ error: 'Email sending not available (nodemailer not installed).' });
-      }
-      const emailCfg = appConfig?.newsletterEmail;
-      if (!emailCfg || emailCfg.enabled === false) {
-        return res.status(400).json({ error: 'Newsletter email is not configured or disabled.' });
-      }
-
       const subject = (req.body && String(req.body.subject || '').trim()) || '';
       const body = (req.body && String(req.body.body || '').trim()) || '';
       if (!subject || !body) {
         return res.status(400).json({ error: 'subject and body are required' });
       }
 
-      const rows = await new Promise((resolve, reject) => {
-        historyDb.all(
-          'SELECT DISTINCT email, name FROM newsletter_subscribers WHERE active = 1 AND email IS NOT NULL',
-          [],
-          (err, rows) => {
-            if (err) return reject(err);
-            resolve(rows || []);
-          }
-        );
+      const result = await sendNewsletterBroadcast({
+        subject,
+        body,
+        startDate: req.body && req.body.startDate,
+        endDate: req.body && req.body.endDate,
+        publicBaseUrl: buildPublicBaseUrl(req)
       });
-
-      const emails = rows
-        .map(r => (r && r.email ? String(r.email).trim() : ''))
-        .filter(e => !!e);
-      const uniqueEmails = Array.from(new Set(emails));
-
-      if (!uniqueEmails.length) {
+      if (!result.sent) {
         return res.json({ sent: 0, message: 'No active subscribers with email found.' });
       }
-
-      const transport = nodemailer.createTransport(emailCfg.smtp || {});
-      const mailOptions = {
-        from: emailCfg.from,
-        to: emailCfg.to || emailCfg.from,
-        bcc: uniqueEmails,
-        subject,
-        text: body
-      };
-
-      await transport.sendMail(mailOptions);
-      res.json({ sent: uniqueEmails.length });
+      res.json({ sent: result.sent, saved: result.saved || [] });
     } catch (e) {
       console.error('[OmniStream] Newsletter send failed:', e.message);
       recordNotifierError('newsletter', e.message);
@@ -2167,72 +3342,230 @@ app.get('/api/subscribers/summary', (req, res) => {
     }
   });
 
-  // Helper: fetch recently added items from enabled Plex servers
-  async function fetchPlexRecentlyAdded({ perServer = 10 } = {}) {
-    const enabledPlex = servers.filter(s => !s.disabled && s.type === 'plex' && s.token);
-    const results = [];
-    for (const server of enabledPlex) {
-      const base = (server.baseUrl || '').replace(/\/$/, '');
-      const url = base + '/library/recentlyAdded';
+  // Render a newsletter preview without sending any email.
+  app.post('/api/newsletter/preview', async (req, res) => {
+    try {
+      const subject = (req.body && String(req.body.subject || '').trim()) || '';
+      const body = (req.body && String(req.body.body || '').trim()) || '';
+      if (!subject || !body) {
+        return res.status(400).json({ error: 'subject and body are required' });
+      }
+      const rendered = await renderNewsletterSubjectAndBody(subject, body, fetchPlexRecentlyAdded, {
+        startDate: req.body && req.body.startDate,
+        endDate: req.body && req.body.endDate,
+        publicBaseUrl: buildPublicBaseUrl(req)
+      });
+      res.json({
+        subject: rendered.subject || subject,
+        html: rendered.html || '',
+        text: rendered.text || '',
+        startDate: rendered._startDate || null,
+        endDate: rendered._endDate || null
+      });
+    } catch (e) {
+      console.error('[OmniStream] Newsletter preview failed:', e.message);
+      res.status(500).json({ error: 'Failed to render preview' });
+    }
+  });
+
+  // Proxy Plex thumbnails without exposing Plex tokens in email HTML.
+  app.get('/api/newsletter/plex/thumb', async (req, res) => {
+    try {
+      const serverId = String(req.query.serverId || '').trim();
+      let thumb = String(req.query.thumb || '').trim();
+      if (!serverId || !thumb) {
+        return res.status(400).json({ error: 'serverId and thumb are required' });
+      }
+      if (!thumb.startsWith('/') || thumb.includes('..') || thumb.includes('://')) {
+        return res.status(400).json({ error: 'Invalid thumb path' });
+      }
+      // Strip any token in the provided thumb query for safety.
+      thumb = thumb.replace(/([?&])X-Plex-Token=[^&]+/ig, '$1').replace(/[?&]$/g, '');
+
+      const server = servers.find(s => String(s.id) === serverId);
+      if (!server || server.type !== 'plex' || !server.baseUrl || !server.token) {
+        return res.status(404).json({ error: 'Plex server not found' });
+      }
+
+      const base = String(server.baseUrl).replace(/\/$/, '');
+      const urlObj = new URL(base + thumb);
       const headers = {};
-      const params = {
-        'X-Plex-Container-Start': 0,
-        'X-Plex-Container-Size': perServer
-      };
       const tokenLoc = server.tokenLocation || 'query';
       if (tokenLoc === 'header') {
         headers['X-Plex-Token'] = server.token;
       } else {
-        params['X-Plex-Token'] = server.token;
+        urlObj.searchParams.set('X-Plex-Token', server.token);
       }
+
+      const resp = await axios.get(urlObj.toString(), {
+        headers,
+        timeout: 15000,
+        responseType: 'arraybuffer'
+      });
+
+      const contentType = (resp && resp.headers && resp.headers['content-type']) ? resp.headers['content-type'] : 'image/jpeg';
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+      res.status(200).send(Buffer.from(resp.data));
+    } catch (e) {
+      console.error('[OmniStream] Newsletter thumb proxy failed:', e.message);
+      res.status(500).json({ error: 'Failed to proxy thumb' });
+    }
+  });
+
+  // Helper: fetch recently added items from enabled Plex servers
+  async function fetchPlexRecentlyAdded({ perServer = 10 } = {}) {
+    const enabledPlex = servers.filter(s => !s.disabled && s.type === 'plex' && s.token);
+    const results = [];
+
+    const parseAddedAtIso = (m) => {
+      if (typeof m.addedAt === 'number') {
+        return new Date(m.addedAt * 1000).toISOString();
+      }
+      if (typeof m.addedAt === 'string') {
+        const parsed = Date.parse(m.addedAt);
+        return Number.isNaN(parsed) ? new Date().toISOString() : new Date(parsed).toISOString();
+      }
+      return new Date().toISOString();
+    };
+
+    const toItem = (server, m) => {
+      const rawType = (m && m.type ? String(m.type) : '').toLowerCase();
+      const isMovie = rawType === 'movie';
+      const isEpisode = rawType === 'episode';
+      const isShow = rawType === 'show';
+      const isSeason = rawType === 'season';
+      if (!isMovie && !isEpisode && !isShow && !isSeason) return null;
+
+      let title;
+      if (isEpisode || m.grandparentTitle) {
+        const series = m.grandparentTitle || '';
+        const epName = m.title || '';
+        const seasonNum = typeof m.parentIndex === 'number' ? m.parentIndex : null;
+        const epNum = typeof m.index === 'number' ? m.index : null;
+        let epLabel = '';
+        if (seasonNum !== null && epNum !== null) {
+          epLabel = `S${String(seasonNum).padStart(2, '0')}E${String(epNum).padStart(2, '0')}`;
+        } else if (epNum !== null) {
+          epLabel = `E${String(epNum).padStart(2, '0')}`;
+        }
+        if (series && epLabel && epName) {
+          title = `${series} - ${epLabel} - ${epName}`;
+        } else if (series && epName) {
+          title = `${series} - ${epName}`;
+        } else {
+          title = epName || series || m.title || m.originalTitle || 'Unknown';
+        }
+      } else if (isSeason) {
+        const showName = m.parentTitle || m.grandparentTitle || '';
+        const seasonNum = typeof m.index === 'number' ? m.index : (typeof m.parentIndex === 'number' ? m.parentIndex : null);
+        if (showName && seasonNum !== null) {
+          title = `${showName} - Season ${seasonNum}`;
+        } else if (showName && m.title) {
+          title = `${showName} - ${m.title}`;
+        } else {
+          title = m.title || showName || m.originalTitle || 'Unknown';
+        }
+      } else {
+        title = m.title || m.originalTitle || 'Unknown';
+      }
+
+      const addedAtIso = parseAddedAtIso(m);
+
+      const thumb = isMovie
+        ? (m.thumb || '')
+        : (m.grandparentThumb || m.parentThumb || m.thumb || '');
+
+      return {
+        serverId: server.id,
+        serverName: server.name || server.baseUrl,
+        type: rawType,
+        title,
+        year: m.year || null,
+        durationMinutes: typeof m.duration === 'number' ? (m.duration / 60000) : null,
+        genres: Array.isArray(m.Genre) ? m.Genre.map(g => g && g.tag ? String(g.tag) : '').filter(Boolean) : [],
+        summary: typeof m.summary === 'string' ? m.summary : '',
+        ratingKey: m.ratingKey != null ? String(m.ratingKey) : null,
+        thumb,
+        addedAt: addedAtIso
+      };
+    };
+
+    const plexGet = async (server, plexPath, { params = {}, responseType } = {}) => {
+      const base = (server.baseUrl || '').replace(/\/$/, '');
+      const headers = {};
+      const requestParams = { ...(params || {}) };
+      const tokenLoc = server.tokenLocation || 'query';
+      if (tokenLoc === 'header') {
+        headers['X-Plex-Token'] = server.token;
+      } else {
+        requestParams['X-Plex-Token'] = server.token;
+      }
+      return axios.get(base + plexPath, {
+        headers,
+        params: requestParams,
+        timeout: 15000,
+        responseType
+      });
+    };
+
+    const seen = new Set();
+    for (const server of enabledPlex) {
       try {
-        const resp = await axios.get(url, { headers, params, timeout: 15000 });
-        const mc = resp.data && resp.data.MediaContainer ? resp.data.MediaContainer : null;
-        const items = mc && Array.isArray(mc.Metadata) ? mc.Metadata : [];
-        items.forEach(m => {
-          const rawType = (m.type || '').toLowerCase();
-          const isMovie = rawType === 'movie';
-          const isEpisode = rawType === 'episode';
-          if (!isMovie && !isEpisode) return;
-          let title;
-          if (isEpisode || m.grandparentTitle) {
-            const series = m.grandparentTitle || '';
-            const epName = m.title || '';
-            const seasonNum = typeof m.parentIndex === 'number' ? m.parentIndex : null;
-            const epNum = typeof m.index === 'number' ? m.index : null;
-            let epLabel = '';
-            if (seasonNum !== null && epNum !== null) {
-              epLabel = `S${String(seasonNum).padStart(2, '0')}E${String(epNum).padStart(2, '0')}`;
-            } else if (epNum !== null) {
-              epLabel = `E${String(epNum).padStart(2, '0')}`;
+        // Prefer per-library-section recently added so TV libraries are always included.
+        let sectionDirs = [];
+        try {
+          const secResp = await plexGet(server, '/library/sections');
+          const mc = secResp.data && secResp.data.MediaContainer ? secResp.data.MediaContainer : null;
+          sectionDirs = mc && Array.isArray(mc.Directory) ? mc.Directory : [];
+        } catch (_) {
+          sectionDirs = [];
+        }
+
+        const sections = sectionDirs
+          .map(d => ({
+            key: d && d.key != null ? String(d.key) : '',
+            type: d && d.type ? String(d.type).toLowerCase() : ''
+          }))
+          .filter(s => s.key && (s.type === 'movie' || s.type === 'show'));
+
+        const pullFrom = async (plexPath) => {
+          const resp = await plexGet(server, plexPath, {
+            params: {
+              'X-Plex-Container-Start': 0,
+              'X-Plex-Container-Size': perServer
             }
-            if (series && epLabel && epName) {
-              title = `${series} - ${epLabel} - ${epName}`;
-            } else if (series && epName) {
-              title = `${series} - ${epName}`;
-            } else {
-              title = epName || series || m.title || m.originalTitle || 'Unknown';
-            }
-          } else {
-            title = m.title || m.originalTitle || 'Unknown';
-          }
-          let addedAtIso;
-          if (typeof m.addedAt === 'number') {
-            addedAtIso = new Date(m.addedAt * 1000).toISOString();
-          } else if (typeof m.addedAt === 'string') {
-            const parsed = Date.parse(m.addedAt);
-            addedAtIso = Number.isNaN(parsed) ? new Date().toISOString() : new Date(parsed).toISOString();
-          } else {
-            addedAtIso = new Date().toISOString();
-          }
-          results.push({
-            serverId: server.id,
-            serverName: server.name || server.baseUrl,
-            type: isMovie ? 'movie' : 'episode',
-            title,
-            year: m.year || null,
-            addedAt: addedAtIso
           });
+          const mc = resp.data && resp.data.MediaContainer ? resp.data.MediaContainer : null;
+          return mc && Array.isArray(mc.Metadata) ? mc.Metadata : [];
+        };
+
+        let metas = [];
+        if (sections.length) {
+          for (const s of sections) {
+            try {
+              const part = await pullFrom(`/library/sections/${encodeURIComponent(s.key)}/recentlyAdded`);
+              metas = metas.concat(part);
+            } catch (e) {
+              // continue; some servers may have restricted libraries
+            }
+          }
+        } else {
+          // Fallback for older servers/configs: global recentlyAdded.
+          try {
+            metas = await pullFrom('/library/recentlyAdded');
+          } catch (e) {
+            metas = [];
+          }
+        }
+
+        metas.forEach(m => {
+          const it = toItem(server, m);
+          if (!it) return;
+          const key = `${it.serverId}:${it.ratingKey || it.title || ''}:${it.type}`;
+          if (seen.has(key)) return;
+          seen.add(key);
+          results.push(it);
         });
       } catch (e) {
         console.error(`[OmniStream] Failed to fetch recently added from Plex server ${server.name || server.baseUrl}:`, e.message);
@@ -2370,8 +3703,25 @@ app.get('/api/history/query', (req, res) => {
     to,
     sort = 'time',
     order = 'desc',
-    limit
+    limit,
+    page,
+    pageSize,
+    unique,
+    includeStats
   } = req.query;
+
+  const isUnique = ['1', 'true', 'yes', 'on'].includes(String(unique || '').toLowerCase());
+  const wantStats = ['1', 'true', 'yes', 'on'].includes(String(includeStats || '').toLowerCase());
+
+  const pageNum = Math.max(0, parseInt(String(page || '0'), 10) || 0);
+  let size = parseInt(String(pageSize || ''), 10);
+  if (!Number.isFinite(size) || size <= 0) {
+    // Back-compat: legacy callers use `limit`
+    size = parseInt(String(limit || ''), 10);
+  }
+  if (!Number.isFinite(size) || size <= 0) size = 100;
+  size = Math.max(1, Math.min(size, 250));
+  const offset = pageNum * size;
 
   const where = [];
   const params = [];
@@ -2397,6 +3747,8 @@ app.get('/api/history/query', (req, res) => {
     params.push(to);
   }
 
+  const whereSql = where.length ? 'WHERE ' + where.join(' AND ') : '';
+
   let orderBy = 'time DESC';
   const dir = String(order).toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
   if (sort === 'bandwidth') {
@@ -2405,44 +3757,116 @@ app.get('/api/history/query', (req, res) => {
     orderBy = `time ${dir}`;
   }
 
-  let max;
-  let limitClause = '';
-  if (MAX_HISTORY > 0) {
-    max = Math.min(Number(limit) || MAX_HISTORY, MAX_HISTORY);
-    limitClause = ' LIMIT ?';
-    params.push(max);
-  } else if (limit) {
-    const requested = Number(limit);
-    if (Number.isFinite(requested) && requested > 0) {
-      max = requested;
-      limitClause = ' LIMIT ?';
-      params.push(max);
-    }
+  const selectCols = 'time, endedAt, lastSeenAt, sessionKey, serverId, serverName, type, user, userAvatar, title, stream, transcoding, location, bandwidth, platform, product, player, quality, duration, progress, ip, completed';
+
+  const baseParams = [...params];
+  let querySql;
+  let queryParams;
+  if (isUnique) {
+    const uniqueSub = `SELECT MAX(id) AS id FROM history ${whereSql} GROUP BY serverId, user, title, stream, location, COALESCE(ip,'')`;
+    querySql = `SELECT ${selectCols} FROM history h INNER JOIN (${uniqueSub}) u ON h.id = u.id ORDER BY ${orderBy} LIMIT ? OFFSET ?`;
+    queryParams = [...baseParams, size + 1, offset];
+  } else {
+    querySql = `SELECT ${selectCols} FROM history ${whereSql} ORDER BY ${orderBy} LIMIT ? OFFSET ?`;
+    queryParams = [...baseParams, size + 1, offset];
   }
 
-  const sql = `SELECT time, serverId, serverName, type, user, title, stream, transcoding, location, bandwidth
-               FROM history
-               ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
-               ORDER BY ${orderBy}${limitClause}`;
+  const statsSqlForMode = () => {
+    const watchedExpr = `CASE
+      WHEN duration IS NOT NULL AND duration > 0 AND progress IS NOT NULL AND progress > 0
+      THEN CASE
+        WHEN CAST(ROUND(duration * (progress / 100.0)) AS INTEGER) > duration THEN duration
+        ELSE CAST(ROUND(duration * (progress / 100.0)) AS INTEGER)
+      END
+      ELSE 0
+    END`;
 
-  historyDb.all(sql, params, (err, rows) => {
+    if (isUnique) {
+      const uniqueSub = `SELECT MAX(id) AS id FROM history ${whereSql} GROUP BY serverId, user, title, stream, location, COALESCE(ip,'')`;
+      return {
+        sql: `SELECT
+                COUNT(*) AS total,
+                COUNT(DISTINCT LOWER(h.user)) AS uniqueUsers,
+                COUNT(DISTINCT LOWER(h.title)) AS uniqueTitles,
+                SUM(${watchedExpr}) AS watchSeconds
+              FROM history h INNER JOIN (${uniqueSub}) u ON h.id = u.id`,
+        params: [...baseParams]
+      };
+    }
+
+    return {
+      sql: `SELECT
+              COUNT(*) AS total,
+              COUNT(DISTINCT LOWER(user)) AS uniqueUsers,
+              COUNT(DISTINCT LOWER(title)) AS uniqueTitles,
+              SUM(${watchedExpr}) AS watchSeconds
+            FROM history ${whereSql}`,
+      params: [...baseParams]
+    };
+  };
+
+  const send = (history, hasMore, stats) => {
+    res.json({
+      page: pageNum,
+      pageSize: size,
+      hasMore: !!hasMore,
+      unique: isUnique,
+      stats: stats || undefined,
+      history
+    });
+  };
+
+  historyDb.all(querySql, queryParams, (err, rows) => {
     if (err) {
       console.error('Failed to query history database:', err.message);
       return res.status(500).json({ history: [] });
     }
-    const history = rows.map(r => ({
+
+    const hasMore = Array.isArray(rows) && rows.length > size;
+    const sliced = hasMore ? rows.slice(0, size) : rows;
+    const history = sliced.map(r => ({
       time: r.time,
+      endedAt: r.endedAt,
+      lastSeenAt: r.lastSeenAt,
+      sessionKey: r.sessionKey,
       serverId: r.serverId,
       serverName: r.serverName,
       type: r.type,
       user: r.user,
+      userAvatar: r.userAvatar || undefined,
       title: r.title,
       stream: r.stream,
       transcoding: typeof r.transcoding === 'number' ? !!r.transcoding : undefined,
       location: r.location,
-      bandwidth: typeof r.bandwidth === 'number' ? r.bandwidth : 0
+      bandwidth: typeof r.bandwidth === 'number' ? r.bandwidth : 0,
+      platform: r.platform,
+      product: r.product,
+      player: r.player,
+      quality: r.quality,
+      duration: typeof r.duration === 'number' ? r.duration : 0,
+      progress: typeof r.progress === 'number' ? r.progress : 0,
+      ip: r.ip,
+      completed: typeof r.completed === 'number' ? !!r.completed : undefined
     }));
-    res.json({ history });
+
+    if (!wantStats) {
+      return send(history, hasMore, null);
+    }
+
+    const st = statsSqlForMode();
+    historyDb.get(st.sql, st.params, (e2, row) => {
+      if (e2) {
+        console.error('Failed to compute history stats:', e2.message);
+        return send(history, hasMore, null);
+      }
+      const stats = {
+        totalPlays: row && typeof row.total === 'number' ? row.total : 0,
+        uniqueUsers: row && typeof row.uniqueUsers === 'number' ? row.uniqueUsers : 0,
+        uniqueTitles: row && typeof row.uniqueTitles === 'number' ? row.uniqueTitles : 0,
+        watchSeconds: row && typeof row.watchSeconds === 'number' ? row.watchSeconds : 0
+      };
+      return send(history, hasMore, stats);
+    });
   });
 });
 
@@ -2669,6 +4093,20 @@ app.get('/api/config/app', (req, res) => {
         from: appConfig.newsletterEmail?.from || '',
         to: appConfig.newsletterEmail?.to || ''
       },
+      newsletterSchedule: {
+        enabled: appConfig.newsletterSchedule?.enabled === true,
+        templateId: appConfig.newsletterSchedule?.templateId != null ? String(appConfig.newsletterSchedule.templateId) : DEFAULT_NEWSLETTER_TEMPLATE_ID,
+        dayOfWeek: normalizeDayOfWeek(appConfig.newsletterSchedule?.dayOfWeek),
+        time: normalizeTimeHHMM(appConfig.newsletterSchedule?.time) || '09:00',
+        lastSentDate: appConfig.newsletterSchedule?.lastSentDate || ''
+      },
+      newsletterCustomSections: Array.isArray(appConfig.newsletterCustomSections)
+        ? appConfig.newsletterCustomSections.map((s, idx) => ({
+          id: s && s.id != null ? String(s.id) : `sec-${idx + 1}`,
+          header: s && typeof s.header === 'string' ? s.header : '',
+          columns: Array.isArray(s && s.columns) ? s.columns.map(c => typeof c === 'string' ? c : '') : ['', '', '']
+        }))
+        : [],
       newsletterTemplates: Array.isArray(appConfig.newsletterTemplates) ? appConfig.newsletterTemplates.map(t => ({
         id: t.id,
         name: t.name,
@@ -2750,7 +4188,52 @@ app.put('/api/config/app', (req, res) => {
       }
     }
 
-    fs.writeFileSync(CONFIG_FILE, JSON.stringify(appConfig, null, 2));
+    // Newsletter custom sections (header + 3 columns)
+    if (Object.prototype.hasOwnProperty.call(body, 'newsletterCustomSections')) {
+      const raw = body.newsletterCustomSections;
+      if (Array.isArray(raw)) {
+        appConfig.newsletterCustomSections = raw.map((s, idx) => {
+          const header = s && typeof s.header === 'string' ? s.header : '';
+          const cols = s && Array.isArray(s.columns) ? s.columns : [];
+          const c1 = typeof cols[0] === 'string' ? cols[0] : '';
+          const c2 = typeof cols[1] === 'string' ? cols[1] : '';
+          const c3 = typeof cols[2] === 'string' ? cols[2] : '';
+          return {
+            id: s && s.id != null ? String(s.id) : `sec-${idx + 1}`,
+            header,
+            columns: [c1, c2, c3]
+          };
+        });
+      }
+    }
+
+    // Weekly newsletter schedule
+    if (Object.prototype.hasOwnProperty.call(body, 'newsletterSchedule')) {
+      const incoming = body.newsletterSchedule && typeof body.newsletterSchedule === 'object' ? body.newsletterSchedule : {};
+      const current = appConfig.newsletterSchedule && typeof appConfig.newsletterSchedule === 'object' ? appConfig.newsletterSchedule : {};
+      const next = { ...current };
+
+      if (Object.prototype.hasOwnProperty.call(incoming, 'enabled')) {
+        next.enabled = incoming.enabled === true;
+      }
+      if (Object.prototype.hasOwnProperty.call(incoming, 'templateId')) {
+        next.templateId = incoming.templateId != null ? String(incoming.templateId) : '';
+      }
+      if (Object.prototype.hasOwnProperty.call(incoming, 'dayOfWeek')) {
+        next.dayOfWeek = normalizeDayOfWeek(incoming.dayOfWeek);
+      }
+      if (Object.prototype.hasOwnProperty.call(incoming, 'time')) {
+        const t = normalizeTimeHHMM(incoming.time);
+        next.time = t || next.time || '09:00';
+      }
+      if (Object.prototype.hasOwnProperty.call(incoming, 'lastSentDate')) {
+        // Allow manual reset/override if needed
+        next.lastSentDate = normalizeDateInput(incoming.lastSentDate);
+      }
+      appConfig.newsletterSchedule = next;
+    }
+
+    saveAppConfigToDisk();
 
     const overseerrCfg = appConfig.overseerr || {};
     res.json({
@@ -2764,6 +4247,20 @@ app.put('/api/config/app', (req, res) => {
         from: appConfig.newsletterEmail?.from || '',
         to: appConfig.newsletterEmail?.to || ''
       },
+      newsletterSchedule: {
+        enabled: appConfig.newsletterSchedule?.enabled === true,
+        templateId: appConfig.newsletterSchedule?.templateId != null ? String(appConfig.newsletterSchedule.templateId) : DEFAULT_NEWSLETTER_TEMPLATE_ID,
+        dayOfWeek: normalizeDayOfWeek(appConfig.newsletterSchedule?.dayOfWeek),
+        time: normalizeTimeHHMM(appConfig.newsletterSchedule?.time) || '09:00',
+        lastSentDate: appConfig.newsletterSchedule?.lastSentDate || ''
+      },
+      newsletterCustomSections: Array.isArray(appConfig.newsletterCustomSections)
+        ? appConfig.newsletterCustomSections.map((s, idx) => ({
+          id: s && s.id != null ? String(s.id) : `sec-${idx + 1}`,
+          header: s && typeof s.header === 'string' ? s.header : '',
+          columns: Array.isArray(s && s.columns) ? s.columns.map(c => typeof c === 'string' ? c : '') : ['', '', '']
+        }))
+        : [],
       newsletterTemplates: Array.isArray(appConfig.newsletterTemplates) ? appConfig.newsletterTemplates.map(t => ({
         id: t.id,
         name: t.name,
@@ -2838,4 +4335,56 @@ app.post('/api/servers', (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`OmniStream listening on port ${PORT}`));
+
+function listenWithFallback(startPort) {
+  const usingDefaultPort = !process.env.PORT;
+  const maxAttempts = 20;
+  const basePort = Number(startPort);
+  const resolvedBasePort = Number.isFinite(basePort) ? basePort : 3000;
+
+  let attempt = 0;
+  const tryListen = (port) => {
+    const server = app.listen(port, () => {
+      console.log(`OmniStream listening on port ${port}`);
+    });
+    server.on('error', (err) => {
+      if (err && err.code === 'EADDRINUSE' && usingDefaultPort && attempt < maxAttempts) {
+        attempt++;
+        const nextPort = port + 1;
+        console.warn(`[OmniStream] Port ${port} in use; trying ${nextPort}...`);
+        try {
+          server.close(() => tryListen(nextPort));
+        } catch {
+          tryListen(nextPort);
+        }
+        return;
+      }
+
+      console.error('[OmniStream] Server failed to start:', err && err.message ? err.message : err);
+      process.exit(1);
+    });
+  };
+
+  tryListen(resolvedBasePort);
+}
+
+listenWithFallback(PORT);
+
+// In-process scheduler: checks once per minute whether a weekly newsletter is due.
+setInterval(() => {
+  runNewsletterScheduleIfDue();
+}, 60 * 1000);
+
+// In-process update checker: checks GitHub releases on a randomized schedule.
+// This avoids frequent polling while still being reliable.
+function scheduleNextUpdateCheck(isStartup) {
+  const minDelayMs = isStartup ? (60 * 1000) : (6 * 60 * 60 * 1000);
+  const maxDelayMs = isStartup ? (10 * 60 * 1000) : (12 * 60 * 60 * 1000);
+  const delay = minDelayMs + Math.floor(Math.random() * (maxDelayMs - minDelayMs + 1));
+  setTimeout(async () => {
+    await maybeCheckForUpdates({ force: true });
+    scheduleNextUpdateCheck(false);
+  }, delay);
+}
+
+scheduleNextUpdateCheck(true);

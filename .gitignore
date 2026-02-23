@@ -1,6 +1,11 @@
 node_modules/
 servers.json
 servers.test.json
+config.json
+history.db
+sent_newsletters/
+omnistream-mock.pid
+omnistream-app.pid
 .env
 npm-debug.log
 .DS_Store

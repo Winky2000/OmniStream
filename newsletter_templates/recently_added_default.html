@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light dark">
+    <meta name="supported-color-schemes" content="light dark">
+    <title>Gold_tower Newsletter</title> <!-- Change to your Plex Media Server Name -->
+    <!--[if mso]>
+    <noscript>
+        <xml>
+            <o:OfficeDocumentSettings>
+                <o:PixelsPerInch>96</o:PixelsPerInch>
+            </o:OfficeDocumentSettings>
+        </xml>
+    </noscript>
+    <![endif]-->
+    <style>
+        :root {
+            color-scheme: light dark;
+        }
+
+        /* Default to a dark look so clients that ignore prefers-color-scheme
+           still render something consistent with OmniStream's dark UI. */
+        .dark-mode {
+            background-color: #050814 !important;
+            color: #e5e7eb !important;
+        }
+
+        .dark-mode-text {
+            color: #e5e7eb !important;
+        }
+
+        .dark-mode-muted {
+            color: #94a3b8 !important;
+        }
+
+        .dark-mode-border {
+            border-color: #E5A00D !important;
+        }
+
+        .dark-mode-card {
+            background-color: #0b1226 !important;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            /* Keep these for clients that support it, but our defaults are
+               already dark so this is mostly redundant. */
+            .dark-mode {
+                background-color: #050814 !important;
+                color: #e5e7eb !important;
+            }
+
+            .dark-mode-text {
+                color: #e5e7eb !important;
+            }
+
+            .dark-mode-muted {
+                color: #94a3b8 !important;
+            }
+
+            .dark-mode-border {
+                border-color: #E5A00D !important;
+            }
+
+            .dark-mode-card {
+                background-color: #0b1226 !important;
+            }
+        }
+
+        @media screen and (max-width: 800px) {
+            .movie-card {
+                flex-direction: column !important;
+            }
+
+            .movie-poster {
+                margin-right: 0 !important;
+                margin-bottom: 15px !important;
+                align-self: center !important;
+                width: 150px !important;
+                height: 225px !important;
+            }
+
+            .movie-content {
+                width: 100% !important;
+            }
+        }
+    </style>
+</head>
+<body style="margin: 0; padding: 0; width: 100%; background-color: #050814; color: #e5e7eb;" class="dark-mode">
+
+
+    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; margin: 0 auto; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+        <tr>
+            <td style="padding: 20px 0; text-align: center;">
+                <!-- Header -->
+                <div class="d-flex justify-content-center align-items-center">
+                   <img src="http://winkys.com/img/wpe.jpg" alt="Logo" width="640" height="117"> <!-- Change to your Logo -->
+                </div>
+                <h1 style="margin: 0; font-size: 36px; font-weight: 700; color: #E5A00D; text-transform: uppercase; letter-spacing: 2px;">Gold Tower SERVER</h1> <!-- Change to your Plex Media Server Name -->
+                <p style="margin: 10px 0; font-size: 18px; color: #94a3b8;" class="dark-mode-muted">
+                    {{START_DATE}} - {{END_DATE}}
+                </p>
+            </td>
+        </tr>
+</table>
+
+    <!-- Optional custom section blocks (header + 3 columns). Configure on the Templates page. -->
+    {{CUSTOM_SECTIONS}}
+
+    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; margin: 0 auto; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+        <tr>
+            <td style="padding: 20px;">
+                <div style="border-top: 2px solid #E5A00D; margin: 20px 0;" class="dark-mode-border"></div>
+                <h2 style="margin: 0; font-size: 24px; color: #333333; text-align: center;" class="dark-mode-text">
+                    Recently Added
+                </h2>
+                <p style="margin: 8px 0 0 0; font-size: 13px; color: #666666; text-align: center;" class="dark-mode-text">
+                    Powered by OmniStream
+                </p>
+            </td>
+        </tr>
+
+        <tr>
+          <td style="padding: 0 20px 24px 20px;">
+            {{RECENTLY_ADDED}}
+          </td>
+        </tr>
+
+        <!-- Original footer -->
+        <tr>
+            <td class="footer" style="font-family: 'Open Sans', Helvetica, Arial, sans-serif;font-size: 12px;display: none;vertical-align: top;clear: both;margin-top: 10px;text-align: center;width: 100%;">
+                <div class="footer-bar" style="margin-left: auto;margin-right: auto;width: 200px;border-top: 1px solid #E5A00D;margin-top: 25px;"></div>
+                <div class="content-block powered-by" style="padding-bottom: 10px;padding-top: 10px;">
+                    <!-- FOOTER MESSAGE - DO NOT REMOVE -->
+                </div>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

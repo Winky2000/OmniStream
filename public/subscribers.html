@@ -14,6 +14,8 @@
     .nav-link{display:block;padding:8px 10px;border-radius:8px;font-size:13px;color:var(--text-muted);text-decoration:none;transition:background 0.15s,color 0.15s;}
     .nav-link:hover{background:rgba(148,163,184,0.15);color:var(--text-main);}
     .nav-link-active{background:rgba(59,130,246,0.18);color:#e5edff;border-left:3px solid var(--btn-border);padding-left:7px;}
+    .nav-group-toggle{display:block;width:100%;text-align:left;padding:8px 10px;border-radius:8px;font-size:13px;color:var(--text-muted);background:transparent;border:0;cursor:pointer;font-family:inherit;transition:color 0.15s;}
+    .nav-group-toggle:hover{color:var(--text-main);}
     .settings-group{margin-top:4px;}
     .settings-submenu{display:none;flex-direction:column;gap:2px;padding-left:14px;margin-top:3px;}
     .settings-submenu.open{display:flex;}
@@ -57,21 +59,23 @@
         <a href="reports.html" class="nav-link">Reports</a>
         <a href="notifications.html" class="nav-link">Notifications</a>
         <div class="settings-group">
-          <button type="button" class="nav-link nav-link-active newsletter-toggle">Newsletter</button>
+          <button type="button" class="nav-group-toggle newsletter-toggle">Newsletter</button>
           <div class="settings-submenu newsletter-submenu open">
             <a href="overseerr.html" class="submenu-link">Overseerr</a>
             <a href="subscribers.html" class="submenu-link submenu-link-active">Subscribers</a>
             <a href="templates.html" class="submenu-link">Templates</a>
+            <a href="custom-header.html" class="submenu-link">Custom header</a>
           </div>
         </div>
         <div class="settings-group">
-          <button type="button" class="nav-link settings-toggle">Settings</button>
+          <button type="button" class="nav-group-toggle settings-toggle">Settings</button>
           <div class="settings-submenu">
             <a href="admin.html" class="submenu-link">Connected servers</a>
             <a href="servers.html" class="submenu-link">Servers</a>
             <a href="display.html" class="submenu-link">Themes &amp; layout</a>
             <a href="notifiers.html" class="submenu-link">Notifiers</a>
             <a href="system.html" class="submenu-link">System</a>
+            <a href="about.html" class="submenu-link">About</a>
           </div>
         </div>
       </nav>
@@ -139,9 +143,35 @@
           Message
           <textarea id="nlBody" placeholder="This message will be emailed to all active subscribers."></textarea>
         </label>
-        <button class="btn" id="nlSendBtn">Send newsletter to active subscribers</button>
+        <div class="row" style="gap:8px;flex-wrap:wrap;">
+          <button class="btn" id="nlPreviewBtn" type="button">Preview HTML</button>
+          <button class="btn" id="nlSendBtn" type="button">Send newsletter to active subscribers</button>
+        </div>
         <span id="nlSendStatus" class="row"></span>
-        <div class="hint">Uses the dedicated newsletter email settings. Recipients are BCC'd and come from the active subscribers list.</div>
+        <div class="hint">Preview renders placeholders (like recently added) without sending. Sending uses the dedicated newsletter email settings. Recipients are BCC'd and come from the active subscribers list.</div>
+
+        <h2 style="margin-top:18px;">Weekly auto-send</h2>
+        <div class="row">Automatically send a selected newsletter template every week on the chosen day/time (server local time).</div>
+        <label>
+          <input type="checkbox" id="nlScheduleEnabled"> Enable weekly auto-send
+        </label>
+        <label>
+          Template
+          <select id="nlScheduleTemplateSelect" style="margin-top:4px;padding:4px 8px;border-radius:6px;border:1px solid #444;background:var(--bg);color:var(--text-main);font-size:13px;min-width:240px;"></select>
+        </label>
+        <div class="row" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+          <label style="margin:0;min-width:200px;">
+            Day
+            <select id="nlScheduleDay" style="margin-top:4px;padding:4px 8px;border-radius:6px;border:1px solid #444;background:var(--bg);color:var(--text-main);font-size:13px;min-width:180px;"></select>
+          </label>
+          <label style="margin:0;min-width:160px;">
+            Time
+            <input type="time" id="nlScheduleTime" step="60" style="margin-top:4px;max-width:160px;">
+          </label>
+        </div>
+        <div class="row"><b>Last sent:</b> <span id="nlScheduleLastSent">-</span></div>
+        <button class="btn" id="nlScheduleSaveBtn" type="button">Save weekly schedule</button>
+        <span id="nlScheduleStatus" class="row"></span>
       </div>
 
       <div class="card newsletter-panel" data-panel="subscribers">
@@ -261,6 +291,50 @@
             sel.appendChild(opt);
           });
         }
+
+        // Weekly schedule
+        const sched = data.newsletterSchedule || {};
+        const schedEnabled = document.getElementById('nlScheduleEnabled');
+        const schedTemplateSel = document.getElementById('nlScheduleTemplateSelect');
+        const schedDaySel = document.getElementById('nlScheduleDay');
+        const schedTime = document.getElementById('nlScheduleTime');
+        const schedLastSent = document.getElementById('nlScheduleLastSent');
+
+        if (schedEnabled) schedEnabled.checked = sched.enabled === true;
+        if (schedLastSent) schedLastSent.textContent = sched.lastSentDate ? String(sched.lastSentDate) : 'Never';
+
+        if (schedDaySel) {
+          const existing = schedDaySel.value;
+          if (!schedDaySel.options.length) {
+            const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+            days.forEach((name, idx) => {
+              const opt = document.createElement('option');
+              opt.value = String(idx);
+              opt.textContent = name;
+              schedDaySel.appendChild(opt);
+            });
+          }
+          const d = Number.isFinite(Number(sched.dayOfWeek)) ? String(Number(sched.dayOfWeek)) : '0';
+          schedDaySel.value = d;
+          if (existing && existing !== schedDaySel.value) {
+            // no-op; just keeps selection in sync
+          }
+        }
+        if (schedTime) {
+          schedTime.value = sched.time || '09:00';
+        }
+        if (schedTemplateSel) {
+          schedTemplateSel.innerHTML = '';
+          templates.forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t.id;
+            opt.textContent = t.name || t.subject || 'Template';
+            schedTemplateSel.appendChild(opt);
+          });
+          if (sched.templateId) {
+            schedTemplateSel.value = String(sched.templateId);
+          }
+        }
       } catch (e) {
         console.error('Failed to load newsletter config:', e);
       }
@@ -375,13 +449,21 @@
         statusEl.className = 'row status-error';
         return;
       }
+
+      const lastPreview = window.__omnistreamLastNewsletterPreview || null;
+      const reuseRange = lastPreview && lastPreview.subject === subject && lastPreview.body === body && lastPreview.startDate && lastPreview.endDate;
       statusEl.textContent = 'Sending newsletter...';
       statusEl.className = 'row';
       try {
         const resp = await fetch('/api/newsletter/send', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ subject, body })
+          body: JSON.stringify({
+            subject,
+            body,
+            startDate: reuseRange ? lastPreview.startDate : undefined,
+            endDate: reuseRange ? lastPreview.endDate : undefined
+          })
         });
         if (!resp.ok) {
           const text = await resp.text().catch(() => '');
@@ -391,11 +473,81 @@
         }
         const data = await resp.json();
         const sent = typeof data.sent === 'number' ? data.sent : 0;
-        statusEl.textContent = `Newsletter sent to ${sent} subscriber${sent === 1 ? '' : 's'}.`;
+        const saved = data && Array.isArray(data.saved) ? data.saved : [];
+        statusEl.textContent = `Newsletter sent to ${sent} subscriber${sent === 1 ? '' : 's'}.` + (saved.length ? ` Saved: ${saved.join(', ')}` : '');
         statusEl.className = 'row status-ok';
       } catch (e) {
         console.error('Newsletter send failed:', e);
         statusEl.textContent = 'Send failed. Check server logs.';
+        statusEl.className = 'row status-error';
+      }
+    });
+
+    document.getElementById('nlPreviewBtn').addEventListener('click', async () => {
+      const statusEl = document.getElementById('nlSendStatus');
+      const subjectInput = document.getElementById('nlSubject');
+      const bodyInput = document.getElementById('nlBody');
+      const subject = (subjectInput.value || '').trim();
+      const body = (bodyInput.value || '').trim();
+      if (!subject || !body) {
+        statusEl.textContent = 'Subject and message are required.';
+        statusEl.className = 'row status-error';
+        return;
+      }
+      statusEl.textContent = 'Generating preview...';
+      statusEl.className = 'row';
+      try {
+        const resp = await fetch('/api/newsletter/preview', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subject, body })
+        });
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => '');
+          statusEl.textContent = 'Preview failed: ' + (text || resp.status + ' ' + resp.statusText);
+          statusEl.className = 'row status-error';
+          return;
+        }
+        const data = await resp.json();
+        const html = data && typeof data.html === 'string' && data.html.trim() ? data.html : '';
+        const text = data && typeof data.text === 'string' ? data.text : '';
+        const subj = data && typeof data.subject === 'string' ? data.subject : subject;
+        const startDate = data && typeof data.startDate === 'string' ? data.startDate : '';
+        const endDate = data && typeof data.endDate === 'string' ? data.endDate : '';
+
+        window.__omnistreamLastNewsletterPreview = {
+          subject,
+          body,
+          startDate,
+          endDate
+        };
+
+        const popup = window.open('', '_blank');
+        if (!popup) {
+          statusEl.textContent = 'Preview blocked by popup blocker.';
+          statusEl.className = 'row status-error';
+          return;
+        }
+        popup.document.open();
+        if (html) {
+          // Make the preview tab title match the rendered subject.
+          let renderedHtml = html;
+          if (/<title>[^<]*<\/title>/i.test(renderedHtml)) {
+            renderedHtml = renderedHtml.replace(/<title>[^<]*<\/title>/i, `<title>${subj.replace(/[&<>]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;' }[c]))}</title>`);
+          } else if (/<head\b[^>]*>/i.test(renderedHtml)) {
+            renderedHtml = renderedHtml.replace(/<head\b[^>]*>/i, (m) => m + `<title>${subj.replace(/[&<>]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;' }[c]))}</title>`);
+          }
+          popup.document.write(renderedHtml);
+        } else {
+          const safe = (text || '').replace(/[&<>]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;' }[c]));
+          popup.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${subj}</title></head><body><pre style="white-space:pre-wrap;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;">${safe}</pre></body></html>`);
+        }
+        popup.document.close();
+        statusEl.textContent = 'Preview opened in a new tab.' + (startDate && endDate ? ` Date range: ${startDate} - ${endDate}` : '');
+        statusEl.className = 'row status-ok';
+      } catch (e) {
+        console.error('Newsletter preview failed:', e);
+        statusEl.textContent = 'Preview failed. Check server logs.';
         statusEl.className = 'row status-error';
       }
     });
@@ -435,6 +587,45 @@
         loadNewsletterConfig();
       } catch (e) {
         console.error('Failed to save newsletter email config:', e);
+        statusEl.textContent = 'Save failed. Check server logs.';
+        statusEl.className = 'row status-error';
+      }
+    });
+
+    document.getElementById('nlScheduleSaveBtn').addEventListener('click', async () => {
+      const statusEl = document.getElementById('nlScheduleStatus');
+      statusEl.textContent = 'Saving...';
+      statusEl.className = 'row';
+      try {
+        const templateId = (document.getElementById('nlScheduleTemplateSelect').value || '').trim();
+        if (!templateId) {
+          statusEl.textContent = 'Pick a template for the weekly send.';
+          statusEl.className = 'row status-error';
+          return;
+        }
+        const payload = {
+          newsletterSchedule: {
+            enabled: document.getElementById('nlScheduleEnabled').checked,
+            templateId,
+            dayOfWeek: Number(document.getElementById('nlScheduleDay').value),
+            time: document.getElementById('nlScheduleTime').value
+          }
+        };
+        const resp = await fetch('/api/config/app', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => '');
+          throw new Error(text || ('HTTP ' + resp.status));
+        }
+        await resp.json().catch(() => ({}));
+        statusEl.textContent = 'Weekly schedule saved.';
+        statusEl.className = 'row status-ok';
+        loadNewsletterConfig();
+      } catch (e) {
+        console.error('Failed to save weekly schedule:', e);
         statusEl.textContent = 'Save failed. Check server logs.';
         statusEl.className = 'row status-error';
       }

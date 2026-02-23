@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>OmniStream Reports</title>
+  <title>OmniStream Watch Statistics</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link rel="stylesheet" href="theme.css">
   <style>
@@ -18,22 +18,57 @@
     .sidebar-toggle:hover{background:var(--btn-bg-hover);color:var(--btn-text-hover);}
     .app-shell.sidebar-collapsed .sidebar{display:none;}
     .main-content{flex:1;box-sizing:border-box;padding:20px;}
-    h1{margin:0 0 12px 0;color:var(--text-main);letter-spacing:0.5px;font-size:1.8em}
-    .placeholder{margin-top:16px;font-size:14px;color:#b0b3b8;}
-    .back-btn{margin-top:16px;padding:6px 14px;border-radius:8px;border:1px solid #555;background:#232837;color:#e0e3e8;cursor:pointer;}
-    .back-btn:hover{background:#2b3040;}
-    .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px;margin-top:18px;}
-    .card{background:var(--card-bg);border-radius:14px;padding:16px 18px;box-shadow:0 2px 10px #0006;border:1px solid #2f3a52;}
-    .card h2{margin:0 0 8px 0;font-size:15px;color:#fff;}
-    .metric{font-size:13px;margin:3px 0;}
-    .list-item{font-size:13px;margin:2px 0;}
-    .user-link{color:#4fc3f7;text-decoration:none;}
+
+    h1{margin:0 0 10px 0;color:var(--text-main);letter-spacing:0.14em;font-size:14px;text-transform:uppercase;}
+
+    .controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:10px 0 18px 0;}
+    .seg{display:inline-flex;gap:0;border:1px solid rgba(148,163,184,0.22);border-radius:999px;overflow:hidden;background:rgba(0,0,0,0.18);}
+    :root[data-theme="light-borderless"] .seg{background:rgba(0,0,0,0.03);border-color:#dddddd;}
+    .seg button{appearance:none;border:0;background:transparent;color:var(--text-muted);font-size:12px;padding:7px 12px;cursor:pointer;}
+    .seg button:hover{background:rgba(148,163,184,0.14);color:var(--text-main);}
+    .seg button.active{background:rgba(59,130,246,0.18);color:var(--text-main);}
+
+    .range{display:inline-flex;align-items:center;gap:8px;color:var(--text-muted);font-size:12px;}
+    .range input{width:86px;padding:6px 10px;border-radius:10px;border:1px solid rgba(148,163,184,0.22);background:rgba(0,0,0,0.18);color:var(--text-main);}
+    :root[data-theme="light-borderless"] .range input{background:rgba(0,0,0,0.03);border-color:#dddddd;color:#111111;}
+
+    .placeholder{margin-top:16px;font-size:14px;color:var(--text-muted);}
+
+    .main-content .grid{display:grid !important;grid-template-columns:repeat(2,minmax(0,1fr)) !important;gap:18px;}
+    @media (max-width: 700px){.main-content .grid{grid-template-columns:1fr !important;}}
+
+    .panel{position:relative;overflow:hidden;border-radius:12px;border:1px solid rgba(148,163,184,0.22);background:rgba(0,0,0,0.18);min-height:138px;}
+    :root[data-theme="light-borderless"] .panel{background:rgba(0,0,0,0.03);border-color:#dddddd;}
+    .panel-bg{position:absolute;inset:-18px;background-size:cover;background-position:center;filter:blur(14px);opacity:0.35;}
+    .panel-bg.fallback{
+      background-image:
+        radial-gradient(circle at 14% 18%, var(--btn-border), rgba(0,0,0,0) 60%),
+        radial-gradient(circle at 82% 52%, var(--text-muted), rgba(0,0,0,0) 58%),
+        radial-gradient(circle at 42% 92%, var(--btn-text), rgba(0,0,0,0) 62%),
+        linear-gradient(135deg, rgba(0,0,0,0.55), rgba(0,0,0,0.25));
+      filter: blur(14px) saturate(1.25) hue-rotate(var(--hue, 0deg));
+      opacity:0.42;
+    }
+    .panel-overlay{position:absolute;inset:0;background:linear-gradient(90deg,rgba(0,0,0,0.65),rgba(0,0,0,0.28) 60%,rgba(0,0,0,0.20));}
+    :root[data-theme="light-borderless"] .panel-overlay{background:linear-gradient(90deg,rgba(255,255,255,0.92),rgba(255,255,255,0.72) 60%,rgba(255,255,255,0.60));}
+    .panel-inner{position:relative;z-index:1;display:flex;gap:12px;padding:12px;}
+    .thumb{width:84px;height:120px;border-radius:6px;object-fit:cover;border:1px solid rgba(148,163,184,0.18);background:rgba(0,0,0,0.10);flex:0 0 auto;}
+    .panel-body{flex:1;min-width:0;}
+    .panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px;}
+    .panel-title{font-size:13px;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-main);opacity:0.95;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .panel-right{font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-muted);white-space:nowrap;}
+    .list{display:flex;flex-direction:column;gap:6px;margin-top:6px;}
+    .row{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px;color:var(--text-main);}
+    .row-left{display:flex;align-items:center;gap:10px;min-width:0;}
+    .rank{width:14px;text-align:right;color:var(--text-muted);font-size:12px;flex:0 0 auto;}
+    .name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .avatar{width:18px;height:18px;border-radius:999px;object-fit:cover;border:1px solid rgba(148,163,184,0.22);flex:0 0 auto;background:rgba(0,0,0,0.10);}
+    .name-link{color:var(--btn-border);text-decoration:none;}
+    .name-link:hover{text-decoration:underline;}
+    .user-link{color:var(--btn-border);text-decoration:none;}
     .user-link:hover{text-decoration:underline;}
-    .activity-grid{margin-top:10px;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;align-items:flex-end;}
-    .activity-column{display:flex;flex-direction:column;align-items:center;gap:4px;}
-    .activity-bar{width:100%;height:60px;border-radius:10px;background:rgba(148,163,184,0.15);display:flex;align-items:flex-end;justify-content:center;overflow:hidden;}
-    .activity-bar-fill{width:60%;border-radius:999px;background:linear-gradient(180deg,rgba(96,165,250,0.9),rgba(59,130,246,0.9));transition:height 0.2s ease;}
-    .activity-bar-label{font-size:11px;color:var(--text-muted);text-align:center;}
+    .value{color:var(--btn-border);font-variant-numeric:tabular-nums;}
+    .muted{color:var(--text-muted);}
   </style>
 </head>
 <body>
@@ -49,16 +84,24 @@
       </nav>
     </aside>
     <main class="main-content">
-  <button class="sidebar-toggle" id="sidebarToggle">Hide menu</button>
-  <h1>Reports</h1>
-  <div style="margin-bottom:12px;font-size:13px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-    <span style="color:var(--text-muted);">Scope:</span>
-    <select id="serverFilter" style="padding:4px 8px;border-radius:6px;border:1px solid #4b5563;background:var(--card-bg);color:var(--text-main);font-size:13px;">
-      <option value="all">All servers</option>
-    </select>
-    <span id="serverFilterNote" style="color:var(--text-faint);"></span>
+      <button class="sidebar-toggle" id="sidebarToggle">Hide menu</button>
+      <h1>WATCH STATISTICS</h1>
+
+      <div class="controls">
+        <div class="seg" role="group" aria-label="Metric">
+          <button id="metricCount" class="active" type="button">Play Count</button>
+          <button id="metricDuration" type="button">Play Duration</button>
+        </div>
+        <div class="range">
+          <span>Last</span>
+          <input id="daysInput" type="number" min="1" max="5000" step="1" value="1000" />
+          <span>days</span>
+        </div>
+      </div>
+
+      <div id="content" class="placeholder">Loading watch statistics...</div>
+    </main>
   </div>
-  <div id="summary" class="placeholder">Loading summary...</div>
 
   <script>
     // Apply saved theme and wire sidebar toggle
@@ -83,257 +126,252 @@
       }
     })();
 
-    async function fetchStatus() {
-      const r = await fetch('/api/status');
-      return await r.json();
+    function escapeHtml(s) {
+      return String(s ?? '').replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      }[c]));
     }
-    async function fetchHistory() {
-      const r = await fetch('/api/history');
-      return await r.json();
+
+    function hashHue(input) {
+      const str = String(input ?? '');
+      let h = 0;
+      for (let i = 0; i < str.length; i++) {
+        h = ((h << 5) - h) + str.charCodeAt(i);
+        h |= 0;
+      }
+      return Math.abs(h) % 360;
     }
-    async function renderReports() {
-      try {
-        const [statusData, historyData] = await Promise.all([fetchStatus(), fetchHistory()]);
-        const { servers = [], statuses = {} } = statusData;
-        const { history = [] } = historyData;
-        const summaryDiv = document.getElementById('summary');
 
-        // Collapse raw history samples into approximate "play events" so
-        // long-running sessions aren't counted on every poll. We treat
-        // repeated (user,title) entries within a sliding window as the
-        // same play.
-        const SESSION_WINDOW_MS = 30 * 60 * 1000; // 30 minutes
-        const events = [];
-        const lastByKey = new Map();
+    function formatSeconds(sec) {
+      const s = Math.max(0, Number(sec) || 0);
+      if (s < 60) return Math.round(s) + 's';
+      const m = Math.floor(s / 60);
+      if (m < 60) return m + 'm';
+      const h = Math.floor(m / 60);
+      if (h < 48) return h + 'h';
+      const d = Math.floor(h / 24);
+      return d + 'd';
+    }
 
-        function parseTime(h) {
-          if (typeof h.time === 'number') return h.time;
-          if (typeof h.time === 'string') {
-            const parsed = Date.parse(h.time);
-            if (!Number.isNaN(parsed)) return parsed;
+    function hrefToUserHistory(user) {
+      const u = String(user || '').trim();
+      if (!u) return 'history.html';
+      return 'history.html?user=' + encodeURIComponent(u);
+    }
+
+    function topThumb(items) {
+      if (!Array.isArray(items) || !items.length) return null;
+      const it = items[0] || {};
+      return it.poster || it.background || null;
+    }
+
+    function panelBgUrl(items) {
+      if (!Array.isArray(items) || !items.length) return '/live_tv_placeholder.svg';
+      return (items[0].background || items[0].poster || '/live_tv_placeholder.svg');
+    }
+
+    function hasArtwork(items) {
+      if (!Array.isArray(items) || !items.length) return false;
+      const it = items[0] || {};
+      return !!(it.background || it.poster);
+    }
+
+    function renderPanel(opts) {
+      const title = opts.title;
+      const right = opts.right;
+      const items = opts.items || [];
+      const valueLabel = opts.valueLabel;
+      const showThumb = !!opts.showThumb;
+      const showAvatars = !!opts.showAvatars;
+      const linkUsers = !!opts.linkUsers;
+
+      const thumbUrl = showThumb ? topThumb(items) : null;
+      const bgUrl = panelBgUrl(items);
+      const useFallbackBg = !hasArtwork(items) || bgUrl === '/live_tv_placeholder.svg';
+      const hue = useFallbackBg ? hashHue(title + '|' + (items[0]?.name || items[0]?.title || '')) : 0;
+
+      let html = '<div class="panel">';
+      if (useFallbackBg) {
+        html += `<div class="panel-bg fallback" style="--hue:${hue}deg;"></div>`;
+      } else {
+        html += `<div class="panel-bg" style="background-image:url('${escapeHtml(bgUrl)}');"></div>`;
+      }
+      html += '<div class="panel-overlay"></div>';
+      html += '<div class="panel-inner">';
+      if (showThumb) {
+        const t = thumbUrl || '/live_tv_placeholder.svg';
+        html += `<img class="thumb" src="${escapeHtml(t)}" alt="" onerror="this.style.display='none'"/>`;
+      }
+      html += '<div class="panel-body">';
+      html += '<div class="panel-head">';
+      html += `<div class="panel-title">${escapeHtml(title)}</div>`;
+      html += `<div class="panel-right">${escapeHtml(right)}</div>`;
+      html += '</div>';
+      html += '<div class="list">';
+      if (!items.length) {
+        html += '<div class="row"><span class="muted">No data yet.</span></div>';
+      } else {
+        items.forEach((it, idx) => {
+          const name = it.name || it.title || 'Unknown';
+          const year = it.year ? ` (${it.year})` : '';
+          const avatar = (it.avatar || it.userAvatar || '').toString();
+          const val = (valueLabel === 'duration') ? formatSeconds(it.value) : String(it.value ?? '');
+          html += '<div class="row">';
+          html += '<div class="row-left">';
+          html += `<div class="rank">${idx + 1}</div>`;
+          if (showAvatars && avatar) {
+            html += `<img class="avatar" src="${escapeHtml(avatar)}" alt="" onerror="this.style.display='none'"/>`;
           }
-          return null;
-        }
-
-        history.forEach(h => {
-          const t = parseTime(h);
-          if (t == null) return;
-          const user = h.user || 'Unknown';
-          const title = h.title || 'Idle';
-          const serverId = h.serverId || 'unknown';
-          const serverName = h.serverName || 'Unknown server';
-          const key = serverId + '|' + user + '|' + title;
-          const last = lastByKey.get(key) || 0;
-          if (!last || (t - last) > SESSION_WINDOW_MS) {
-            events.push({ time: t, user, title, serverId, serverName });
-            lastByKey.set(key, t);
+          if (linkUsers) {
+            html += `<a class="name name-link" href="${escapeHtml(hrefToUserHistory(name))}">${escapeHtml(name + year)}</a>`;
+          } else {
+            html += `<div class="name">${escapeHtml(name + year)}</div>`;
           }
-        });
-
-        // Populate server filter dropdown if present
-        const serverFilter = document.getElementById('serverFilter');
-        const serverFilterNote = document.getElementById('serverFilterNote');
-        if (serverFilter) {
-          const seenIds = new Set();
-          while (serverFilter.options.length > 1) serverFilter.remove(1);
-          servers.forEach(s => {
-            if (seenIds.has(String(s.id))) return;
-            seenIds.add(String(s.id));
-            const opt = document.createElement('option');
-            opt.value = String(s.id);
-            opt.textContent = s.name || s.baseUrl || ('Server ' + s.id);
-            serverFilter.appendChild(opt);
-          });
-        }
-
-        function computeAndRender(scopeServerId) {
-          const scopeAll = !scopeServerId || scopeServerId === 'all';
-          const filteredEvents = scopeAll
-            ? events
-            : events.filter(ev => String(ev.serverId) === String(scopeServerId));
-
-          const totalCurrentStreams = scopeAll
-            ? Object.values(statuses).reduce((sum, st) => sum + (Array.isArray(st.sessions) ? st.sessions.length : 0), 0)
-            : (statuses[scopeServerId] && Array.isArray(statuses[scopeServerId].sessions)
-                ? statuses[scopeServerId].sessions.length
-                : 0);
-
-          const totalHistoryEntries = filteredEvents.length;
-
-          const users = new Map();
-          const titles = new Map();
-          filteredEvents.forEach(ev => {
-            if (ev.user) {
-              users.set(ev.user, (users.get(ev.user) || 0) + 1);
-            }
-            if (ev.title) {
-              titles.set(ev.title, (titles.get(ev.title) || 0) + 1);
-            }
-          });
-
-          const topTitles = Array.from(titles.entries())
-            .sort((a,b) => b[1]-a[1])
-            .slice(0,5);
-
-          const topUsers = Array.from(users.entries())
-            .sort((a,b) => b[1]-a[1])
-            .slice(0,5);
-
-          // Activity over the last 7 days
-          const now = Date.now();
-          const oneDayMs = 24 * 60 * 60 * 1000;
-          const startOfToday = new Date();
-          startOfToday.setHours(0,0,0,0);
-          const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-          const dayBuckets = [];
-          for (let i = 6; i >= 0; i--) {
-            const dayStart = startOfToday.getTime() - i * oneDayMs;
-            const dayEnd = dayStart + oneDayMs;
-            const label = dayNames[new Date(dayStart).getDay()];
-            dayBuckets.push({ label, start: dayStart, end: dayEnd, count: 0 });
-          }
-
-          let last24hCount = 0;
-          let last7dCount = 0;
-          const sevenDaysAgo = now - 7 * oneDayMs;
-          const hourBuckets = new Array(24).fill(0);
-
-          filteredEvents.forEach(ev => {
-            const t = ev.time;
-            if (t == null) return;
-
-            if (t >= now - oneDayMs) last24hCount++;
-            if (t >= sevenDaysAgo) last7dCount++;
-
-            if (t >= sevenDaysAgo) {
-              const local = new Date(t);
-              hourBuckets[local.getHours()]++;
-            }
-
-            dayBuckets.forEach(bucket => {
-              if (t >= bucket.start && t < bucket.end) {
-                bucket.count++;
-              }
-            });
-          });
-
-          const maxDayCount = dayBuckets.reduce((max, d) => Math.max(max, d.count), 0);
-          let busiestDayLabel = null;
-          let busiestDayCount = 0;
-          dayBuckets.forEach(bucket => {
-            if (bucket.count > busiestDayCount) {
-              busiestDayCount = bucket.count;
-              busiestDayLabel = bucket.label;
-            }
-          });
-
-          let peakHourIndex = -1;
-          let peakHourCount = 0;
-          hourBuckets.forEach((count, hour) => {
-            if (count > peakHourCount) {
-              peakHourCount = count;
-              peakHourIndex = hour;
-            }
-          });
-
-          if (serverFilterNote) {
-            if (scopeAll) {
-              serverFilterNote.textContent = 'Showing activity across all servers.';
-            } else {
-              const s = servers.find(sv => String(sv.id) === String(scopeServerId));
-              serverFilterNote.textContent = s ? `Showing activity for ${s.name || s.baseUrl}.` : '';
-            }
-          }
-
-          let html = '<div class="cards">';
-          html += '<div class="card">';
-          html += '<h2>Overview</h2>';
-          html += `<div class="metric"><b>Current streams:</b> ${totalCurrentStreams}</div>`;
-          html += `<div class="metric"><b>Unique play events (recent):</b> ${totalHistoryEntries}</div>`;
-          html += `<div class="metric"><b>Unique users seen:</b> ${users.size}</div>`;
           html += '</div>';
+          html += `<div class="value">${escapeHtml(val)}</div>`;
+          html += '</div>';
+        });
+      }
+      html += '</div>';
+      html += '</div>';
+      html += '</div>';
+      html += '</div>';
+      return html;
+    }
 
-          html += '<div class="card">';
-          html += '<h2>Activity (last 7 days)</h2>';
-          html += `<div class="metric"><b>Plays last 24 hours:</b> ${last24hCount}</div>`;
-          html += `<div class="metric"><b>Plays last 7 days:</b> ${last7dCount}</div>`;
-          if (last7dCount > 0 && busiestDayLabel) {
-            html += `<div class="metric"><b>Busiest day:</b> ${busiestDayLabel} · ${busiestDayCount} plays</div>`;
-          }
-          if (peakHourIndex >= 0 && peakHourCount > 0) {
-            const hourLabel = String(peakHourIndex).padStart(2,'0') + ':00–' + String(peakHourIndex).padStart(2,'0') + ':59';
-            html += `<div class="metric"><b>Peak hour:</b> ${hourLabel} · ${peakHourCount} plays</div>`;
-          }
-          if (last7dCount > 0 && maxDayCount > 0) {
-            html += '<div class="activity-grid">';
-            dayBuckets.forEach(bucket => {
-              let heightPct = maxDayCount ? (bucket.count / maxDayCount) * 100 : 0;
-              if (bucket.count > 0 && heightPct < 18) heightPct = 18;
-              if (bucket.count === 0) heightPct = 0;
-              html += '<div class="activity-column">';
-              html += '<div class="activity-bar">';
-              html += `<div class="activity-bar-fill" style="height:${heightPct}%;"></div>`;
-              html += '</div>';
-              html += `<div class="activity-bar-label">${bucket.label}</div>`;
-              html += '</div>';
-            });
+    function renderRecently(items) {
+      const thumbUrl = topThumb(items);
+      const bgUrl = panelBgUrl(items);
+      const recentUser = items && items[0] && items[0].user ? String(items[0].user).toUpperCase() : 'USER';
+      const useFallbackBg = !hasArtwork(items) || bgUrl === '/live_tv_placeholder.svg';
+      const hue = useFallbackBg ? hashHue('Recently Watched|' + (items[0]?.title || items[0]?.name || '')) : 0;
+
+      let html = '<div class="panel">';
+      if (useFallbackBg) {
+        html += `<div class="panel-bg fallback" style="--hue:${hue}deg;"></div>`;
+      } else {
+        html += `<div class="panel-bg" style="background-image:url('${escapeHtml(bgUrl)}');"></div>`;
+      }
+      html += '<div class="panel-overlay"></div>';
+      html += '<div class="panel-inner">';
+      html += `<img class="thumb" src="${escapeHtml(thumbUrl || '/live_tv_placeholder.svg')}" alt="" onerror="this.style.display='none'"/>`;
+      html += '<div class="panel-body">';
+      html += '<div class="panel-head">';
+      html += '<div class="panel-title">Recently Watched</div>';
+      html += `<div class="panel-right">${escapeHtml(recentUser)}</div>`;
+      html += '</div>';
+      html += '<div class="list">';
+      if (!items || !items.length) {
+        html += '<div class="row"><span class="muted">No data yet.</span></div>';
+      } else {
+        items.forEach((it, idx) => {
+          const title = it.title || 'Unknown';
+          const userRaw = it.user ? String(it.user) : '';
+          const user = userRaw ? userRaw.toUpperCase() : '';
+          const avatar = (it.userAvatar || it.avatar || '').toString();
+          html += '<div class="row">';
+          html += '<div class="row-left">';
+          html += `<div class="rank">${idx + 1}</div>`;
+          html += `<div class="name">${escapeHtml(title)}</div>`;
+          html += '</div>';
+          if (userRaw) {
+            html += '<div class="value">';
+            html += `<a class="user-link" href="${escapeHtml(hrefToUserHistory(userRaw))}" style="display:inline-flex;align-items:center;gap:8px;">`;
+            if (avatar) {
+              html += `<img class="avatar" src="${escapeHtml(avatar)}" alt="" onerror="this.style.display='none'"/>`;
+            }
+            html += `<span>${escapeHtml(user)}</span>`;
+            html += '</a>';
             html += '</div>';
           } else {
-            html += '<div class="list-item">No activity in the last 7 days yet.</div>';
+            html += `<div class="value">${escapeHtml(user)}</div>`;
           }
           html += '</div>';
+        });
+      }
+      html += '</div>';
+      html += '</div>';
+      html += '</div>';
+      html += '</div>';
+      return html;
+    }
 
-          html += '<div class="card">';
-          html += '<h2>Top titles (recent)</h2>';
-          if (topTitles.length) {
-            topTitles.forEach(([title,count]) => {
-              html += `<div class="list-item">${title} &times; ${count}</div>`;
-            });
-          } else {
-            html += '<div class="list-item">No history yet.</div>';
-          }
-          html += '</div>';
+    function renderConcurrent(concurrent) {
+      const c = concurrent || { streams: 0, transcodes: 0, directPlays: 0 };
+      const items = [
+        { name: 'Concurrent Streams', value: c.streams ?? 0 },
+        { name: 'Concurrent Transcodes', value: c.transcodes ?? 0 },
+        { name: 'Concurrent Direct Plays', value: c.directPlays ?? 0 }
+      ];
+      return renderPanel({ title: 'Most Concurrent Streams', right: 'STREAMS', items, valueLabel: 'count', showThumb: false });
+    }
 
-          html += '<div class="card">';
-          html += '<h2>Top users (recent)</h2>';
-          if (topUsers.length) {
-            topUsers.forEach(([user,count]) => {
-              const href = 'user.html?user=' + encodeURIComponent(user);
-              html += `<div class="list-item"><a class="user-link" href="${href}">${user}</a> &times; ${count}</div>`;
-            });
-          } else {
-            html += '<div class="list-item">No users yet.</div>';
-          }
-          html += '</div>';
+    async function fetchWatchStats(metric, days) {
+      const url = `/api/reports/watch-statistics?metric=${encodeURIComponent(metric)}&days=${encodeURIComponent(days)}`;
+      const r = await fetch(url);
+      if (!r.ok) throw new Error('Failed to load reports');
+      return await r.json();
+    }
 
-          html += '</div>';
+    const content = document.getElementById('content');
+    const metricCountBtn = document.getElementById('metricCount');
+    const metricDurationBtn = document.getElementById('metricDuration');
+    const daysInput = document.getElementById('daysInput');
+    let state = { metric: 'count', days: 1000 };
 
-          summaryDiv.innerHTML = html;
-        }
+    function setMetric(metric) {
+      state.metric = metric;
+      metricCountBtn.classList.toggle('active', metric === 'count');
+      metricDurationBtn.classList.toggle('active', metric === 'duration');
+      render();
+    }
 
-        // initial render using current scope (or "all")
-        computeAndRender(serverFilter && serverFilter.value ? serverFilter.value : 'all');
+    async function render() {
+      content.className = 'placeholder';
+      content.textContent = 'Loading watch statistics...';
+      try {
+        const data = await fetchWatchStats(state.metric, state.days);
+        const s = data.sections || {};
+        const valueLabel = data.metric === 'duration' ? 'duration' : 'count';
+        const playsOrDuration = data.metric === 'duration' ? 'DURATION' : 'PLAYS';
 
-        if (serverFilter) {
-          serverFilter.onchange = () => {
-            computeAndRender(serverFilter.value || 'all');
-          };
-        }
+        let html = '<div class="grid">';
+        html += renderPanel({ title: 'Most Watched Movies', right: playsOrDuration, items: s.mostWatchedMovies || [], valueLabel, showThumb: true });
+        html += renderPanel({ title: 'Most Popular Movies', right: 'USERS', items: s.mostPopularMovies || [], valueLabel: 'count', showThumb: true });
+        html += renderPanel({ title: 'Most Watched TV Shows', right: playsOrDuration, items: s.mostWatchedTvShows || [], valueLabel, showThumb: true });
+        html += renderPanel({ title: 'Most Popular TV Shows', right: 'USERS', items: s.mostPopularTvShows || [], valueLabel: 'count', showThumb: true });
+        html += renderPanel({ title: 'Most Played Artists', right: playsOrDuration, items: s.mostPlayedArtists || [], valueLabel, showThumb: true });
+        html += renderPanel({ title: 'Most Popular Artists', right: 'USERS', items: s.mostPopularArtists || [], valueLabel: 'count', showThumb: true });
+        html += renderRecently(s.recentlyWatched || []);
+        html += renderPanel({ title: 'Most Active Libraries', right: playsOrDuration, items: s.mostActiveLibraries || [], valueLabel, showThumb: false });
+        html += renderPanel({ title: 'Most Active Users', right: playsOrDuration, items: s.mostActiveUsers || [], valueLabel, showThumb: false, showAvatars: true, linkUsers: true });
+        html += renderPanel({ title: 'Most Active Platforms', right: playsOrDuration, items: s.mostActivePlatforms || [], valueLabel, showThumb: false });
+        html += renderConcurrent(s.mostConcurrentStreams);
+        html += '</div>';
+
+        content.className = '';
+        content.innerHTML = html;
       } catch (e) {
         console.error(e);
-        document.getElementById('summary').textContent = 'Failed to load reports.';
+        content.className = 'placeholder';
+        content.textContent = 'Failed to load watch statistics.';
       }
     }
-    renderReports();
-    // Apply saved theme
-    (function() {
-      const savedTheme = localStorage.getItem('omnistreamTheme') || 'default';
-      if (savedTheme && savedTheme !== 'default') {
-        document.documentElement.setAttribute('data-theme', savedTheme);
-      }
-    })();
+
+    metricCountBtn.addEventListener('click', () => setMetric('count'));
+    metricDurationBtn.addEventListener('click', () => setMetric('duration'));
+    daysInput.addEventListener('change', () => {
+      const v = Number(daysInput.value);
+      state.days = Number.isFinite(v) ? Math.max(1, Math.min(5000, Math.floor(v))) : 1000;
+      daysInput.value = String(state.days);
+      render();
+    });
+
+    render();
   </script>
-    </main>
-  </div>
 </body>
 </html>

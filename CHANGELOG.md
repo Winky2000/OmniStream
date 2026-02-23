@@ -8,6 +8,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 _No unreleased changes yet._
 
+## [0.2.0] - 2026-02-22
+
+### Added
+- Newsletter system: subscribers, templates, preview/send endpoints, and sent-newsletter archiving.
+- Custom template header blocks editor (separate page) with automatic placement under the logo/header.
+- Weekly newsletter auto-send scheduling (day/time + template).
+- About page showing version and GitHub links.
+- Randomized GitHub release checks with an in-app update-available notice.
+
+### Changed
+- Newsletter default template refreshed to a darker style.
+- Reports: Most Popular Movies panel now shows the top movie poster.
+
 ## [0.1.1] - 2026-02-21
 
 ### Added
@@ -35,4 +48,5 @@ _No unreleased changes yet._
 
 [0.1.0]: https://github.com/winky2000/omnistream/releases/tag/v0.1.0
 [0.1.1]: https://github.com/winky2000/omnistream/releases/tag/v0.1.1
-[Unreleased]: https://github.com/winky2000/omnistream/compare/v0.1.1...HEAD
+[0.2.0]: https://github.com/winky2000/omnistream/releases/tag/v0.2.0
+[Unreleased]: https://github.com/winky2000/omnistream/compare/v0.2.0...HEAD

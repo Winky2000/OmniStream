@@ -22,7 +22,35 @@
     .placeholder{margin-top:24px;font-size:14px;color:var(--text-muted);}
     .back-btn{margin-top:12px;padding:6px 14px;border-radius:8px;border:1px solid var(--btn-border);background:var(--btn-bg);color:var(--btn-text);cursor:pointer;}
     .back-btn:hover{background:var(--btn-bg-hover);color:var(--btn-text-hover);}
-  </style>
+
+    .stats-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:12px;margin-bottom:10px;}
+    @media (max-width: 1100px){.stats-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
+    @media (max-width: 640px){.stats-grid{grid-template-columns:1fr;}}
+    .stat-card{background:rgba(0,0,0,0.18);border:1px solid rgba(148,163,184,0.22);border-radius:12px;padding:12px 14px;}
+    :root[data-theme="light"] .stat-card,
+    :root[data-theme="light-borderless"] .stat-card{background:rgba(0,0,0,0.03);border-color:#dddddd;}
+    .stat-value{font-size:18px;font-weight:700;letter-spacing:0.2px;color:var(--text-main);line-height:1.1;}
+    .stat-label{margin-top:2px;font-size:12px;color:var(--text-muted);}
+
+    .pill-row{margin-top:10px;margin-bottom:10px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;}
+    .pill-group{display:inline-flex;gap:6px;align-items:center;padding:6px;border-radius:12px;background:rgba(0,0,0,0.18);border:1px solid rgba(148,163,184,0.22);}
+    :root[data-theme="light"] .pill-group,
+    :root[data-theme="light-borderless"] .pill-group{background:rgba(0,0,0,0.03);border-color:#dddddd;}
+    .pill{appearance:none;border:1px solid transparent;background:transparent;color:var(--text-muted);padding:6px 10px;border-radius:10px;font-size:12px;cursor:pointer;transition:background 0.15s,color 0.15s,border-color 0.15s;}
+    .pill:hover{background:rgba(148,163,184,0.14);color:var(--text-main);}
+    .pill-active{background:rgba(59,130,246,0.18);color:#e5edff;border-color:rgba(59,130,246,0.35);}
+    .custom-range{display:none;gap:8px;align-items:center;flex-wrap:wrap;}
+    .custom-range input{padding:4px 8px;border-radius:8px;border:1px solid #444;background:#181c24;color:#e0e3e8;}
+    :root[data-theme="light"] .custom-range input,
+    :root[data-theme="light-borderless"] .custom-range input{border-color:#dddddd;background:#ffffff;color:#111111;}
+
+    .pager{margin-top:12px;display:flex;justify-content:flex-end;align-items:center;gap:10px;}
+    .pager-note{font-size:12px;color:var(--text-muted);}
+
+    .user-cell{display:inline-flex;align-items:center;gap:8px;min-width:0;}
+    .user-avatar{width:18px;height:18px;border-radius:999px;object-fit:cover;border:1px solid rgba(148,163,184,0.22);background:rgba(0,0,0,0.10);flex:0 0 auto;}
+    .user-link{color:var(--btn-border);text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .user-link:hover{text-decoration:underline;}
   </style>
 </head>
 <body>
@@ -40,9 +68,45 @@
     <main class="main-content">
   <button class="sidebar-toggle" id="sidebarToggle">Hide menu</button>
   <h1>History</h1>
+
+  <div class="stats-grid" aria-label="History summary">
+    <div class="stat-card">
+      <div class="stat-value" id="statTotalPlays">—</div>
+      <div class="stat-label">Total Plays</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="statWatchTime">—</div>
+      <div class="stat-label">Watch Time</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="statUniqueUsers">—</div>
+      <div class="stat-label">Unique Users</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="statUniqueTitles">—</div>
+      <div class="stat-label">Unique Titles</div>
+    </div>
+  </div>
+
   <div class="placeholder">
     Recent sessions (most recent first):
   </div>
+
+  <div class="pill-row">
+    <div class="pill-group" role="group" aria-label="Date range">
+      <button class="pill" data-range="7d" id="pill7d">7d</button>
+      <button class="pill pill-active" data-range="30d" id="pill30d">30d</button>
+      <button class="pill" data-range="1y" id="pill1y">1y</button>
+      <button class="pill" data-range="all" id="pillAll">All</button>
+      <button class="pill" data-range="custom" id="pillCustom">Custom</button>
+    </div>
+    <div class="custom-range" id="customRange">
+      <input id="fromDate" type="date" />
+      <span style="font-size:12px;color:var(--text-muted);">to</span>
+      <input id="toDate" type="date" />
+    </div>
+  </div>
+
   <div style="margin-top:10px;margin-bottom:8px;font-size:12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
     <input id="searchText" type="text" placeholder="Search user/title/server" style="padding:4px 8px;border-radius:6px;border:1px solid #444;background:#181c24;color:#e0e3e8;min-width:200px;">
     <select id="sortSelect" style="padding:4px 8px;border-radius:6px;border:1px solid #444;background:#181c24;color:#e0e3e8;">
@@ -57,18 +121,26 @@
   <table id="historyTable" style="width:100%;margin-top:12px;border-collapse:collapse;font-size:12px;">
     <thead>
       <tr style="text-align:left;border-bottom:1px solid #444;">
-        <th style="padding:4px 6px;">Time</th>
+        <th style="padding:4px 6px;">Date</th>
         <th style="padding:4px 6px;">Server</th>
         <th style="padding:4px 6px;">User</th>
         <th style="padding:4px 6px;">Title</th>
-        <th style="padding:4px 6px;">Type</th>
         <th style="padding:4px 6px;">Stream</th>
+        <th style="padding:4px 6px;">Platform</th>
         <th style="padding:4px 6px;">Location</th>
+        <th style="padding:4px 6px;">Quality</th>
+        <th style="padding:4px 6px;">Duration</th>
+        <th style="padding:4px 6px;">Progress</th>
         <th style="padding:4px 6px;">Bandwidth</th>
       </tr>
     </thead>
     <tbody></tbody>
   </table>
+
+  <div class="pager">
+    <div class="pager-note" id="pageNote">Showing 0–0</div>
+    <button id="nextPage" class="back-btn" style="margin-top:0;">Next</button>
+  </div>
   <button class="back-btn" onclick="window.location.href='admin.html'">Back to Settings</button>
 
   <script>
@@ -96,11 +168,117 @@
     })();
 
     let currentSearch = '';
+    let linkedUser = '';
     let currentSort = 'time_desc';
+    let currentPage = 0;
+    const PAGE_SIZE = 100;
+
+    let currentRange = '30d';
+    let currentFrom = '';
+    let currentTo = '';
+
+    // Allow deep-linking from Reports: history.html?user=SomeUser
+    (function () {
+      try {
+        const p = new URLSearchParams(window.location.search || '');
+        const u = (p.get('user') || '').trim();
+        if (u) {
+          linkedUser = u;
+          const input = document.getElementById('searchText');
+          if (input) input.value = u;
+        }
+      } catch (e) {
+        // ignore
+      }
+    })();
+
+    function fmtDuration(sec) {
+      const s = Number(sec) || 0;
+      if (s <= 0) return '';
+      const h = Math.floor(s / 3600);
+      const m = Math.floor((s % 3600) / 60);
+      const r = Math.floor(s % 60);
+      if (h > 0) return `${h}h ${String(m).padStart(2,'0')}m`;
+      return `${m}m ${String(r).padStart(2,'0')}s`;
+    }
+
+    function fmtWatchTime(sec) {
+      const s = Math.max(0, Math.floor(Number(sec) || 0));
+      const days = Math.floor(s / 86400);
+      const hours = Math.floor((s % 86400) / 3600);
+      const mins = Math.floor((s % 3600) / 60);
+      if (days > 0) return `${days}d ${hours}h`;
+      if (hours > 0) return `${hours}h ${mins}m`;
+      return `${mins}m`;
+    }
+
+    function updateStatsFromServer(stats, historyFallback) {
+      const totalPlays = stats && typeof stats.totalPlays === 'number'
+        ? stats.totalPlays
+        : (Array.isArray(historyFallback) ? historyFallback.length : 0);
+      const uniqueUsers = stats && typeof stats.uniqueUsers === 'number'
+        ? stats.uniqueUsers
+        : 0;
+      const uniqueTitles = stats && typeof stats.uniqueTitles === 'number'
+        ? stats.uniqueTitles
+        : 0;
+      const watchSeconds = stats && typeof stats.watchSeconds === 'number'
+        ? stats.watchSeconds
+        : 0;
+
+      const elTotal = document.getElementById('statTotalPlays');
+      const elWatch = document.getElementById('statWatchTime');
+      const elUsers = document.getElementById('statUniqueUsers');
+      const elTitles = document.getElementById('statUniqueTitles');
+      if (elTotal) elTotal.textContent = totalPlays.toLocaleString();
+      if (elWatch) elWatch.textContent = fmtWatchTime(watchSeconds);
+      if (elUsers) elUsers.textContent = uniqueUsers.toLocaleString();
+      if (elTitles) elTitles.textContent = uniqueTitles.toLocaleString();
+    }
+
+    function setActivePill(range) {
+      ['pill7d','pill30d','pill1y','pillAll','pillCustom'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.classList.toggle('pill-active', el.getAttribute('data-range') === range);
+      });
+      const cr = document.getElementById('customRange');
+      if (cr) cr.style.display = range === 'custom' ? 'inline-flex' : 'none';
+    }
+
+    function computeRange(range) {
+      const now = new Date();
+      if (range === 'all') {
+        return { from: '', to: '' };
+      }
+      if (range === '7d') {
+        return { from: new Date(now.getTime() - 7 * 86400000).toISOString(), to: now.toISOString() };
+      }
+      if (range === '30d') {
+        return { from: new Date(now.getTime() - 30 * 86400000).toISOString(), to: now.toISOString() };
+      }
+      if (range === '1y') {
+        return { from: new Date(now.getTime() - 365 * 86400000).toISOString(), to: now.toISOString() };
+      }
+      if (range === 'custom') {
+        const fromEl = document.getElementById('fromDate');
+        const toEl = document.getElementById('toDate');
+        const f = fromEl && fromEl.value ? fromEl.value : '';
+        const t = toEl && toEl.value ? toEl.value : '';
+        if (!f && !t) return { from: '', to: '' };
+        const fromIso = f ? new Date(f + 'T00:00:00').toISOString() : '';
+        const toIso = t ? new Date(t + 'T23:59:59').toISOString() : '';
+        return { from: fromIso, to: toIso };
+      }
+      return { from: '', to: '' };
+    }
 
     async function fetchHistory() {
       const params = new URLSearchParams();
-      if (currentSearch) params.set('q', currentSearch);
+      if (linkedUser) params.set('user', linkedUser);
+      else if (currentSearch) params.set('q', currentSearch);
+      if (currentFrom) params.set('from', currentFrom);
+      if (currentTo) params.set('to', currentTo);
       if (currentSort.startsWith('bandwidth')) {
         params.set('sort', 'bandwidth');
         params.set('order', currentSort.endsWith('asc') ? 'asc' : 'desc');
@@ -108,35 +286,20 @@
         params.set('sort', 'time');
         params.set('order', currentSort.endsWith('asc') ? 'asc' : 'desc');
       }
+      params.set('unique', '1');
+      params.set('includeStats', '1');
+      params.set('page', String(currentPage));
+      params.set('pageSize', String(PAGE_SIZE));
       const r = await fetch('/api/history/query?' + params.toString());
       return await r.json();
     }
     async function renderHistory() {
       try {
-        const { history = [] } = await fetchHistory();
-        // Collapse repeated snapshots: keep only one entry per unique combination
-        // of server + user + title + stream + location (using the first row,
-        // which will be the most recent when sorted by time_desc).
-        const seen = new Set();
-        const unique = [];
-        history.forEach(h => {
-          const keyParts = [
-            h.serverId || h.serverName || '',
-            h.user || '',
-            h.title || '',
-            h.stream || '',
-            h.location || ''
-          ].map(v => String(v).toLowerCase());
-          const key = keyParts.join('|');
-          if (!seen.has(key)) {
-            seen.add(key);
-            unique.push(h);
-          }
-        });
-
+        const { history = [], hasMore = false, stats = null } = await fetchHistory();
+        updateStatsFromServer(stats, history);
         const tbody = document.querySelector('#historyTable tbody');
         tbody.innerHTML = '';
-        unique.forEach(h => {
+        history.forEach(h => {
           const tr = document.createElement('tr');
           tr.style.borderBottom = '1px solid #222';
           function cell(text) {
@@ -145,7 +308,7 @@
             td.textContent = text;
             return td;
           }
-          const timeStr = h.time ? new Date(h.time).toLocaleTimeString() : '';
+          const timeStr = h.time ? new Date(h.time).toLocaleString() : '';
           tr.appendChild(cell(timeStr));
           tr.appendChild(cell(h.serverName || h.serverId || ''));
           // User cell with link to per-user detail view
@@ -153,32 +316,109 @@
           userTd.style.padding = '4px 6px';
           const u = h.user || '';
           if (u) {
+            const wrap = document.createElement('div');
+            wrap.className = 'user-cell';
+
+            if (h.userAvatar) {
+              const img = document.createElement('img');
+              img.className = 'user-avatar';
+              img.src = h.userAvatar;
+              img.alt = '';
+              img.onerror = () => { img.style.display = 'none'; };
+              wrap.appendChild(img);
+            }
+
             const a = document.createElement('a');
             a.href = 'user.html?user=' + encodeURIComponent(u);
             a.textContent = u;
-            a.style.color = '#4fc3f7';
-            a.style.textDecoration = 'none';
-            a.onmouseenter = () => a.style.textDecoration = 'underline';
-            a.onmouseleave = () => a.style.textDecoration = 'none';
-            userTd.appendChild(a);
+            a.className = 'user-link';
+            wrap.appendChild(a);
+
+            userTd.appendChild(wrap);
           }
           tr.appendChild(userTd);
           tr.appendChild(cell(h.title || ''));
-          tr.appendChild(cell(h.type || ''));
-          tr.appendChild(cell(h.stream || ''));
+          tr.appendChild(cell(h.stream || (h.transcoding ? 'Transcode' : 'Direct Play') || ''));
+          tr.appendChild(cell(h.platform || h.product || h.player || ''));
           tr.appendChild(cell(h.location || ''));
+          tr.appendChild(cell(h.quality || ''));
+          tr.appendChild(cell(fmtDuration(h.duration)));
+
+          const progTd = document.createElement('td');
+          progTd.style.padding = '4px 6px';
+          const p = Math.max(0, Math.min(100, Number(h.progress) || 0));
+          const barWrap = document.createElement('div');
+          barWrap.style.width = '86px';
+          barWrap.style.height = '6px';
+          barWrap.style.borderRadius = '999px';
+          barWrap.style.background = 'rgba(148,163,184,0.18)';
+          barWrap.style.overflow = 'hidden';
+          const fill = document.createElement('div');
+          fill.style.height = '100%';
+          fill.style.width = `${p}%`;
+          fill.style.background = 'var(--progress-fill)';
+          barWrap.appendChild(fill);
+          const label = document.createElement('div');
+          label.style.fontSize = '11px';
+          label.style.color = 'var(--text-faint)';
+          label.style.marginTop = '2px';
+          label.textContent = p ? `${p}%` : '';
+          progTd.appendChild(barWrap);
+          progTd.appendChild(label);
+          tr.appendChild(progTd);
+
           tr.appendChild(cell(typeof h.bandwidth === 'number' && h.bandwidth > 0 ? h.bandwidth.toFixed(1) + ' Mbps' : ''));
           tbody.appendChild(tr);
         });
+
+        const nextBtn = document.getElementById('nextPage');
+        if (nextBtn) nextBtn.disabled = !hasMore;
+        const note = document.getElementById('pageNote');
+        if (note) {
+          const start = history.length ? (currentPage * PAGE_SIZE + 1) : 0;
+          const end = history.length ? (currentPage * PAGE_SIZE + history.length) : 0;
+          note.textContent = `Showing ${start}–${end}`;
+        }
       } catch (e) {
         console.error(e);
       }
     }
     document.getElementById('applyFilters').onclick = async () => {
       currentSearch = document.getElementById('searchText').value.trim();
+      linkedUser = '';
       currentSort = document.getElementById('sortSelect').value;
+      currentPage = 0;
       await renderHistory();
     };
+
+    document.getElementById('nextPage').onclick = async () => {
+      const btn = document.getElementById('nextPage');
+      if (btn && btn.disabled) return;
+      currentPage += 1;
+      await renderHistory();
+    };
+
+    // Range pills
+    function applyRange(range) {
+      currentRange = range;
+      setActivePill(range);
+      const r = computeRange(range);
+      currentFrom = r.from;
+      currentTo = r.to;
+      currentPage = 0;
+      renderHistory();
+    }
+    ['pill7d','pill30d','pill1y','pillAll','pillCustom'].forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.onclick = () => applyRange(el.getAttribute('data-range'));
+    });
+    const fromEl = document.getElementById('fromDate');
+    const toEl = document.getElementById('toDate');
+    if (fromEl) fromEl.onchange = () => { if (currentRange === 'custom') applyRange('custom'); };
+    if (toEl) toEl.onchange = () => { if (currentRange === 'custom') applyRange('custom'); };
+    // Default range
+    applyRange('30d');
 
     document.getElementById('importBtn').onclick = async () => {
       try {
@@ -194,7 +434,6 @@
         alert('Import failed. Check server logs for details.');
       }
     };
-    renderHistory();
     setInterval(renderHistory, 10000);
   </script>
     </main>

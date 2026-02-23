@@ -39,7 +39,24 @@ OmniStream is a dashboard to monitor multiple Plex, Jellyfin, and Emby servers o
 - History and reports with per-server scope and imported server history
 - Admin UI to add/edit/enable/disable servers
 - Simple notifications (offline servers, WAN transcodes, high bandwidth)
+- Newsletter: subscriber list, templates, preview/send, and weekly scheduled sends
 - Lightweight health endpoint for external monitors (Home Assistant, Uptime Kuma)
+
+## Newsletter
+
+OmniStream includes a lightweight newsletter/broadcast email feature:
+
+- Manage subscribers in **Newsletter → Subscribers**.
+- Configure SMTP in **Newsletter → Subscribers → Email settings**.
+- Create/edit templates in **Newsletter → Templates**.
+- Add optional header blocks (shown under the newsletter logo/header) in **Newsletter → Custom header**.
+- Enable weekly auto-send (day/time + template) in **Newsletter → Subscribers → Send newsletter**.
+
+Notes:
+
+- Recipients are sent via **BCC** from the active subscribers list.
+- The server must be running at the scheduled send time.
+- For images to render in email clients during scheduled sends, set a public base URL in your config so absolute links can be generated.
 
 ---
 ## What OmniStream does (and doesn't) do
@@ -376,6 +393,12 @@ Once servers are online, the main dashboard shows live sessions, and the Admin t
 
 ## Releases
 
+### v0.2.0
+
+- Newsletter system (subscribers + templates + preview/send + weekly scheduling).
+- Custom newsletter header blocks with automatic placement under the logo/header.
+- About page (version + GitHub links) and periodic update checks against GitHub releases.
+
 ### v0.1.0
 
 Initial public release of OmniStream:
@@ -408,10 +431,6 @@ Contributions and feedback are welcome.
 - **UI/UX**
 	- Optional compact/mobile layout.
 	- Icon-based client badges for popular players.
-- **Newsletter (upcoming)**
-	- Subscriber management + templates polished for general use.
-	- Optional Overseerr integration to pull subscribers.
-	- Safer defaults and better docs before promoting as a main feature.
 - **Technical**
 	- More tests around history import and notifiers.
 	- Configurable polling interval and history retention.
