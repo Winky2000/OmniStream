@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 _No unreleased changes yet._
 
+## [0.2.1] - 2026-02-22
+
+### Fixed
+- Docker publishing: stable version tags now also publish the `latest` image tag so `ghcr.io/...:latest` matches the newest non-beta release.
+
 ## [0.2.0] - 2026-02-22
 
 ### Added
@@ -49,4 +54,5 @@ _No unreleased changes yet._
 [0.1.0]: https://github.com/winky2000/omnistream/releases/tag/v0.1.0
 [0.1.1]: https://github.com/winky2000/omnistream/releases/tag/v0.1.1
 [0.2.0]: https://github.com/winky2000/omnistream/releases/tag/v0.2.0
-[Unreleased]: https://github.com/winky2000/omnistream/compare/v0.2.0...HEAD
+[0.2.1]: https://github.com/winky2000/omnistream/releases/tag/v0.2.1
+[Unreleased]: https://github.com/winky2000/omnistream/compare/v0.2.1...HEAD

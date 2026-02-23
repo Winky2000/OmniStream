@@ -31,11 +31,20 @@ jobs:
           echo "IMAGE_NAME=ghcr.io/${OWNER_LC}/omnistream" >> $GITHUB_ENV
         shell: bash
 
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=tag
+            type=raw,value=latest,enable=${{ !contains(env.TAG, 'beta') }}
+            type=raw,value=beta,enable=${{ contains(env.TAG, 'beta') }}
+
       - name: Build and push image
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          tags: |
-            ${{ env.IMAGE_NAME }}:${{ env.TAG }}
-            ${{ contains(env.TAG, 'beta') && format('{0}:beta', env.IMAGE_NAME) || '' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
