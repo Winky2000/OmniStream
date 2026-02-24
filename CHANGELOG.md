@@ -8,6 +8,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 _No unreleased changes yet._
 
+## [0.2.3] - 2026-02-23
+
+### Added
+- Newsletter: server-scoped manual send and preview (pick a server; sends only to subscribers tagged for that server).
+- Newsletter: per-server automated schedules (multiple schedules, each optionally scoped to a server).
+- Newsletter: unified “Recently Added” across Plex + Jellyfin + Emby.
+- System setting: configurable public base URL to generate absolute image URLs in newsletter emails.
+- Deployment examples: Nginx Basic Auth and Nginx + Authelia (2FA) configs and docs.
+
+### Changed
+- Default newsletter template now uses `{{SERVER_NAME}}` instead of a hard-coded header/title.
+- Windows PowerShell scripts improved to find `node.exe` even when Node isn’t on PATH.
+- Local newsletter upload assets are now ignored via `.gitignore` (prevents committing `public/uploads`).
+
+### Fixed
+- Settings sidebar submenu toggles no longer open the wrong submenu on some pages.
+- Newsletter header now matches the selected server in server-scoped previews/sends.
+
+### Security
+- CORS is disabled by default; cross-origin API access requires an explicit `OMNISTREAM_CORS_ORIGINS` allowlist.
+
 ## [0.2.2] - 2026-02-22
 
 ### Added
@@ -56,9 +77,10 @@ _No unreleased changes yet._
 - Notifiers test endpoint and "Send test notification" button.
 - Sidebar-based UI with Settings subpages (Servers, Themes & layout, Notifiers) and a setup experience when no servers are configured.
 
-[0.1.0]: https://github.com/winky2000/omnistream/releases/tag/v0.1.0
-[0.1.1]: https://github.com/winky2000/omnistream/releases/tag/v0.1.1
-[0.2.0]: https://github.com/winky2000/omnistream/releases/tag/v0.2.0
-[0.2.1]: https://github.com/winky2000/omnistream/releases/tag/v0.2.1
-[0.2.2]: https://github.com/winky2000/omnistream/releases/tag/v0.2.2
-[Unreleased]: https://github.com/winky2000/omnistream/compare/v0.2.2...HEAD
+[0.1.0]: https://github.com/Winky2000/OmniStream/releases/tag/v0.1.0
+[0.1.1]: https://github.com/Winky2000/OmniStream/releases/tag/v0.1.1
+[0.2.0]: https://github.com/Winky2000/OmniStream/releases/tag/v0.2.0
+[0.2.1]: https://github.com/Winky2000/OmniStream/releases/tag/v0.2.1
+[0.2.2]: https://github.com/Winky2000/OmniStream/releases/tag/v0.2.2
+[0.2.3]: https://github.com/Winky2000/OmniStream/releases/tag/v0.2.3
+[Unreleased]: https://github.com/Winky2000/OmniStream/compare/v0.2.3...HEAD
