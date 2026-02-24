@@ -91,6 +91,13 @@
         <h2>Application config</h2>
         <div class="config-row">
           <label>
+            Public base URL (for newsletter images)
+            <input type="text" id="cfgPublicBaseUrl" placeholder="https://omnistream.yourdomain.com">
+          </label>
+          <div class="hint">Used to generate absolute image URLs in newsletter emails (logo, posters). Use an <b>https://</b> URL with no trailing slash.</div>
+        </div>
+        <div class="config-row">
+          <label>
             History retention (maxHistory)
             <input type="number" id="cfgMaxHistory" placeholder="500">
           </label>
@@ -146,9 +153,11 @@
   <script>
     (function() {
       const settingsToggle = document.querySelector('.settings-toggle');
-      const settingsSubmenu = document.querySelector('.settings-submenu');
+      const settingsGroup = settingsToggle ? settingsToggle.closest('.settings-group') : null;
+      const settingsSubmenu = settingsGroup ? settingsGroup.querySelector('.settings-submenu') : null;
       const newsletterToggle = document.querySelector('.newsletter-toggle');
-      const newsletterSubmenu = document.querySelector('.newsletter-submenu');
+      const newsletterGroup = newsletterToggle ? newsletterToggle.closest('.settings-group') : null;
+      const newsletterSubmenu = newsletterGroup ? newsletterGroup.querySelector('.newsletter-submenu') : null;
       const appShell = document.querySelector('.app-shell');
       const sidebarToggle = document.getElementById('sidebarToggle');
       const savedTheme = localStorage.getItem('omnistreamTheme') || 'default';
@@ -261,6 +270,10 @@
         const r = await fetch('/api/config/app');
         if (!r.ok) throw new Error('HTTP ' + r.status);
         const data = await r.json();
+        const baseUrlInput = document.getElementById('cfgPublicBaseUrl');
+        if (baseUrlInput) {
+          baseUrlInput.value = (data.publicBaseUrl || '').trim();
+        }
         const maxHistoryInput = document.getElementById('cfgMaxHistory');
         if (maxHistoryInput) {
           if (typeof data.maxHistory === 'number') {
@@ -324,6 +337,10 @@
       statusEl.className = '';
       try {
         const payload = {};
+        const baseUrlInput = document.getElementById('cfgPublicBaseUrl');
+        if (baseUrlInput) {
+          payload.publicBaseUrl = (baseUrlInput.value || '').trim();
+        }
         const maxInput = document.getElementById('cfgMaxHistory');
         if (maxInput) {
           const raw = (maxInput.value || '').trim();
@@ -350,6 +367,12 @@
         // Update read-only runtime view and config inputs based on server response
         if (typeof data.maxHistory === 'number') {
           document.getElementById('maxHistory').textContent = data.maxHistory;
+        }
+        if (Object.prototype.hasOwnProperty.call(data, 'publicBaseUrl')) {
+          const baseUrlInput = document.getElementById('cfgPublicBaseUrl');
+          if (baseUrlInput) {
+            baseUrlInput.value = (data.publicBaseUrl || '').trim();
+          }
         }
         statusEl.textContent = 'Config saved.';
         statusEl.className = 'status-ok';

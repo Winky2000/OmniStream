@@ -296,9 +296,11 @@
         document.documentElement.setAttribute('data-theme', savedTheme);
       }
       const settingsToggle = document.querySelector('.settings-toggle');
-      const settingsSubmenu = document.querySelector('.settings-submenu');
+      const settingsGroup = settingsToggle ? settingsToggle.closest('.settings-group') : null;
+      const settingsSubmenu = settingsGroup ? settingsGroup.querySelector('.settings-submenu') : null;
       const newsletterToggle = document.querySelector('.newsletter-toggle');
-      const newsletterSubmenu = document.querySelector('.newsletter-submenu');
+      const newsletterGroup = newsletterToggle ? newsletterToggle.closest('.settings-group') : null;
+      const newsletterSubmenu = newsletterGroup ? newsletterGroup.querySelector('.newsletter-submenu') : null;
       if (settingsToggle && settingsSubmenu) {
         settingsToggle.addEventListener('click', () => {
           settingsSubmenu.classList.toggle('open');

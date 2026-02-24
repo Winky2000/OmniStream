@@ -23,8 +23,39 @@ try {
 // ...existing code...
 
 const app = express();
-app.use(cors());
-app.use(express.json());
+app.disable('x-powered-by');
+
+// Basic hardening headers (avoid breaking the existing inline-script UI).
+app.use((req, res, next) => {
+  try {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  } catch (_) {
+    // ignore
+  }
+  next();
+});
+
+// CORS is disabled by default. If you need cross-origin API access, set
+// OMNISTREAM_CORS_ORIGINS="http://host1,http://host2" (comma-separated).
+const corsAllowlistRaw = String(process.env.OMNISTREAM_CORS_ORIGINS || '').trim();
+if (corsAllowlistRaw) {
+  const allowedOrigins = corsAllowlistRaw
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean);
+  app.use(cors({
+    origin: (origin, cb) => {
+      // Non-browser callers (curl, server-side) may not send Origin.
+      if (!origin) return cb(null, true);
+      if (allowedOrigins.includes(origin)) return cb(null, true);
+      return cb(new Error('Not allowed by CORS'), false);
+    }
+  }));
+}
+// Allow modestly-sized JSON payloads (used for base64 logo uploads).
+app.use(express.json({ limit: '15mb' }));
 
 // Help avoid confusion from cached HTML and make it easy to confirm which build is serving a page.
 app.use((req, res, next) => {
@@ -209,6 +240,12 @@ if (!appConfig.newsletterTemplates) {
 if (!appConfig.newsletterCustomSections) {
   appConfig.newsletterCustomSections = [];
 }
+if (!appConfig.newsletterBranding) {
+  appConfig.newsletterBranding = { logoUrl: '' };
+}
+if (typeof appConfig.newsletterBranding.logoUrl !== 'string') {
+  appConfig.newsletterBranding.logoUrl = '';
+}
 if (!appConfig.newsletterSchedule) {
   appConfig.newsletterSchedule = {
     enabled: false,
@@ -284,12 +321,14 @@ function ensureDefaultNewsletterTemplate() {
         const existing = appConfig.newsletterTemplates[idx] || {};
         const existingBody = String(existing.body || '');
         const looksLikeOldBright = existingBody.includes('background-color: #F1E5AC');
+        const looksLikeOldHardcodedLogo = /winkys\.com\/img\/wpe\.(jpg|jpeg|png)/i.test(existingBody)
+          && !/\{\{\s*NEWSLETTER_LOGO_BLOCK\s*\}\}/i.test(existingBody);
         const looksLikeHardcodedSection = /<figure\s+class="table"/i.test(existingBody)
           && /Useful\s+Links/i.test(existingBody)
           && /Donate\s+to\s+my\s+hard\s+drive\s+fund/i.test(existingBody)
           && !/\{\{\s*CUSTOM_SECTIONS\s*\}\}/i.test(existingBody);
 
-        if (looksLikeOldBright || looksLikeHardcodedSection) {
+        if (looksLikeOldBright || looksLikeOldHardcodedLogo || looksLikeHardcodedSection) {
           appConfig.newsletterTemplates[idx] = {
             ...existing,
             body: bodyFromDisk
@@ -306,6 +345,21 @@ function ensureDefaultNewsletterTemplate() {
   } catch (e) {
     console.error('[OmniStream] ensureDefaultNewsletterTemplate failed:', e.message);
   }
+}
+
+function normalizeNewsletterLogoUrl(input) {
+  const raw = typeof input === 'string' ? input.trim() : '';
+  if (!raw) return '';
+  // Allow serving uploaded logo from our own static path.
+  if (raw.startsWith('/uploads/')) return raw;
+  // Allow only http(s) absolute URLs.
+  try {
+    const u = new URL(raw);
+    if (u.protocol === 'http:' || u.protocol === 'https:') return raw;
+  } catch (_) {
+    // ignore
+  }
+  return '';
 }
 
 function escapeHtml(input) {
@@ -353,17 +407,82 @@ function linkifyAndPreserveLines(text) {
   return withLinks.replace(/\r\n|\r|\n/g, '<br>');
 }
 
+function normalizeCustomHeaderSize(input) {
+  const s = String(input || '').trim().toLowerCase();
+  if (s === 'sm' || s === 'small') return 'sm';
+  if (s === 'lg' || s === 'large') return 'lg';
+  return 'md';
+}
+
+function normalizeHexColor(input) {
+  const s = String(input || '').trim();
+  if (!s) return '';
+  if (/^#[0-9a-fA-F]{6}$/.test(s)) return s.toLowerCase();
+  if (/^#[0-9a-fA-F]{3}$/.test(s)) return s.toLowerCase();
+  return '';
+}
+
+function normalizeCustomHeaderColumn(input) {
+  if (typeof input === 'string') {
+    return { type: 'text', value: input };
+  }
+  if (input && typeof input === 'object') {
+    const rawType = String(input.type || input.kind || 'text').trim().toLowerCase();
+    const type = rawType === 'url' ? 'url' : 'text';
+    const value = typeof input.value === 'string' ? input.value : '';
+    return { type, value };
+  }
+  return { type: 'text', value: '' };
+}
+
+function safeLinkHref(input) {
+  const s = String(input || '').trim();
+  if (!s) return '';
+  const lower = s.toLowerCase();
+  if (lower.startsWith('http://') || lower.startsWith('https://') || lower.startsWith('mailto:')) {
+    return s;
+  }
+  return '';
+}
+
+function renderUrlColumnHtml(raw) {
+  const text = String(raw || '').trim();
+  if (!text) return '';
+
+  const lines = text.split(/\r\n|\r|\n/).map(l => l.trim()).filter(Boolean);
+  if (!lines.length) return '';
+
+  const parts = [];
+  for (const line of lines) {
+    const href = safeLinkHref(line);
+    if (href) {
+      const escapedHref = escapeHtml(href);
+      const escapedLabel = escapeHtml(line);
+      parts.push(`<a href="${escapedHref}" target="_blank" rel="noopener noreferrer" style="color:#E5A00D;text-decoration:none;">${escapedLabel}</a>`);
+    } else {
+      parts.push(escapeHtml(line));
+    }
+  }
+  return parts.join('<br>');
+}
+
 function buildCustomSectionsBlocks(sections) {
   const list = Array.isArray(sections) ? sections : [];
   const cleaned = list
     .map((s) => {
       const header = s && typeof s.header === 'string' ? s.header.trim() : '';
+      const headerSize = normalizeCustomHeaderSize(s && s.headerSize);
+      const headerColor = normalizeHexColor(s && s.headerColor);
+
       const cols = s && Array.isArray(s.columns) ? s.columns : [];
-      const c1 = typeof cols[0] === 'string' ? cols[0].trim() : '';
-      const c2 = typeof cols[1] === 'string' ? cols[1].trim() : '';
-      const c3 = typeof cols[2] === 'string' ? cols[2].trim() : '';
-      const hasAny = !!(header || c1 || c2 || c3);
-      return hasAny ? { header, columns: [c1, c2, c3] } : null;
+      const c1 = normalizeCustomHeaderColumn(cols[0]);
+      const c2 = normalizeCustomHeaderColumn(cols[1]);
+      const c3 = normalizeCustomHeaderColumn(cols[2]);
+      const v1 = (c1 && typeof c1.value === 'string') ? c1.value.trim() : '';
+      const v2 = (c2 && typeof c2.value === 'string') ? c2.value.trim() : '';
+      const v3 = (c3 && typeof c3.value === 'string') ? c3.value.trim() : '';
+      const hasAny = !!(header || v1 || v2 || v3);
+      return hasAny ? { header, headerSize, headerColor, columns: [c1, c2, c3] } : null;
     })
     .filter(Boolean);
 
@@ -374,17 +493,33 @@ function buildCustomSectionsBlocks(sections) {
 
   cleaned.forEach((sec) => {
     const header = sec.header || '';
-    const [c1, c2, c3] = sec.columns;
-    const hasAnyColumnData = Boolean((c1 && c1.trim()) || (c2 && c2.trim()) || (c3 && c3.trim()));
+    const headerSize = normalizeCustomHeaderSize(sec.headerSize);
+    const headerColor = normalizeHexColor(sec.headerColor) || '#e5e7eb';
+    const sizePx = headerSize === 'sm' ? 18 : (headerSize === 'lg' ? 26 : 22);
+
+    const [col1, col2, col3] = sec.columns;
+    const c1 = col1 && typeof col1.value === 'string' ? col1.value.trim() : '';
+    const c2 = col2 && typeof col2.value === 'string' ? col2.value.trim() : '';
+    const c3 = col3 && typeof col3.value === 'string' ? col3.value.trim() : '';
+    const hasAnyColumnData = Boolean(c1 || c2 || c3);
 
     if (header) {
       textParts.push(header);
       textParts.push('-'.repeat(Math.min(40, Math.max(6, header.length))));
     }
     if (hasAnyColumnData) {
-      const lines1 = (c1 || '').split(/\r\n|\r|\n/).filter(Boolean);
-      const lines2 = (c2 || '').split(/\r\n|\r|\n/).filter(Boolean);
-      const lines3 = (c3 || '').split(/\r\n|\r|\n/).filter(Boolean);
+      const linesFor = (col) => {
+        const normalized = normalizeCustomHeaderColumn(col);
+        const raw = typeof normalized.value === 'string' ? normalized.value.trim() : '';
+        if (!raw) return [];
+        if (normalized.type === 'url') {
+          return raw.split(/\r\n|\r|\n/).map(l => l.trim()).filter(Boolean);
+        }
+        return raw.split(/\r\n|\r|\n/).filter(Boolean);
+      };
+      const lines1 = linesFor(col1);
+      const lines2 = linesFor(col2);
+      const lines3 = linesFor(col3);
       const max = Math.max(lines1.length, lines2.length, lines3.length);
       for (let i = 0; i < max; i++) {
         const a = lines1[i] || '';
@@ -401,7 +536,7 @@ function buildCustomSectionsBlocks(sections) {
       `<tr><td style="padding: 10px 20px ${hasAnyColumnData ? '0' : '18px'} 20px;">` +
       `<div style="border-top: 2px solid #E5A00D; margin: 10px 0 14px 0;" class="dark-mode-border"></div>` +
       (header
-        ? `<div style="margin:0 0 10px 0;font-weight:700;font-size:22px;letter-spacing:0.3px;color:#e5e7eb;text-align:center;" class="dark-mode-text">${escapeHtml(header)}</div>`
+        ? `<div style="margin:0 0 10px 0;font-weight:700;font-size:${sizePx}px;letter-spacing:0.3px;color:${escapeHtml(headerColor)};text-align:center;" class="dark-mode-text">${escapeHtml(header)}</div>`
         : '') +
       `</td></tr>` +
       (hasAnyColumnData
@@ -409,9 +544,9 @@ function buildCustomSectionsBlocks(sections) {
           `<td style="padding: 0 20px 18px 20px;">` +
           `<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="border-radius:10px;overflow:hidden;border:1px solid rgba(148,163,184,0.25);">` +
           `<tr>` +
-          `<td width="33%" valign="top" style="padding:12px 10px;background:#0b1226;color:#e5e7eb;font-size:13px;line-height:1.5;" class="dark-mode-card">${linkifyAndPreserveLines(c1)}</td>` +
-          `<td width="33%" valign="top" style="padding:12px 10px;background:#0b1226;color:#e5e7eb;font-size:13px;line-height:1.5;border-left:1px solid rgba(148,163,184,0.18);" class="dark-mode-card">${linkifyAndPreserveLines(c2)}</td>` +
-          `<td width="34%" valign="top" style="padding:12px 10px;background:#0b1226;color:#e5e7eb;font-size:13px;line-height:1.5;border-left:1px solid rgba(148,163,184,0.18);" class="dark-mode-card">${linkifyAndPreserveLines(c3)}</td>` +
+          `<td width="33%" valign="top" style="padding:12px 10px;background:#0b1226;color:#e5e7eb;font-size:13px;line-height:1.5;" class="dark-mode-card">${normalizeCustomHeaderColumn(col1).type === 'url' ? renderUrlColumnHtml(c1) : linkifyAndPreserveLines(c1)}</td>` +
+          `<td width="33%" valign="top" style="padding:12px 10px;background:#0b1226;color:#e5e7eb;font-size:13px;line-height:1.5;border-left:1px solid rgba(148,163,184,0.18);" class="dark-mode-card">${normalizeCustomHeaderColumn(col2).type === 'url' ? renderUrlColumnHtml(c2) : linkifyAndPreserveLines(c2)}</td>` +
+          `<td width="34%" valign="top" style="padding:12px 10px;background:#0b1226;color:#e5e7eb;font-size:13px;line-height:1.5;border-left:1px solid rgba(148,163,184,0.18);" class="dark-mode-card">${normalizeCustomHeaderColumn(col3).type === 'url' ? renderUrlColumnHtml(c3) : linkifyAndPreserveLines(c3)}</td>` +
           `</tr>` +
           `</table>` +
           `</td>` +
@@ -529,6 +664,19 @@ function buildPublicBaseUrl(req) {
   return '';
 }
 
+function normalizePublicBaseUrl(input) {
+  const s = String(input || '').trim();
+  if (!s) return '';
+  if (!/^https?:\/\//i.test(s)) return '';
+  try {
+    const u = new URL(s);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return '';
+    return s.replace(/\/$/, '');
+  } catch (_) {
+    return '';
+  }
+}
+
 function normalizeDayOfWeek(input) {
   const n = Number(input);
   if (!Number.isFinite(n)) return 0;
@@ -546,7 +694,7 @@ function normalizeTimeHHMM(input) {
   return `${hh}:${mm}`;
 }
 
-async function sendNewsletterBroadcast({ subject, body, startDate, endDate, publicBaseUrl } = {}) {
+async function sendNewsletterBroadcast({ subject, body, startDate, endDate, publicBaseUrl, serverId } = {}) {
   if (!historyDb) {
     throw new Error('history DB not available');
   }
@@ -563,16 +711,30 @@ async function sendNewsletterBroadcast({ subject, body, startDate, endDate, publ
     throw new Error('subject and body are required');
   }
 
-  const rendered = await renderNewsletterSubjectAndBody(subj, rawBody, fetchPlexRecentlyAdded, {
+  const scopeServerId = serverId != null ? String(serverId).trim() : '';
+
+  const rendered = await renderNewsletterSubjectAndBody(subj, rawBody, fetchUnifiedRecentlyAdded, {
     startDate,
     endDate,
-    publicBaseUrl: String(publicBaseUrl || '').trim()
+    publicBaseUrl: String(publicBaseUrl || '').trim(),
+    serverId: scopeServerId
   });
 
   const rows = await new Promise((resolve, reject) => {
+    const where = ['active = 1', 'email IS NOT NULL'];
+    const params = [];
+
+    if (scopeServerId) {
+      // serverTags stored as a JSON array string (e.g. ["plex-1","jelly-1"]).
+      // Use a quoted LIKE match to reduce substring collisions.
+      where.push('serverTags IS NOT NULL');
+      where.push('serverTags LIKE ?');
+      params.push(`%"${scopeServerId.replace(/"/g, '')}"%`);
+    }
+
     historyDb.all(
-      'SELECT DISTINCT email, name FROM newsletter_subscribers WHERE active = 1 AND email IS NOT NULL',
-      [],
+      `SELECT DISTINCT email, name FROM newsletter_subscribers WHERE ${where.join(' AND ')}`,
+      params,
       (err, rows) => {
         if (err) return reject(err);
         resolve(rows || []);
@@ -607,48 +769,63 @@ async function sendNewsletterBroadcast({ subject, body, startDate, endDate, publ
 
 async function runNewsletterScheduleIfDue() {
   try {
-    const sched = appConfig && appConfig.newsletterSchedule ? appConfig.newsletterSchedule : null;
-    if (!sched || sched.enabled !== true) return;
+    const templates = Array.isArray(appConfig.newsletterTemplates) ? appConfig.newsletterTemplates : [];
+    const schedules = Array.isArray(appConfig.newsletterSchedules) && appConfig.newsletterSchedules.length
+      ? appConfig.newsletterSchedules
+      : (appConfig && appConfig.newsletterSchedule ? [appConfig.newsletterSchedule] : []);
 
-    const dayOfWeek = normalizeDayOfWeek(sched.dayOfWeek);
-    const time = normalizeTimeHHMM(sched.time);
-    const templateId = sched.templateId != null ? String(sched.templateId) : '';
-    if (!time || !templateId) return;
+    if (!schedules.length) return;
 
     const now = new Date();
-    if (now.getDay() !== dayOfWeek) return;
-
     const today = formatIsoDateShort(now);
-    if (sched.lastSentDate && String(sched.lastSentDate) === today) return;
-
-    const parts = time.split(':');
-    const schedMin = Number(parts[0]) * 60 + Number(parts[1]);
     const nowMin = now.getHours() * 60 + now.getMinutes();
-    const windowMins = 10;
-    if (nowMin < schedMin || nowMin >= (schedMin + windowMins)) return;
-
-    const tpl = Array.isArray(appConfig.newsletterTemplates)
-      ? appConfig.newsletterTemplates.find(t => t && String(t.id) === templateId)
-      : null;
-    if (!tpl) {
-      console.warn('[OmniStream] Newsletter schedule: template not found:', templateId);
-      return;
-    }
-
     const baseUrl = String(appConfig.publicBaseUrl || appConfig.httpBaseUrl || '').trim();
-    const result = await sendNewsletterBroadcast({
-      subject: tpl.subject || '',
-      body: tpl.body || '',
-      publicBaseUrl: baseUrl
-    });
+    const windowMins = 10;
 
-    if (result && typeof result.sent === 'number' && result.sent > 0) {
-      // Mark as sent for today to prevent duplicates.
-      appConfig.newsletterSchedule.lastSentDate = today;
-      saveAppConfigToDisk();
-      console.log(`[OmniStream] Newsletter schedule sent to ${result.sent} subscriber(s) using template ${templateId} (${today} ${time}).`);
-    } else {
-      console.log(`[OmniStream] Newsletter schedule due, but no active subscribers were emailed (template ${templateId}).`);
+    for (const sched of schedules) {
+      if (!sched || sched.enabled !== true) continue;
+
+      const dayOfWeek = normalizeDayOfWeek(sched.dayOfWeek);
+      const time = normalizeTimeHHMM(sched.time);
+      const templateId = sched.templateId != null ? String(sched.templateId) : '';
+      if (!time || !templateId) continue;
+      if (now.getDay() !== dayOfWeek) continue;
+
+      if (sched.lastSentDate && String(sched.lastSentDate) === today) continue;
+
+      const parts = time.split(':');
+      const schedMin = Number(parts[0]) * 60 + Number(parts[1]);
+      if (nowMin < schedMin || nowMin >= (schedMin + windowMins)) continue;
+
+      const tpl = templates.find(t => t && String(t.id) === templateId);
+      if (!tpl) {
+        console.warn('[OmniStream] Newsletter schedule: template not found:', templateId);
+        continue;
+      }
+
+      const scopeServerId = (Array.isArray(appConfig.newsletterSchedules) ? (sched.serverId != null ? String(sched.serverId).trim() : '') : '');
+      if (scopeServerId) {
+        const server = servers.find(s => s && String(s.id) === scopeServerId);
+        if (!server) {
+          console.warn('[OmniStream] Newsletter schedule: invalid serverId:', scopeServerId);
+          continue;
+        }
+      }
+
+      const result = await sendNewsletterBroadcast({
+        subject: tpl.subject || '',
+        body: tpl.body || '',
+        publicBaseUrl: baseUrl,
+        serverId: scopeServerId
+      });
+
+      if (result && typeof result.sent === 'number' && result.sent > 0) {
+        sched.lastSentDate = today;
+        saveAppConfigToDisk();
+        console.log(`[OmniStream] Newsletter schedule sent to ${result.sent} subscriber(s) using template ${templateId}${scopeServerId ? ` (server ${scopeServerId})` : ''} (${today} ${time}).`);
+      } else {
+        console.log(`[OmniStream] Newsletter schedule due, but no active subscribers were emailed (template ${templateId}${scopeServerId ? `, server ${scopeServerId}` : ''}).`);
+      }
     }
   } catch (e) {
     console.error('[OmniStream] Newsletter schedule failed:', e.message);
@@ -662,6 +839,7 @@ function buildRecentlyAddedBlocks(items, { publicBaseUrl } = {}) {
   const startDate = typeof options.startDate === 'string' ? options.startDate.trim() : '';
   const endDate = typeof options.endDate === 'string' ? options.endDate.trim() : '';
   const displayLimit = Number.isFinite(Number(options.displayLimit)) ? Number(options.displayLimit) : 20;
+  const scopeServerName = typeof options.scopeServerName === 'string' ? options.scopeServerName.trim() : '';
 
   const parseRangeMs = () => {
     const startMs = startDate ? Date.parse(`${startDate}T00:00:00.000Z`) : NaN;
@@ -680,8 +858,15 @@ function buildRecentlyAddedBlocks(items, { publicBaseUrl } = {}) {
     })
     : rowsAll;
 
+  const sortByAddedAtDesc = (a, b) => {
+    const ta = a && a.addedAt ? (Date.parse(a.addedAt) || 0) : 0;
+    const tb = b && b.addedAt ? (Date.parse(b.addedAt) || 0) : 0;
+    return tb - ta;
+  };
+
   // Totals are computed across the full (optionally date-filtered) result set.
   const totalMovies = rows.filter(r => r && r.type === 'movie').length;
+  const totalEpisodes = rows.filter(r => r && r.type === 'episode').length;
 
   const tvRows = rows.filter(r => r && (r.type === 'episode' || r.type === 'season' || r.type === 'show'));
   const showKeyFor = (r) => {
@@ -715,25 +900,45 @@ function buildRecentlyAddedBlocks(items, { publicBaseUrl } = {}) {
   const totalSeasons = seasonSet.size;
 
   // Display lists are limited so emails don't explode in size.
-  const displayRows = rows.slice(0, Math.max(0, displayLimit));
-  const movies = displayRows.filter(r => r && r.type === 'movie');
-  const episodes = displayRows.filter(r => r && r.type === 'episode');
+  // Apply the limit *per section* (movies vs TV) so one type doesn't crowd out the other.
+  const safeLimit = Math.max(0, displayLimit);
+  const movies = rows
+    .filter(r => r && r.type === 'movie')
+    .sort(sortByAddedAtDesc)
+    .slice(0, safeLimit);
+  const episodes = rows
+    .filter(r => r && r.type === 'episode')
+    .sort(sortByAddedAtDesc)
+    .slice(0, safeLimit);
+
+  const moviesTitleBase = scopeServerName ? `Recently Added on ${scopeServerName} - Movies` : 'Recently Added Movies';
+  const tvTitleBase = scopeServerName ? `Recently Added on ${scopeServerName} - TV` : 'Recently Added TV';
+  const moviesTitle = totalMovies > movies.length
+    ? `${moviesTitleBase} (${totalMovies}, showing ${movies.length})`
+    : `${moviesTitleBase} (${totalMovies})`;
+  const tvTitle = totalEpisodes > episodes.length
+    ? `${tvTitleBase} (${totalShows} shows · ${totalSeasons} seasons, showing ${episodes.length})`
+    : `${tvTitleBase} (${totalShows} shows · ${totalSeasons} seasons)`;
 
   const formatLine = (it) => {
     let line = it.title || '';
     if (it.year) line += ` (${it.year})`;
-    if (it.serverName) line += ` · ${it.serverName}`;
+    if (!scopeServerName && it.serverName) line += ` · ${it.serverName}`;
     return line;
   };
 
   const textParts = [];
   if (movies.length) {
-    textParts.push(`Movies (${totalMovies})`);
+    textParts.push(totalMovies > movies.length ? `Movies (${totalMovies}, showing ${movies.length})` : `Movies (${totalMovies})`);
     movies.forEach(m => textParts.push('- ' + formatLine(m)));
     textParts.push('');
   }
   if (episodes.length) {
-    textParts.push(`TV (${totalShows} shows · ${totalSeasons} seasons)`);
+    textParts.push(
+      totalEpisodes > episodes.length
+        ? `TV (${totalShows} shows · ${totalSeasons} seasons, showing ${episodes.length})`
+        : `TV (${totalShows} shows · ${totalSeasons} seasons)`
+    );
     episodes.forEach(e => textParts.push('- ' + formatLine(e)));
     textParts.push('');
   }
@@ -744,6 +949,12 @@ function buildRecentlyAddedBlocks(items, { publicBaseUrl } = {}) {
   const thumbUrlFor = (it) => {
     const base = String(publicBaseUrl || '').replace(/\/$/, '');
     if (!base) return '';
+    if (it && it.thumbProxyPath) {
+      const rel = String(it.thumbProxyPath);
+      if (!rel) return '';
+      if (rel.startsWith('http://') || rel.startsWith('https://')) return rel;
+      return base + (rel.startsWith('/') ? rel : '/' + rel);
+    }
     if (!it || !it.serverId || !it.thumb) return '';
     return `${base}/api/newsletter/plex/thumb?serverId=${encodeURIComponent(String(it.serverId))}&thumb=${encodeURIComponent(String(it.thumb))}`;
   };
@@ -754,7 +965,7 @@ function buildRecentlyAddedBlocks(items, { publicBaseUrl } = {}) {
     if (typeof it.durationMinutes === 'number' && Number.isFinite(it.durationMinutes) && it.durationMinutes > 0) {
       parts.push(`${Math.round(it.durationMinutes)} mins`);
     }
-    if (it.serverName) parts.push(String(it.serverName));
+    if (!scopeServerName && it.serverName) parts.push(String(it.serverName));
     return parts.join(' · ');
   };
 
@@ -797,8 +1008,8 @@ function buildRecentlyAddedBlocks(items, { publicBaseUrl } = {}) {
       htmlParts.push(cardHtml(it));
     });
   };
-  section(`Recently Added Movies (${totalMovies})`, movies);
-  section(`Recently Added TV (${totalShows} shows · ${totalSeasons} seasons)`, episodes);
+  section(moviesTitle, movies);
+  section(tvTitle, episodes);
   if (!movies.length && !episodes.length) {
     htmlParts.push('<div style="color:#94a3b8;" class="dark-mode-muted">No recently added items found.</div>');
   }
@@ -821,6 +1032,26 @@ async function renderNewsletterSubjectAndBody(subject, body, fetchRecentlyAdded,
   const startDate = requestedStart || fallback.startDate;
   const endDate = requestedEnd || fallback.endDate;
   const publicBaseUrl = String(options.publicBaseUrl || '').trim();
+
+  const scopeServerId = options.serverId != null ? String(options.serverId).trim() : '';
+  const scopeServer = scopeServerId ? servers.find(s => String(s.id) === scopeServerId) : null;
+  const scopeServerName = scopeServer
+    ? String(scopeServer.name || scopeServer.baseUrl || scopeServerId)
+    : (scopeServerId ? scopeServerId : 'OmniStream');
+
+  const rawLogoUrl = normalizeNewsletterLogoUrl(
+    (appConfig && appConfig.newsletterBranding && typeof appConfig.newsletterBranding.logoUrl === 'string')
+      ? String(appConfig.newsletterBranding.logoUrl)
+      : ''
+  );
+
+  const logoUrlForEmail = (() => {
+    if (!rawLogoUrl) return '';
+    if (rawLogoUrl.startsWith('/') && publicBaseUrl) {
+      return publicBaseUrl.replace(/\/$/, '') + rawLogoUrl;
+    }
+    return rawLogoUrl;
+  })();
 
   function autoInsertCustomSectionsTokenIntoHtml(html) {
     try {
@@ -876,8 +1107,8 @@ async function renderNewsletterSubjectAndBody(subject, body, fetchRecentlyAdded,
     try {
       if (typeof fetchRecentlyAdded === 'function') {
         // Fetch more than we display so counts reflect the full date window.
-        const items = await fetchRecentlyAdded({ perServer: 50 });
-        recentlyAddedBlocks = buildRecentlyAddedBlocks((items || []), { publicBaseUrl, startDate, endDate, displayLimit: 20 });
+        const items = await fetchRecentlyAdded({ perServer: 50, serverId: scopeServerId });
+        recentlyAddedBlocks = buildRecentlyAddedBlocks((items || []), { publicBaseUrl, startDate, endDate, displayLimit: 20, scopeServerName });
       } else {
         recentlyAddedBlocks = { text: 'Recently added list unavailable.', html: '<div>Recently added list unavailable.</div>' };
       }
@@ -890,6 +1121,8 @@ async function renderNewsletterSubjectAndBody(subject, body, fetchRecentlyAdded,
   const recentStats = recentlyAddedBlocks && recentlyAddedBlocks.stats ? recentlyAddedBlocks.stats : { movies: 0, shows: 0, seasons: 0 };
 
   const replacements = {
+    '{{SERVER_ID}}': scopeServerId,
+    '{{SERVER_NAME}}': scopeServerName,
     '{{START_DATE}}': startDate,
     '{{END_DATE}}': endDate,
     '{{RECENTLY_ADDED}}': recentlyAddedBlocks.text,
@@ -897,6 +1130,8 @@ async function renderNewsletterSubjectAndBody(subject, body, fetchRecentlyAdded,
     '{{RECENTLY_ADDED_SHOWS_COUNT}}': String(recentStats.shows || 0),
     '{{RECENTLY_ADDED_SEASONS_COUNT}}': String(recentStats.seasons || 0),
     '{{CUSTOM_SECTIONS}}': customSectionsBlocks.text,
+    '{{NEWSLETTER_LOGO_URL}}': logoUrlForEmail,
+    '{{NEWSLETTER_LOGO_BLOCK}}': '',
     // Back-compat with some existing templates people copy in
     "${parameters['start_date']}": startDate,
     "${parameters['end_date']}": endDate
@@ -920,10 +1155,14 @@ async function renderNewsletterSubjectAndBody(subject, body, fetchRecentlyAdded,
   }
 
   if (isHtml) {
+    const logoBlockHtml = logoUrlForEmail
+      ? `<img src="${escapeHtml(logoUrlForEmail)}" alt="Logo" style="display:block;max-width:100%;height:auto;" />`
+      : '';
     const htmlReplacements = {
       ...replacements,
       '{{RECENTLY_ADDED}}': recentlyAddedBlocks.html,
-      '{{CUSTOM_SECTIONS}}': customSectionsBlocks.html
+      '{{CUSTOM_SECTIONS}}': customSectionsBlocks.html,
+      '{{NEWSLETTER_LOGO_BLOCK}}': logoBlockHtml
     };
     const renderedHtml = applyBasicNewsletterReplacements(rawBody, htmlReplacements);
     const renderedText = stripHtmlToText(renderedHtml) || applyBasicNewsletterReplacements(rawBody, replacements);
@@ -1404,14 +1643,37 @@ try {
       "  source TEXT NOT NULL,\n" +
       "  externalId TEXT,\n" +
       "  name TEXT,\n" +
+      "  watchUser TEXT,\n" +
       "  email TEXT NOT NULL,\n" +
       "  createdAt TEXT NOT NULL,\n" +
       "  updatedAt TEXT NOT NULL,\n" +
       "  active INTEGER NOT NULL DEFAULT 1,\n" +
+      "  serverTags TEXT,\n" +
       '  UNIQUE(source, externalId)\n' +
       ')'
     );
     historyDb.run('CREATE INDEX IF NOT EXISTS idx_subscribers_email ON newsletter_subscribers(email)');
+
+    // Lightweight schema migrations for newsletter_subscribers
+    historyDb.all('PRAGMA table_info(newsletter_subscribers)', (err, rows) => {
+      if (err) {
+        console.error('[OmniStream] Failed to inspect newsletter_subscribers schema:', err.message);
+        return;
+      }
+      const existing = new Set((rows || []).map(r => r && r.name).filter(Boolean));
+      const toAdd = [
+        { name: 'watchUser', ddl: 'ALTER TABLE newsletter_subscribers ADD COLUMN watchUser TEXT' },
+        { name: 'serverTags', ddl: 'ALTER TABLE newsletter_subscribers ADD COLUMN serverTags TEXT' }
+      ].filter(c => !existing.has(c.name));
+      if (!toAdd.length) return;
+      toAdd.forEach(c => {
+        historyDb.run(c.ddl, (e) => {
+          if (e) {
+            console.error(`[OmniStream] Failed to migrate newsletter_subscribers schema (add ${c.name}):`, e.message);
+          }
+        });
+      });
+    });
   });
   console.log('[OmniStream] Using history database at', HISTORY_DB_FILE);
 } catch (e) {
@@ -3184,18 +3446,21 @@ async function importOverseerrSubscribers() {
         "  source TEXT NOT NULL,\n" +
         "  externalId TEXT,\n" +
         "  name TEXT,\n" +
+        "  watchUser TEXT,\n" +
         "  email TEXT NOT NULL,\n" +
         "  createdAt TEXT NOT NULL,\n" +
         "  updatedAt TEXT NOT NULL,\n" +
         "  active INTEGER NOT NULL DEFAULT 1,\n" +
+        "  serverTags TEXT,\n" +
         '  UNIQUE(source, externalId)\n' +
         ')'
       );
       const stmt = historyDb.prepare(
-        'INSERT INTO newsletter_subscribers (source, externalId, name, email, createdAt, updatedAt, active) ' +
-        'VALUES (?, ?, ?, ?, ?, ?, 1) ' +
+        'INSERT INTO newsletter_subscribers (source, externalId, name, watchUser, email, createdAt, updatedAt, active) ' +
+        'VALUES (?, ?, ?, ?, ?, ?, ?, 1) ' +
         'ON CONFLICT(source, externalId) DO UPDATE SET ' +
         '  name = excluded.name, ' +
+        '  watchUser = excluded.watchUser, ' +
         '  email = excluded.email, ' +
         '  updatedAt = excluded.updatedAt, ' +
         '  active = 1'
@@ -3205,7 +3470,8 @@ async function importOverseerrSubscribers() {
       withEmail.forEach(u => {
         const externalId = u.id != null ? String(u.id) : null;
         const name = u.name || u.email;
-        stmt.run('overseerr', externalId, name, u.email, now, now, (err) => {
+        const watchUser = name;
+        stmt.run('overseerr', externalId, name, watchUser, u.email, now, now, (err) => {
           if (err) {
             console.error('[OmniStream] Failed to upsert subscriber from Overseerr:', err.message);
             return; // continue with others
@@ -3305,7 +3571,7 @@ app.get('/api/subscribers/summary', (req, res) => {
     let offset = Number(req.query.offset) || 0;
     if (!Number.isFinite(offset) || offset < 0) offset = 0;
 
-    let sql = 'SELECT id, source, externalId, name, email, createdAt, updatedAt, active FROM newsletter_subscribers';
+    let sql = 'SELECT id, source, externalId, name, watchUser, email, createdAt, updatedAt, active, serverTags FROM newsletter_subscribers';
     if (where.length) {
       sql += ' WHERE ' + where.join(' AND ');
     }
@@ -3322,13 +3588,117 @@ app.get('/api/subscribers/summary', (req, res) => {
         source: r.source,
         externalId: r.externalId,
         name: r.name,
+        watchUser: r.watchUser,
         email: r.email,
         createdAt: r.createdAt,
         updatedAt: r.updatedAt,
-        active: Number(r.active) === 1
+        active: Number(r.active) === 1,
+        serverTags: (() => {
+          if (!r.serverTags) return [];
+          try {
+            const parsed = JSON.parse(String(r.serverTags));
+            return Array.isArray(parsed) ? parsed.map(x => String(x)) : [];
+          } catch (_) {
+            return [];
+          }
+        })()
       }));
       res.json({ total: items.length, items });
     });
+  });
+
+  // Recompute subscriber server tags based on watch history.
+  // Tags are derived by matching subscriber.watchUser (or subscriber.name) to history.user (case-insensitive).
+  app.post('/api/subscribers/tag-by-server', (req, res) => {
+    if (!historyDb) {
+      return res.status(500).json({ error: 'history DB not available' });
+    }
+
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    let days = Number(body.days);
+    if (!Number.isFinite(days) || days <= 0) days = 0;
+    if (days > 3650) days = 3650;
+    const cutoffIso = days ? new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString() : null;
+
+    historyDb.all(
+      'SELECT id, COALESCE(NULLIF(watchUser,\'\'), NULLIF(name,\'\')) AS watchUser FROM newsletter_subscribers',
+      [],
+      (err, subs) => {
+        if (err) {
+          console.error('[OmniStream] Failed to load subscribers for tagging:', err.message);
+          return res.status(500).json({ error: 'Failed to load subscribers' });
+        }
+
+        const list = Array.isArray(subs) ? subs : [];
+        const userKeys = [];
+        const userKeySet = new Set();
+        const watchUserBySubId = new Map();
+        list.forEach(s => {
+          const wu = s && typeof s.watchUser === 'string' ? s.watchUser.trim() : '';
+          watchUserBySubId.set(s.id, wu);
+          if (!wu) return;
+          const key = wu.toLowerCase();
+          if (!userKeySet.has(key)) {
+            userKeySet.add(key);
+            userKeys.push(key);
+          }
+        });
+
+        if (!userKeys.length) {
+          return res.json({ total: list.length, updated: 0, unmatched: list.length, days: days || null });
+        }
+
+        const placeholders = userKeys.map(() => '?').join(',');
+        const params = [];
+        let sql = `SELECT LOWER(user) AS u, GROUP_CONCAT(DISTINCT serverId) AS serverIds FROM history WHERE user IS NOT NULL AND serverId IS NOT NULL`;
+        if (cutoffIso) {
+          sql += ' AND time >= ?';
+          params.push(cutoffIso);
+        }
+        sql += ` AND LOWER(user) IN (${placeholders}) GROUP BY LOWER(user)`;
+        params.push(...userKeys);
+
+        historyDb.all(sql, params, (err2, rows) => {
+          if (err2) {
+            console.error('[OmniStream] Failed to compute subscriber tags from history:', err2.message);
+            return res.status(500).json({ error: 'Failed to compute tags' });
+          }
+
+          const tagsByUserLower = new Map();
+          (rows || []).forEach(r => {
+            const key = r && typeof r.u === 'string' ? r.u : '';
+            const raw = r && typeof r.serverIds === 'string' ? r.serverIds : '';
+            const parts = raw ? raw.split(',').map(x => String(x).trim()).filter(Boolean) : [];
+            const uniq = Array.from(new Set(parts));
+            uniq.sort();
+            if (key) tagsByUserLower.set(key, uniq);
+          });
+
+          const now = new Date().toISOString();
+          const stmt = historyDb.prepare('UPDATE newsletter_subscribers SET serverTags = ?, updatedAt = ? WHERE id = ?');
+          let updated = 0;
+          let unmatched = 0;
+
+          list.forEach(s => {
+            const id = s.id;
+            const wu = watchUserBySubId.get(id) || '';
+            const key = wu ? wu.toLowerCase() : '';
+            const tags = key && tagsByUserLower.has(key) ? tagsByUserLower.get(key) : [];
+            if (!tags.length) unmatched++;
+            try {
+              stmt.run(JSON.stringify(tags), now, id);
+              updated++;
+            } catch (_) {
+              // ignore
+            }
+          });
+
+          stmt.finalize(() => {
+            res.json({ total: list.length, updated, unmatched, days: days || null });
+          });
+        });
+      }
+    );
   });
 
   // Toggle subscriber active flag
@@ -3359,7 +3729,7 @@ app.get('/api/subscribers/summary', (req, res) => {
           return res.status(404).json({ error: 'Subscriber not found' });
         }
         historyDb.get(
-          'SELECT id, source, externalId, name, email, createdAt, updatedAt, active FROM newsletter_subscribers WHERE id = ?',
+          'SELECT id, source, externalId, name, watchUser, email, createdAt, updatedAt, active, serverTags FROM newsletter_subscribers WHERE id = ?',
           [id],
           (err2, row) => {
             if (err2 || !row) {
@@ -3373,10 +3743,20 @@ app.get('/api/subscribers/summary', (req, res) => {
               source: row.source,
               externalId: row.externalId,
               name: row.name,
+              watchUser: row.watchUser,
               email: row.email,
               createdAt: row.createdAt,
               updatedAt: row.updatedAt,
-              active: Number(row.active) === 1
+              active: Number(row.active) === 1,
+              serverTags: (() => {
+                if (!row.serverTags) return [];
+                try {
+                  const parsed = JSON.parse(String(row.serverTags));
+                  return Array.isArray(parsed) ? parsed.map(x => String(x)) : [];
+                } catch (_) {
+                  return [];
+                }
+              })()
             });
           }
         );
@@ -3389,8 +3769,16 @@ app.get('/api/subscribers/summary', (req, res) => {
     try {
       const subject = (req.body && String(req.body.subject || '').trim()) || '';
       const body = (req.body && String(req.body.body || '').trim()) || '';
+      const serverId = (req.body && req.body.serverId != null) ? String(req.body.serverId).trim() : '';
       if (!subject || !body) {
         return res.status(400).json({ error: 'subject and body are required' });
+      }
+
+      if (serverId) {
+        const server = servers.find(s => String(s.id) === serverId);
+        if (!server) {
+          return res.status(400).json({ error: 'Invalid serverId' });
+        }
       }
 
       const result = await sendNewsletterBroadcast({
@@ -3398,7 +3786,8 @@ app.get('/api/subscribers/summary', (req, res) => {
         body,
         startDate: req.body && req.body.startDate,
         endDate: req.body && req.body.endDate,
-        publicBaseUrl: buildPublicBaseUrl(req)
+        publicBaseUrl: buildPublicBaseUrl(req),
+        serverId
       });
       if (!result.sent) {
         return res.json({ sent: 0, message: 'No active subscribers with email found.' });
@@ -3416,13 +3805,22 @@ app.get('/api/subscribers/summary', (req, res) => {
     try {
       const subject = (req.body && String(req.body.subject || '').trim()) || '';
       const body = (req.body && String(req.body.body || '').trim()) || '';
+      const serverId = (req.body && req.body.serverId != null) ? String(req.body.serverId).trim() : '';
       if (!subject || !body) {
         return res.status(400).json({ error: 'subject and body are required' });
       }
-      const rendered = await renderNewsletterSubjectAndBody(subject, body, fetchPlexRecentlyAdded, {
+
+      if (serverId) {
+        const server = servers.find(s => String(s.id) === serverId);
+        if (!server) {
+          return res.status(400).json({ error: 'Invalid serverId' });
+        }
+      }
+      const rendered = await renderNewsletterSubjectAndBody(subject, body, fetchUnifiedRecentlyAdded, {
         startDate: req.body && req.body.startDate,
         endDate: req.body && req.body.endDate,
-        publicBaseUrl: buildPublicBaseUrl(req)
+        publicBaseUrl: buildPublicBaseUrl(req),
+        serverId
       });
       res.json({
         subject: rendered.subject || subject,
@@ -3434,6 +3832,67 @@ app.get('/api/subscribers/summary', (req, res) => {
     } catch (e) {
       console.error('[OmniStream] Newsletter preview failed:', e.message);
       res.status(500).json({ error: 'Failed to render preview' });
+    }
+  });
+
+  // Upload a newsletter logo image (base64 data URL) and save under public/uploads.
+  // Returns the public path and updates config.newsletterBranding.logoUrl.
+  app.post('/api/newsletter/logo/upload', async (req, res) => {
+    try {
+      const body = req.body && typeof req.body === 'object' ? req.body : {};
+      const dataUrl = typeof body.dataUrl === 'string' ? body.dataUrl.trim() : '';
+      if (!dataUrl) {
+        return res.status(400).json({ error: 'dataUrl is required' });
+      }
+
+      const m = dataUrl.match(/^data:([^;]+);base64,(.+)$/i);
+      if (!m) {
+        return res.status(400).json({ error: 'Invalid dataUrl format' });
+      }
+      const mime = String(m[1] || '').toLowerCase();
+      const b64 = String(m[2] || '');
+      const allowed = new Map([
+        ['image/png', 'png'],
+        ['image/jpeg', 'jpg'],
+        ['image/jpg', 'jpg'],
+        ['image/gif', 'gif'],
+        ['image/webp', 'webp']
+      ]);
+      const ext = allowed.get(mime);
+      if (!ext) {
+        return res.status(400).json({ error: 'Unsupported image type' });
+      }
+
+      let buf;
+      try {
+        buf = Buffer.from(b64, 'base64');
+      } catch (_) {
+        return res.status(400).json({ error: 'Invalid base64 payload' });
+      }
+      if (!buf || !buf.length) {
+        return res.status(400).json({ error: 'Empty image payload' });
+      }
+      const maxBytes = 5 * 1024 * 1024;
+      if (buf.length > maxBytes) {
+        return res.status(413).json({ error: 'Logo too large (max 5MB)' });
+      }
+
+      const uploadsDir = path.join(__dirname, 'public', 'uploads');
+      fs.mkdirSync(uploadsDir, { recursive: true });
+      const name = `newsletter-logo-${Date.now()}-${Math.random().toString(16).slice(2)}.${ext}`;
+      const filePath = path.join(uploadsDir, name);
+      fs.writeFileSync(filePath, buf);
+
+      if (!appConfig.newsletterBranding || typeof appConfig.newsletterBranding !== 'object') {
+        appConfig.newsletterBranding = { logoUrl: '' };
+      }
+      appConfig.newsletterBranding.logoUrl = `/uploads/${name}`;
+      saveAppConfigToDisk();
+
+      res.json({ ok: true, logoUrl: appConfig.newsletterBranding.logoUrl });
+    } catch (e) {
+      console.error('[OmniStream] Logo upload failed:', e.message);
+      res.status(500).json({ error: 'Failed to upload logo' });
     }
   });
 
@@ -3483,8 +3942,13 @@ app.get('/api/subscribers/summary', (req, res) => {
   });
 
   // Helper: fetch recently added items from enabled Plex servers
-  async function fetchPlexRecentlyAdded({ perServer = 10 } = {}) {
-    const enabledPlex = servers.filter(s => !s.disabled && s.type === 'plex' && s.token);
+  async function fetchPlexRecentlyAdded({ perServer = 10, serverId = '' } = {}) {
+    const wantedId = serverId != null ? String(serverId).trim() : '';
+    const enabledPlex = servers.filter(s => {
+      if (!s || s.disabled || s.type !== 'plex' || !s.token) return false;
+      if (wantedId && String(s.id) !== wantedId) return false;
+      return true;
+    });
     const results = [];
 
     const parseAddedAtIso = (m) => {
@@ -3672,6 +4136,173 @@ app.get('/api/subscribers/summary', (req, res) => {
       return tb - ta;
     });
     return results;
+  }
+
+  function getJellyfinOrEmbyAuth(server) {
+    const token = server && server.token ? String(server.token) : '';
+    const tokenLoc = (server && server.tokenLocation) ? String(server.tokenLocation) : 'header';
+    const headers = {};
+    const params = {};
+    if (!token) return { headers, params };
+
+    if (server.type === 'jellyfin') {
+      if (tokenLoc === 'query') {
+        params.api_key = token;
+      } else {
+        headers['X-MediaBrowser-Token'] = token;
+      }
+    } else {
+      // emby
+      if (tokenLoc === 'query') {
+        params['X-Emby-Token'] = token;
+      } else {
+        headers['X-Emby-Token'] = token;
+      }
+    }
+    return { headers, params };
+  }
+
+  function pickJellyfinOrEmbyUserId(users = []) {
+    const arr = Array.isArray(users) ? users : [];
+    const admin = arr.find(u => u && u.Policy && u.Policy.IsAdministrator && u.Id);
+    if (admin && admin.Id) return String(admin.Id);
+    const first = arr.find(u => u && u.Id);
+    return first && first.Id ? String(first.Id) : '';
+  }
+
+  function buildJellyfinOrEmbyRecentlyAddedItem(server, it) {
+    if (!server || !it) return null;
+    const rawType = String(it.Type || it.MediaType || '').trim();
+    if (rawType !== 'Movie' && rawType !== 'Episode') return null;
+
+    const isEpisode = rawType === 'Episode';
+    const seasonNumber = typeof it.ParentIndexNumber === 'number' ? it.ParentIndexNumber : null;
+    const episodeNumber = typeof it.IndexNumber === 'number' ? it.IndexNumber : null;
+    const showTitle = isEpisode ? (it.SeriesName || null) : null;
+    const seasonTitle = isEpisode ? (it.SeasonName || null) : null;
+
+    let title;
+    if (isEpisode || it.SeriesName) {
+      const series = it.SeriesName || '';
+      const epName = it.Name || '';
+      let epLabel = '';
+      if (seasonNumber !== null && episodeNumber !== null) {
+        epLabel = `S${String(seasonNumber).padStart(2, '0')}E${String(episodeNumber).padStart(2, '0')}`;
+      } else if (episodeNumber !== null) {
+        epLabel = `E${String(episodeNumber).padStart(2, '0')}`;
+      }
+      if (series && epLabel && epName) {
+        title = `${series} - ${epLabel} - ${epName}`;
+      } else if (series && epName) {
+        title = `${series} - ${epName}`;
+      } else {
+        title = epName || series || it.Name || 'Unknown';
+      }
+    } else {
+      title = it.Name || it.OriginalTitle || 'Unknown';
+    }
+
+    const addedAt = typeof it.DateCreated === 'string' && it.DateCreated ? it.DateCreated : new Date().toISOString();
+    const runTimeTicks = typeof it.RunTimeTicks === 'number' ? it.RunTimeTicks : null;
+    const durationMinutes = runTimeTicks && Number.isFinite(runTimeTicks) ? (runTimeTicks / 600000000) : null;
+
+    const itemId = it.Id != null ? String(it.Id) : '';
+    const imagePath = itemId ? `/Items/${encodeURIComponent(itemId)}/Images/Primary` : '';
+    const thumbProxyPath = (itemId && imagePath)
+      ? `/api/poster?serverId=${encodeURIComponent(String(server.id))}&path=${encodeURIComponent(imagePath)}`
+      : '';
+
+    return {
+      serverId: server.id,
+      serverName: server.name || server.baseUrl,
+      type: rawType.toLowerCase(),
+      title,
+      showTitle,
+      seasonTitle,
+      seasonNumber,
+      episodeNumber,
+      year: typeof it.ProductionYear === 'number' ? it.ProductionYear : null,
+      durationMinutes,
+      genres: Array.isArray(it.Genres) ? it.Genres.map(g => String(g)).filter(Boolean) : [],
+      summary: typeof it.Overview === 'string' ? it.Overview : '',
+      ratingKey: itemId || null,
+      thumb: '',
+      thumbProxyPath,
+      addedAt
+    };
+  }
+
+  async function fetchJellyfinOrEmbyRecentlyAddedForServer(server, { perServer = 10 } = {}) {
+    try {
+      if (!server || !server.baseUrl || !server.token) return [];
+      const base = String(server.baseUrl).replace(/\/$/, '');
+      const auth = getJellyfinOrEmbyAuth(server);
+
+      const usersResp = await axios.get(base + '/Users', {
+        headers: auth.headers,
+        params: auth.params,
+        timeout: 15000
+      });
+      const users = Array.isArray(usersResp.data) ? usersResp.data : [];
+      const userId = pickJellyfinOrEmbyUserId(users);
+      if (!userId) return [];
+
+      const itemsResp = await axios.get(base + `/Users/${encodeURIComponent(userId)}/Items`, {
+        headers: auth.headers,
+        timeout: 20000,
+        params: {
+          ...(auth.params || {}),
+          IncludeItemTypes: 'Movie,Episode',
+          Recursive: true,
+          SortBy: 'DateCreated',
+          SortOrder: 'Descending',
+          Limit: perServer,
+          Fields: 'Genres,Overview,ProductionYear,RunTimeTicks,DateCreated'
+        }
+      });
+      const items = itemsResp.data && Array.isArray(itemsResp.data.Items) ? itemsResp.data.Items : [];
+      return items
+        .map(it => buildJellyfinOrEmbyRecentlyAddedItem(server, it))
+        .filter(Boolean);
+    } catch (e) {
+      console.error(`[OmniStream] Failed to fetch recently added from ${server.type} server ${server.name || server.baseUrl}:`, e.message);
+      return [];
+    }
+  }
+
+  async function fetchUnifiedRecentlyAdded({ perServer = 10, serverId = '' } = {}) {
+    const wantedId = serverId != null ? String(serverId).trim() : '';
+
+    if (wantedId) {
+      const server = servers.find(s => s && String(s.id) === wantedId);
+      if (!server || server.disabled) return [];
+      if (server.type === 'plex') {
+        return fetchPlexRecentlyAdded({ perServer, serverId: wantedId });
+      }
+      if (server.type === 'jellyfin' || server.type === 'emby') {
+        return fetchJellyfinOrEmbyRecentlyAddedForServer(server, { perServer });
+      }
+      return [];
+    }
+
+    const enabled = servers.filter(s => s && !s.disabled);
+    const plex = enabled.some(s => s.type === 'plex') ? await fetchPlexRecentlyAdded({ perServer }) : [];
+
+    const others = [];
+    for (const s of enabled) {
+      if (s.type === 'jellyfin' || s.type === 'emby') {
+        const part = await fetchJellyfinOrEmbyRecentlyAddedForServer(s, { perServer });
+        others.push(...part);
+      }
+    }
+
+    const combined = [...plex, ...others];
+    combined.sort((a, b) => {
+      const ta = a && a.addedAt ? (Date.parse(a.addedAt) || 0) : 0;
+      const tb = b && b.addedAt ? (Date.parse(b.addedAt) || 0) : 0;
+      return tb - ta;
+    });
+    return combined;
   }
 
   // Expose recently added Plex items for newsletter/template helpers
@@ -4176,11 +4807,39 @@ app.put('/api/config/notifiers', (req, res) => {
 app.get('/api/config/app', (req, res) => {
   try {
     const overseerrCfg = appConfig.overseerr || {};
+    const rawSchedules = Array.isArray(appConfig.newsletterSchedules) ? appConfig.newsletterSchedules : [];
+    const normalizedSchedules = rawSchedules.length
+      ? rawSchedules.map((s, idx) => ({
+        id: s && s.id != null ? String(s.id) : `sched-${idx + 1}`,
+        serverId: s && s.serverId != null ? String(s.serverId) : '',
+        enabled: s && s.enabled === true,
+        templateId: s && s.templateId != null ? String(s.templateId) : DEFAULT_NEWSLETTER_TEMPLATE_ID,
+        dayOfWeek: normalizeDayOfWeek(s && s.dayOfWeek),
+        time: normalizeTimeHHMM(s && s.time) || '09:00',
+        lastSentDate: s && s.lastSentDate ? String(s.lastSentDate) : ''
+      }))
+      : [
+        {
+          id: 'default',
+          serverId: '',
+          enabled: appConfig.newsletterSchedule?.enabled === true,
+          templateId: appConfig.newsletterSchedule?.templateId != null ? String(appConfig.newsletterSchedule.templateId) : DEFAULT_NEWSLETTER_TEMPLATE_ID,
+          dayOfWeek: normalizeDayOfWeek(appConfig.newsletterSchedule?.dayOfWeek),
+          time: normalizeTimeHHMM(appConfig.newsletterSchedule?.time) || '09:00',
+          lastSentDate: appConfig.newsletterSchedule?.lastSentDate || ''
+        }
+      ];
     res.json({
       maxHistory: typeof MAX_HISTORY === 'number' ? MAX_HISTORY : DEFAULT_MAX_HISTORY,
+      publicBaseUrl: (appConfig && typeof appConfig.publicBaseUrl === 'string') ? String(appConfig.publicBaseUrl) : '',
       overseerr: {
         baseUrl: overseerrCfg.baseUrl || '',
         hasApiKey: !!overseerrCfg.apiKey
+      },
+      newsletterBranding: {
+        logoUrl: (appConfig && appConfig.newsletterBranding && typeof appConfig.newsletterBranding.logoUrl === 'string')
+          ? String(appConfig.newsletterBranding.logoUrl)
+          : ''
       },
       newsletterEmail: {
         enabled: appConfig.newsletterEmail?.enabled !== false,
@@ -4194,11 +4853,20 @@ app.get('/api/config/app', (req, res) => {
         time: normalizeTimeHHMM(appConfig.newsletterSchedule?.time) || '09:00',
         lastSentDate: appConfig.newsletterSchedule?.lastSentDate || ''
       },
+      newsletterSchedules: normalizedSchedules,
       newsletterCustomSections: Array.isArray(appConfig.newsletterCustomSections)
         ? appConfig.newsletterCustomSections.map((s, idx) => ({
           id: s && s.id != null ? String(s.id) : `sec-${idx + 1}`,
           header: s && typeof s.header === 'string' ? s.header : '',
-          columns: Array.isArray(s && s.columns) ? s.columns.map(c => typeof c === 'string' ? c : '') : ['', '', '']
+          headerSize: normalizeCustomHeaderSize(s && s.headerSize),
+          headerColor: normalizeHexColor(s && s.headerColor) || '#e5e7eb',
+          columns: Array.isArray(s && s.columns)
+            ? [
+              normalizeCustomHeaderColumn(s.columns[0]),
+              normalizeCustomHeaderColumn(s.columns[1]),
+              normalizeCustomHeaderColumn(s.columns[2])
+            ]
+            : [normalizeCustomHeaderColumn(''), normalizeCustomHeaderColumn(''), normalizeCustomHeaderColumn('')]
         }))
         : [],
       newsletterTemplates: Array.isArray(appConfig.newsletterTemplates) ? appConfig.newsletterTemplates.map(t => ({
@@ -4217,6 +4885,34 @@ app.get('/api/config/app', (req, res) => {
 app.put('/api/config/app', (req, res) => {
   try {
     const body = req.body && typeof req.body === 'object' ? req.body : {};
+
+    if (Object.prototype.hasOwnProperty.call(body, 'publicBaseUrl')) {
+      const v = body.publicBaseUrl;
+      if (v === null) {
+        delete appConfig.publicBaseUrl;
+      } else if (typeof v === 'string') {
+        const normalized = normalizePublicBaseUrl(v);
+        if (!normalized && v.trim()) {
+          return res.status(400).json({ error: 'publicBaseUrl must be an absolute http(s) URL (for example https://example.com)' });
+        }
+        if (normalized) {
+          appConfig.publicBaseUrl = normalized;
+        } else {
+          delete appConfig.publicBaseUrl;
+        }
+      }
+    }
+
+    if (body.newsletterBranding && typeof body.newsletterBranding === 'object') {
+      const incoming = body.newsletterBranding;
+      const current = (appConfig.newsletterBranding && typeof appConfig.newsletterBranding === 'object') ? appConfig.newsletterBranding : {};
+      const next = { ...current };
+      if (Object.prototype.hasOwnProperty.call(incoming, 'logoUrl')) {
+        const v = incoming.logoUrl;
+        next.logoUrl = normalizeNewsletterLogoUrl(v);
+      }
+      appConfig.newsletterBranding = next;
+    }
 
     // maxHistory: number, or null to reset to default
     if (Object.prototype.hasOwnProperty.call(body, 'maxHistory')) {
@@ -4288,14 +4984,41 @@ app.put('/api/config/app', (req, res) => {
       if (Array.isArray(raw)) {
         appConfig.newsletterCustomSections = raw.map((s, idx) => {
           const header = s && typeof s.header === 'string' ? s.header : '';
+          const headerSize = normalizeCustomHeaderSize(s && s.headerSize);
+          const headerColor = normalizeHexColor(s && s.headerColor) || '#e5e7eb';
+
           const cols = s && Array.isArray(s.columns) ? s.columns : [];
-          const c1 = typeof cols[0] === 'string' ? cols[0] : '';
-          const c2 = typeof cols[1] === 'string' ? cols[1] : '';
-          const c3 = typeof cols[2] === 'string' ? cols[2] : '';
+          const c1 = normalizeCustomHeaderColumn(cols[0]);
+          const c2 = normalizeCustomHeaderColumn(cols[1]);
+          const c3 = normalizeCustomHeaderColumn(cols[2]);
           return {
             id: s && s.id != null ? String(s.id) : `sec-${idx + 1}`,
             header,
+            headerSize,
+            headerColor,
             columns: [c1, c2, c3]
+          };
+        });
+      }
+    }
+
+    // Multiple weekly newsletter schedules (per-server)
+    if (Object.prototype.hasOwnProperty.call(body, 'newsletterSchedules')) {
+      const raw = body.newsletterSchedules;
+      if (raw === null) {
+        delete appConfig.newsletterSchedules;
+      } else if (Array.isArray(raw)) {
+        appConfig.newsletterSchedules = raw.map((s, idx) => {
+          const templateId = s && s.templateId != null ? String(s.templateId) : '';
+          const time = normalizeTimeHHMM(s && s.time) || '09:00';
+          return {
+            id: s && s.id != null ? String(s.id) : `sched-${idx + 1}`,
+            serverId: s && s.serverId != null ? String(s.serverId).trim() : '',
+            enabled: s && s.enabled === true,
+            templateId,
+            dayOfWeek: normalizeDayOfWeek(s && s.dayOfWeek),
+            time,
+            lastSentDate: normalizeDateInput(s && s.lastSentDate) || ''
           };
         });
       }
@@ -4330,11 +5053,39 @@ app.put('/api/config/app', (req, res) => {
     saveAppConfigToDisk();
 
     const overseerrCfg = appConfig.overseerr || {};
+    const rawSchedules = Array.isArray(appConfig.newsletterSchedules) ? appConfig.newsletterSchedules : [];
+    const normalizedSchedules = rawSchedules.length
+      ? rawSchedules.map((s, idx) => ({
+        id: s && s.id != null ? String(s.id) : `sched-${idx + 1}`,
+        serverId: s && s.serverId != null ? String(s.serverId) : '',
+        enabled: s && s.enabled === true,
+        templateId: s && s.templateId != null ? String(s.templateId) : DEFAULT_NEWSLETTER_TEMPLATE_ID,
+        dayOfWeek: normalizeDayOfWeek(s && s.dayOfWeek),
+        time: normalizeTimeHHMM(s && s.time) || '09:00',
+        lastSentDate: s && s.lastSentDate ? String(s.lastSentDate) : ''
+      }))
+      : [
+        {
+          id: 'default',
+          serverId: '',
+          enabled: appConfig.newsletterSchedule?.enabled === true,
+          templateId: appConfig.newsletterSchedule?.templateId != null ? String(appConfig.newsletterSchedule.templateId) : DEFAULT_NEWSLETTER_TEMPLATE_ID,
+          dayOfWeek: normalizeDayOfWeek(appConfig.newsletterSchedule?.dayOfWeek),
+          time: normalizeTimeHHMM(appConfig.newsletterSchedule?.time) || '09:00',
+          lastSentDate: appConfig.newsletterSchedule?.lastSentDate || ''
+        }
+      ];
     res.json({
       maxHistory: typeof MAX_HISTORY === 'number' ? MAX_HISTORY : DEFAULT_MAX_HISTORY,
+      publicBaseUrl: (appConfig && typeof appConfig.publicBaseUrl === 'string') ? String(appConfig.publicBaseUrl) : '',
       overseerr: {
         baseUrl: overseerrCfg.baseUrl || '',
         hasApiKey: !!overseerrCfg.apiKey
+      },
+      newsletterBranding: {
+        logoUrl: (appConfig && appConfig.newsletterBranding && typeof appConfig.newsletterBranding.logoUrl === 'string')
+          ? String(appConfig.newsletterBranding.logoUrl)
+          : ''
       },
       newsletterEmail: {
         enabled: appConfig.newsletterEmail?.enabled !== false,
@@ -4348,11 +5099,20 @@ app.put('/api/config/app', (req, res) => {
         time: normalizeTimeHHMM(appConfig.newsletterSchedule?.time) || '09:00',
         lastSentDate: appConfig.newsletterSchedule?.lastSentDate || ''
       },
+      newsletterSchedules: normalizedSchedules,
       newsletterCustomSections: Array.isArray(appConfig.newsletterCustomSections)
         ? appConfig.newsletterCustomSections.map((s, idx) => ({
           id: s && s.id != null ? String(s.id) : `sec-${idx + 1}`,
           header: s && typeof s.header === 'string' ? s.header : '',
-          columns: Array.isArray(s && s.columns) ? s.columns.map(c => typeof c === 'string' ? c : '') : ['', '', '']
+          headerSize: normalizeCustomHeaderSize(s && s.headerSize),
+          headerColor: normalizeHexColor(s && s.headerColor) || '#e5e7eb',
+          columns: Array.isArray(s && s.columns)
+            ? [
+              normalizeCustomHeaderColumn(s.columns[0]),
+              normalizeCustomHeaderColumn(s.columns[1]),
+              normalizeCustomHeaderColumn(s.columns[2])
+            ]
+            : [normalizeCustomHeaderColumn(''), normalizeCustomHeaderColumn(''), normalizeCustomHeaderColumn('')]
         }))
         : [],
       newsletterTemplates: Array.isArray(appConfig.newsletterTemplates) ? appConfig.newsletterTemplates.map(t => ({

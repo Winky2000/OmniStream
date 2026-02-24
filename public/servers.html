@@ -98,9 +98,11 @@
         document.documentElement.setAttribute('data-theme', savedTheme);
       }
       const settingsToggle = document.querySelector('.settings-toggle');
-      const settingsSubmenu = document.querySelector('.settings-submenu');
+      const settingsGroup = settingsToggle ? settingsToggle.closest('.settings-group') : null;
+      const settingsSubmenu = settingsGroup ? settingsGroup.querySelector('.settings-submenu') : null;
       const newsletterToggle = document.querySelector('.newsletter-toggle');
-      const newsletterSubmenu = document.querySelector('.newsletter-submenu');
+      const newsletterGroup = newsletterToggle ? newsletterToggle.closest('.settings-group') : null;
+      const newsletterSubmenu = newsletterGroup ? newsletterGroup.querySelector('.newsletter-submenu') : null;
       if (settingsToggle && settingsSubmenu) {
         settingsToggle.addEventListener('click', () => {
           settingsSubmenu.classList.toggle('open');
@@ -141,7 +143,19 @@
         card.className = 'server-card' + (s.disabled ? ' disabled' : '');
         const info = document.createElement('div');
         info.className = 'server-info';
-        info.innerHTML = `<b>${s.name || s.baseUrl}</b><br>Type: ${s.type} <br>Base URL: ${s.baseUrl}`;
+        const nameEl = document.createElement('b');
+        nameEl.textContent = s.name || s.baseUrl || '';
+        info.appendChild(nameEl);
+        info.appendChild(document.createElement('br'));
+
+        const typeLine = document.createElement('span');
+        typeLine.textContent = `Type: ${s.type || ''}`;
+        info.appendChild(typeLine);
+        info.appendChild(document.createElement('br'));
+
+        const baseLine = document.createElement('span');
+        baseLine.textContent = `Base URL: ${s.baseUrl || ''}`;
+        info.appendChild(baseLine);
         card.appendChild(info);
         const actions = document.createElement('div');
         actions.className = 'server-actions';

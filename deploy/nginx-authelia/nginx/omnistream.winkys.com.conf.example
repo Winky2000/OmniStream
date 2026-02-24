@@ -1,0 +1,102 @@
+# Production-ish Nginx example for:
+#   - OmniStream: https://omnistream.winkys.com
+#   - Authelia:   https://auth.omnistream.winkys.com
+#
+# Assumptions:
+#   - You have TLS certs for both hostnames (via certbot, ACME client, etc.)
+#   - OmniStream and Authelia are reachable from Nginx (Docker network or upstream IPs)
+#
+# Update paths to your certs and adjust upstream targets.
+
+# If Nginx runs in Docker on the same compose network as our example:
+#   omnistream:3000 and authelia:9091 will resolve.
+upstream omnistream_upstream {
+  server omnistream:3000;
+  keepalive 16;
+}
+
+upstream authelia_upstream {
+  server authelia:9091;
+  keepalive 16;
+}
+
+# ---------------------------
+# Authelia portal vhost
+# ---------------------------
+server {
+  listen 80;
+  server_name auth.omnistream.winkys.com;
+  return 301 https://$host$request_uri;
+}
+
+server {
+  listen 443 ssl http2;
+  server_name auth.omnistream.winkys.com;
+
+  ssl_certificate     /etc/letsencrypt/live/auth.omnistream.winkys.com/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/auth.omnistream.winkys.com/privkey.pem;
+
+  location / {
+    proxy_pass http://authelia_upstream;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+}
+
+# ---------------------------
+# OmniStream vhost
+# ---------------------------
+server {
+  listen 80;
+  server_name omnistream.winkys.com;
+  return 301 https://$host$request_uri;
+}
+
+server {
+  listen 443 ssl http2;
+  server_name omnistream.winkys.com;
+
+  ssl_certificate     /etc/letsencrypt/live/omnistream.winkys.com/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/omnistream.winkys.com/privkey.pem;
+
+  # Exemption: keep status public for monitors.
+  location = /api/status {
+    proxy_pass http://omnistream_upstream;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+
+  # Internal endpoint used by auth_request to verify access.
+  location = /authelia_verify {
+    internal;
+    proxy_pass http://authelia_upstream/api/verify;
+    proxy_set_header Host $host;
+    proxy_set_header X-Original-URL $scheme://$http_host$request_uri;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Content-Length "";
+    proxy_pass_request_body off;
+  }
+
+  # Everything else requires auth.
+  location / {
+    auth_request /authelia_verify;
+
+    # Redirect unauthenticated users to Authelia portal.
+    error_page 401 =302 https://auth.omnistream.winkys.com/?rd=$scheme://$http_host$request_uri;
+
+    proxy_pass http://omnistream_upstream;
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+}

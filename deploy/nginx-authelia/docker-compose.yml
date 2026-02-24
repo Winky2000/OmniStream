@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  omnistream:
+    image: ghcr.io/winky2000/omnistream:latest
+    container_name: omnistream
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      # No CORS needed when everything is same-origin behind Nginx.
+      # - OMNISTREAM_CORS_ORIGINS=
+    volumes:
+      - ${SERVERS_PATH:-./servers.json}:/usr/src/app/servers.json
+      # If you also want the UI and config/history persisted, add bind mounts here.
+      # - ./config.json:/usr/src/app/config.json
+      # - ./history.db:/usr/src/app/history.db
+    networks:
+      - internal
+
+  authelia:
+    image: authelia/authelia:latest
+    container_name: omnistream-authelia
+    restart: unless-stopped
+    depends_on:
+      - omnistream
+    volumes:
+      - ./deploy/nginx-authelia/authelia/configuration.yml:/config/configuration.yml:ro
+      - ./deploy/nginx-authelia/authelia/users_database.yml:/config/users_database.yml:ro
+      - authelia_data:/config
+    environment:
+      - TZ=Etc/UTC
+    networks:
+      - internal
+
+  nginx:
+    image: nginx:alpine
+    container_name: omnistream-nginx
+    restart: unless-stopped
+    depends_on:
+      - omnistream
+      - authelia
+    ports:
+      # Example: http://localhost:8080
+      - "8080:80"
+    volumes:
+      - ./deploy/nginx-authelia/nginx/omnistream.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - internal
+
+networks:
+  internal:
+    driver: bridge
+
+volumes:
+  authelia_data:

@@ -4,6 +4,7 @@ servers.test.json
 config.json
 history.db
 sent_newsletters/
+public/uploads/
 omnistream-mock.pid
 omnistream-app.pid
 .env

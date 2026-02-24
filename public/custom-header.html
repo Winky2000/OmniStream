@@ -42,11 +42,17 @@
     .status-error{color:#f97373;}
     label{display:block;margin-bottom:8px;font-size:13px;}
     input[type="text"],textarea{width:100%;box-sizing:border-box;border-radius:8px;border:1px solid rgba(75,85,99,0.9);background:rgba(15,23,42,0.8);color:var(--text-main);padding:6px 8px;font-size:13px;}
+    select{width:100%;box-sizing:border-box;border-radius:8px;border:1px solid rgba(75,85,99,0.9);background:rgba(15,23,42,0.8);color:var(--text-main);padding:6px 8px;font-size:13px;}
+    input[type="color"]{height:34px;width:60px;border-radius:8px;border:1px solid rgba(75,85,99,0.9);background:rgba(15,23,42,0.8);padding:2px;}
     textarea{min-height:110px;resize:vertical;font-family:system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;}
 
     .sections-list{display:flex;flex-direction:column;gap:10px;margin-top:10px;}
     .section-item{border:1px solid rgba(51,65,85,0.8);background:rgba(15,23,42,0.45);border-radius:12px;padding:12px;}
     .section-item-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;}
+    .section-meta{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:8px;}
+    .section-meta label{margin:0;}
+    .col-type-row{display:flex;gap:8px;align-items:center;margin-bottom:6px;}
+    .col-type-row select{max-width:120px;}
     .section-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;}
     @media (max-width: 960px){.section-grid{grid-template-columns:minmax(0,1fr);} }
   </style>
@@ -150,6 +156,29 @@
       return JSON.parse(JSON.stringify(obj || null));
     }
 
+    function normalizeCol(col){
+      if (typeof col === 'string') return { type: 'text', value: col };
+      if (col && typeof col === 'object') {
+        const t = String(col.type || col.kind || 'text').toLowerCase();
+        return {
+          type: t === 'url' ? 'url' : 'text',
+          value: typeof col.value === 'string' ? col.value : ''
+        };
+      }
+      return { type: 'text', value: '' };
+    }
+
+    function normalizeSection(sec, idx){
+      const cols = sec && Array.isArray(sec.columns) ? sec.columns : [];
+      return {
+        id: sec && sec.id != null ? String(sec.id) : `sec-${idx + 1}`,
+        header: sec && typeof sec.header === 'string' ? sec.header : '',
+        headerSize: sec && typeof sec.headerSize === 'string' ? sec.headerSize : 'md',
+        headerColor: sec && typeof sec.headerColor === 'string' ? sec.headerColor : '#e5e7eb',
+        columns: [normalizeCol(cols[0]), normalizeCol(cols[1]), normalizeCol(cols[2])]
+      };
+    }
+
     function renderCustomSections(){
       const host = document.getElementById('customSectionsList');
       if (!host) return;
@@ -166,6 +195,11 @@
       }
 
       customSections.forEach((sec, idx) => {
+        // Ensure shape
+        const normalized = normalizeSection(sec, idx);
+        customSections[idx] = normalized;
+        sec = normalized;
+
         const wrap = document.createElement('div');
         wrap.className = 'section-item';
 
@@ -202,22 +236,95 @@
         headerLabel.appendChild(headerInput);
         wrap.appendChild(headerLabel);
 
+        const meta = document.createElement('div');
+        meta.className = 'section-meta';
+
+        const sizeLabel = document.createElement('label');
+        sizeLabel.textContent = 'Header size';
+        sizeLabel.style.minWidth = '180px';
+        const sizeSelect = document.createElement('select');
+        const sizeOptions = [
+          { v: 'sm', t: 'Small' },
+          { v: 'md', t: 'Medium' },
+          { v: 'lg', t: 'Large' }
+        ];
+        sizeOptions.forEach(o => {
+          const opt = document.createElement('option');
+          opt.value = o.v;
+          opt.textContent = o.t;
+          sizeSelect.appendChild(opt);
+        });
+        sizeSelect.value = (sec.headerSize === 'sm' || sec.headerSize === 'lg') ? sec.headerSize : 'md';
+        sizeSelect.addEventListener('change', () => {
+          sec.headerSize = sizeSelect.value;
+        });
+        sizeLabel.appendChild(sizeSelect);
+
+        const colorLabel = document.createElement('label');
+        colorLabel.textContent = 'Header color';
+        colorLabel.style.minWidth = '140px';
+        const colorInput = document.createElement('input');
+        colorInput.type = 'color';
+        colorInput.value = /^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/.test(String(sec.headerColor || '')) ? sec.headerColor : '#e5e7eb';
+        colorInput.addEventListener('input', () => {
+          sec.headerColor = colorInput.value;
+        });
+        colorLabel.appendChild(colorInput);
+
+        meta.appendChild(sizeLabel);
+        meta.appendChild(colorLabel);
+        wrap.appendChild(meta);
+
         const grid = document.createElement('div');
         grid.className = 'section-grid';
-
-        const cols = Array.isArray(sec.columns) ? sec.columns : ['', '', ''];
-        sec.columns = [cols[0] || '', cols[1] || '', cols[2] || ''];
 
         for (let c = 0; c < 3; c++){
           const colLabel = document.createElement('label');
           colLabel.textContent = `Column ${c + 1}`;
-          const ta = document.createElement('textarea');
-          ta.value = sec.columns[c] || '';
-          ta.placeholder = c === 0 ? 'Item names\nMore items...' : (c === 1 ? 'Descriptions\nMore...' : 'https://example.com\nhttps://...');
-          ta.addEventListener('input', () => {
-            sec.columns[c] = ta.value;
+
+          const col = sec.columns[c] || { type: 'text', value: '' };
+          sec.columns[c] = col;
+
+          const typeRow = document.createElement('div');
+          typeRow.className = 'col-type-row';
+
+          const typeSelect = document.createElement('select');
+          const optText = document.createElement('option');
+          optText.value = 'text';
+          optText.textContent = 'Text';
+          const optUrl = document.createElement('option');
+          optUrl.value = 'url';
+          optUrl.textContent = 'URL';
+          typeSelect.appendChild(optText);
+          typeSelect.appendChild(optUrl);
+          typeSelect.value = col.type === 'url' ? 'url' : 'text';
+          typeSelect.addEventListener('change', () => {
+            col.type = typeSelect.value;
+            renderCustomSections();
           });
-          colLabel.appendChild(ta);
+
+          typeRow.appendChild(typeSelect);
+          colLabel.appendChild(typeRow);
+
+          if (col.type === 'url') {
+            const urlInput = document.createElement('input');
+            urlInput.type = 'text';
+            urlInput.value = col.value || '';
+            urlInput.placeholder = 'https://example.com (http/https/mailto)';
+            urlInput.addEventListener('input', () => {
+              col.value = urlInput.value;
+            });
+            colLabel.appendChild(urlInput);
+          } else {
+            const ta = document.createElement('textarea');
+            ta.value = col.value || '';
+            ta.placeholder = c === 0 ? 'Item names\nMore items...' : (c === 1 ? 'Descriptions\nMore...' : 'Links or notes\nMore...');
+            ta.addEventListener('input', () => {
+              col.value = ta.value;
+            });
+            colLabel.appendChild(ta);
+          }
+
           grid.appendChild(colLabel);
         }
 
@@ -235,11 +342,7 @@
         if (!r.ok) throw new Error('HTTP ' + r.status);
         const data = await r.json();
         const rawSections = Array.isArray(data.newsletterCustomSections) ? data.newsletterCustomSections : [];
-        customSections = rawSections.map((s, idx) => ({
-          id: s && s.id != null ? String(s.id) : `sec-${idx + 1}`,
-          header: s && typeof s.header === 'string' ? s.header : '',
-          columns: Array.isArray(s && s.columns) ? [String(s.columns[0] || ''), String(s.columns[1] || ''), String(s.columns[2] || '')] : ['', '', '']
-        }));
+        customSections = rawSections.map((s, idx) => normalizeSection(s, idx));
         originalCustomSections = deepCopy(customSections);
         renderCustomSections();
         status.textContent = '';
@@ -259,7 +362,9 @@
         const clean = customSections.map((s, idx) => ({
           id: s.id || `sec-${idx + 1}`,
           header: s.header || '',
-          columns: Array.isArray(s.columns) ? [s.columns[0] || '', s.columns[1] || '', s.columns[2] || ''] : ['', '', '']
+          headerSize: (s.headerSize === 'sm' || s.headerSize === 'lg') ? s.headerSize : 'md',
+          headerColor: typeof s.headerColor === 'string' ? s.headerColor : '#e5e7eb',
+          columns: Array.isArray(s.columns) ? [normalizeCol(s.columns[0]), normalizeCol(s.columns[1]), normalizeCol(s.columns[2])] : [normalizeCol(''), normalizeCol(''), normalizeCol('')]
         }));
         const resp = await fetch('/api/config/app', {
           method: 'PUT',
@@ -288,7 +393,13 @@
         customSections.push({
           id: 'sec-' + Date.now(),
           header: '',
-          columns: ['', '', '']
+          headerSize: 'md',
+          headerColor: '#e5e7eb',
+          columns: [
+            { type: 'text', value: '' },
+            { type: 'text', value: '' },
+            { type: 'text', value: '' }
+          ]
         });
         renderCustomSections();
         const status = document.getElementById('csStatus');

@@ -134,6 +134,10 @@
             Template
             <select id="nlTemplateSelect" style="margin-left:4px;padding:4px 8px;border-radius:6px;border:1px solid #444;background:var(--bg);color:var(--text-main);font-size:13px;min-width:160px;"></select>
           </label>
+          <label style="display:inline-block;margin-right:8px;">
+            Server
+            <select id="nlServerSelect" style="margin-left:4px;padding:4px 8px;border-radius:6px;border:1px solid #444;background:var(--bg);color:var(--text-main);font-size:13px;min-width:160px;"></select>
+          </label>
         </div>
         <label>
           Subject
@@ -151,26 +155,9 @@
         <div class="hint">Preview renders placeholders (like recently added) without sending. Sending uses the dedicated newsletter email settings. Recipients are BCC'd and come from the active subscribers list.</div>
 
         <h2 style="margin-top:18px;">Weekly auto-send</h2>
-        <div class="row">Automatically send a selected newsletter template every week on the chosen day/time (server local time).</div>
-        <label>
-          <input type="checkbox" id="nlScheduleEnabled"> Enable weekly auto-send
-        </label>
-        <label>
-          Template
-          <select id="nlScheduleTemplateSelect" style="margin-top:4px;padding:4px 8px;border-radius:6px;border:1px solid #444;background:var(--bg);color:var(--text-main);font-size:13px;min-width:240px;"></select>
-        </label>
-        <div class="row" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
-          <label style="margin:0;min-width:200px;">
-            Day
-            <select id="nlScheduleDay" style="margin-top:4px;padding:4px 8px;border-radius:6px;border:1px solid #444;background:var(--bg);color:var(--text-main);font-size:13px;min-width:180px;"></select>
-          </label>
-          <label style="margin:0;min-width:160px;">
-            Time
-            <input type="time" id="nlScheduleTime" step="60" style="margin-top:4px;max-width:160px;">
-          </label>
-        </div>
-        <div class="row"><b>Last sent:</b> <span id="nlScheduleLastSent">-</span></div>
-        <button class="btn" id="nlScheduleSaveBtn" type="button">Save weekly schedule</button>
+        <div class="row">Automatically send a selected newsletter template every week per server (server local time). Only subscribers tagged to that server will receive it.</div>
+        <div id="nlSchedulesWrap" class="row" style="display:block;"></div>
+        <button class="btn" id="nlScheduleSaveBtn" type="button">Save schedules</button>
         <span id="nlScheduleStatus" class="row"></span>
       </div>
 
@@ -178,9 +165,11 @@
         <h2>Subscriber list</h2>
         <div class="row" id="subsSummary">Loading subscriber summary...</div>
         <button class="btn" id="subsRefreshBtn">Refresh subscribers</button>
+        <button class="btn btn-secondary" id="subsTagBtn" style="margin-left:6px;">Tag by server</button>
+        <span id="subsTagStatus" class="row"></span>
         <table id="subsTable" style="display:none;">
           <thead>
-            <tr><th>Name</th><th>Email</th><th>Source</th><th>Active</th></tr>
+            <tr><th>Name</th><th>Email</th><th>Source</th><th>Servers</th><th>Active</th></tr>
           </thead>
           <tbody id="subsTableBody"></tbody>
         </table>
@@ -191,9 +180,11 @@
   <script>
     (function() {
       const settingsToggle = document.querySelector('.settings-toggle');
-      const settingsSubmenu = document.querySelector('.settings-submenu');
+      const settingsGroup = settingsToggle ? settingsToggle.closest('.settings-group') : null;
+      const settingsSubmenu = settingsGroup ? settingsGroup.querySelector('.settings-submenu') : null;
       const newsletterToggle = document.querySelector('.newsletter-toggle');
-      const newsletterSubmenu = document.querySelector('.newsletter-submenu');
+      const newsletterGroup = newsletterToggle ? newsletterToggle.closest('.settings-group') : null;
+      const newsletterSubmenu = newsletterGroup ? newsletterGroup.querySelector('.newsletter-submenu') : null;
       const appShell = document.querySelector('.app-shell');
       const sidebarToggle = document.getElementById('sidebarToggle');
       const savedTheme = localStorage.getItem('omnistreamTheme') || 'default';
@@ -292,52 +283,134 @@
           });
         }
 
-        // Weekly schedule
-        const sched = data.newsletterSchedule || {};
-        const schedEnabled = document.getElementById('nlScheduleEnabled');
-        const schedTemplateSel = document.getElementById('nlScheduleTemplateSelect');
-        const schedDaySel = document.getElementById('nlScheduleDay');
-        const schedTime = document.getElementById('nlScheduleTime');
-        const schedLastSent = document.getElementById('nlScheduleLastSent');
+        // Weekly schedules (per-server)
+        const wrap = document.getElementById('nlSchedulesWrap');
+        if (wrap) {
+          let serverList = [];
+          try {
+            const sr = await fetch('/api/servers');
+            const sd = sr.ok ? await sr.json() : [];
+            serverList = Array.isArray(sd) ? sd : [];
+          } catch (_) {
+            serverList = [];
+          }
 
-        if (schedEnabled) schedEnabled.checked = sched.enabled === true;
-        if (schedLastSent) schedLastSent.textContent = sched.lastSentDate ? String(sched.lastSentDate) : 'Never';
-
-        if (schedDaySel) {
-          const existing = schedDaySel.value;
-          if (!schedDaySel.options.length) {
-            const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-            days.forEach((name, idx) => {
-              const opt = document.createElement('option');
-              opt.value = String(idx);
-              opt.textContent = name;
-              schedDaySel.appendChild(opt);
-            });
-          }
-          const d = Number.isFinite(Number(sched.dayOfWeek)) ? String(Number(sched.dayOfWeek)) : '0';
-          schedDaySel.value = d;
-          if (existing && existing !== schedDaySel.value) {
-            // no-op; just keeps selection in sync
-          }
-        }
-        if (schedTime) {
-          schedTime.value = sched.time || '09:00';
-        }
-        if (schedTemplateSel) {
-          schedTemplateSel.innerHTML = '';
-          templates.forEach(t => {
-            const opt = document.createElement('option');
-            opt.value = t.id;
-            opt.textContent = t.name || t.subject || 'Template';
-            schedTemplateSel.appendChild(opt);
-          });
-          if (sched.templateId) {
-            schedTemplateSel.value = String(sched.templateId);
-          }
+          const enabledServers = serverList.filter(s => s && !s.disabled);
+          const schedules = Array.isArray(data.newsletterSchedules) ? data.newsletterSchedules : [];
+          renderWeeklySchedules(wrap, enabledServers, templates, schedules);
         }
       } catch (e) {
         console.error('Failed to load newsletter config:', e);
       }
+    }
+
+    function renderWeeklySchedules(container, servers, templates, schedules) {
+      const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+      const tplList = Array.isArray(templates) ? templates : [];
+      const schedList = Array.isArray(schedules) ? schedules : [];
+      const byServerId = {};
+      schedList.forEach(s => {
+        const sid = s && s.serverId != null ? String(s.serverId) : '';
+        if (sid) byServerId[sid] = s;
+      });
+
+      if (!servers || !servers.length) {
+        container.innerHTML = '<div class="hint">No enabled servers found.</div>';
+        return;
+      }
+      if (!tplList.length) {
+        container.innerHTML = '<div class="hint">Create at least one newsletter template to enable auto-send schedules.</div>';
+        return;
+      }
+
+      const table = document.createElement('table');
+      table.style.width = '100%';
+      table.style.borderCollapse = 'collapse';
+      table.innerHTML = '<thead><tr><th style="text-align:left;">Enabled</th><th style="text-align:left;">Server</th><th style="text-align:left;">Template</th><th style="text-align:left;">Day</th><th style="text-align:left;">Time</th><th style="text-align:left;">Last sent</th></tr></thead>';
+      const tbody = document.createElement('tbody');
+
+      servers.forEach(srv => {
+        const sid = srv && srv.id != null ? String(srv.id) : '';
+        if (!sid) return;
+
+        const existing = byServerId[sid] || {};
+        const enabled = existing.enabled === true;
+        const templateId = existing.templateId != null ? String(existing.templateId) : String(tplList[0].id);
+        const dayOfWeek = Number.isFinite(Number(existing.dayOfWeek)) ? String(Number(existing.dayOfWeek)) : '0';
+        const time = (existing.time && String(existing.time).trim()) ? String(existing.time).trim() : '09:00';
+        const lastSentDate = existing.lastSentDate ? String(existing.lastSentDate) : '';
+
+        const tr = document.createElement('tr');
+        tr.dataset.serverId = sid;
+        tr.dataset.lastSentDate = lastSentDate;
+        tr.style.borderTop = '1px solid var(--divider, #2a2f33)';
+
+        const tdEnabled = document.createElement('td');
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = enabled;
+        tdEnabled.appendChild(cb);
+
+        const tdServer = document.createElement('td');
+        tdServer.textContent = (srv.name != null && String(srv.name).trim()) ? String(srv.name).trim() : sid;
+
+        const tdTpl = document.createElement('td');
+        const tplSel = document.createElement('select');
+        tplSel.style.padding = '4px 8px';
+        tplSel.style.borderRadius = '6px';
+        tplSel.style.border = '1px solid #444';
+        tplSel.style.background = 'var(--bg)';
+        tplSel.style.color = 'var(--text-main)';
+        tplSel.style.fontSize = '13px';
+        tplList.forEach(t => {
+          const opt = document.createElement('option');
+          opt.value = t.id;
+          opt.textContent = t.name || t.subject || 'Template';
+          tplSel.appendChild(opt);
+        });
+        tplSel.value = templateId;
+        tdTpl.appendChild(tplSel);
+
+        const tdDay = document.createElement('td');
+        const daySel = document.createElement('select');
+        daySel.style.padding = '4px 8px';
+        daySel.style.borderRadius = '6px';
+        daySel.style.border = '1px solid #444';
+        daySel.style.background = 'var(--bg)';
+        daySel.style.color = 'var(--text-main)';
+        daySel.style.fontSize = '13px';
+        days.forEach((name, idx) => {
+          const opt = document.createElement('option');
+          opt.value = String(idx);
+          opt.textContent = name;
+          daySel.appendChild(opt);
+        });
+        daySel.value = dayOfWeek;
+        tdDay.appendChild(daySel);
+
+        const tdTime = document.createElement('td');
+        const timeInput = document.createElement('input');
+        timeInput.type = 'time';
+        timeInput.step = '60';
+        timeInput.value = time;
+        timeInput.style.maxWidth = '140px';
+        tdTime.appendChild(timeInput);
+
+        const tdLast = document.createElement('td');
+        tdLast.textContent = lastSentDate ? lastSentDate : 'Never';
+
+        tr.appendChild(tdEnabled);
+        tr.appendChild(tdServer);
+        tr.appendChild(tdTpl);
+        tr.appendChild(tdDay);
+        tr.appendChild(tdTime);
+        tr.appendChild(tdLast);
+        tbody.appendChild(tr);
+      });
+
+      table.appendChild(tbody);
+      container.innerHTML = '';
+      container.appendChild(table);
     }
 
     async function loadSubscriberSummary() {
@@ -382,6 +455,12 @@
           tdEmail.textContent = sub.email || '';
           const tdSource = document.createElement('td');
           tdSource.textContent = sub.source || '';
+          const tdServers = document.createElement('td');
+          const tags = Array.isArray(sub.serverTags) ? sub.serverTags : [];
+          const serverLabel = tags.length
+            ? tags.map(id => (window.__omnistreamServerNameById && window.__omnistreamServerNameById[id]) ? window.__omnistreamServerNameById[id] : id).join(', ')
+            : '-';
+          tdServers.textContent = serverLabel;
           const tdActive = document.createElement('td');
           const cb = document.createElement('input');
           cb.type = 'checkbox';
@@ -410,6 +489,7 @@
           tr.appendChild(tdName);
           tr.appendChild(tdEmail);
           tr.appendChild(tdSource);
+          tr.appendChild(tdServers);
           tr.appendChild(tdActive);
           tbody.appendChild(tr);
         });
@@ -421,9 +501,115 @@
       }
     }
 
+    async function loadServersMap() {
+      try {
+        const r = await fetch('/api/servers');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const data = await r.json();
+        const map = {};
+        (Array.isArray(data) ? data : []).forEach(s => {
+          if (!s) return;
+          const id = s.id != null ? String(s.id) : '';
+          const name = s.name != null ? String(s.name) : '';
+          if (id) map[id] = name || id;
+        });
+        window.__omnistreamServerNameById = map;
+      } catch (e) {
+        window.__omnistreamServerNameById = {};
+      }
+    }
+
+    async function loadNewsletterServerSelect() {
+      const sel = document.getElementById('nlServerSelect');
+      if (!sel) return;
+      try {
+        const r = await fetch('/api/servers');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const data = await r.json();
+        const servers = Array.isArray(data) ? data : [];
+
+        const previous = localStorage.getItem('omnistreamNewsletterServerId') || '';
+        sel.innerHTML = '';
+
+        const optAll = document.createElement('option');
+        optAll.value = '';
+        optAll.textContent = 'All servers';
+        sel.appendChild(optAll);
+
+        servers
+          .filter(s => s && !s.disabled)
+          .forEach(s => {
+            const id = s.id != null ? String(s.id) : '';
+            if (!id) return;
+            const opt = document.createElement('option');
+            opt.value = id;
+            opt.textContent = (s.name != null && String(s.name).trim()) ? String(s.name).trim() : id;
+            sel.appendChild(opt);
+          });
+
+        // Restore selection if still present.
+        const values = Array.from(sel.options).map(o => o.value);
+        if (values.includes(previous)) {
+          sel.value = previous;
+        } else {
+          sel.value = '';
+        }
+      } catch (e) {
+        sel.innerHTML = '';
+        const optAll = document.createElement('option');
+        optAll.value = '';
+        optAll.textContent = 'All servers';
+        sel.appendChild(optAll);
+        sel.value = '';
+      }
+    }
+
+    document.getElementById('nlServerSelect').addEventListener('change', (ev) => {
+      const v = (ev.target && ev.target.value != null) ? String(ev.target.value) : '';
+      localStorage.setItem('omnistreamNewsletterServerId', v);
+    });
+
     document.getElementById('subsRefreshBtn').addEventListener('click', () => {
       loadSubscribers();
       loadSubscriberSummary();
+    });
+
+    document.getElementById('subsTagBtn').addEventListener('click', async () => {
+      const statusEl = document.getElementById('subsTagStatus');
+      if (statusEl) {
+        statusEl.textContent = 'Tagging subscribers by server...';
+        statusEl.className = 'row';
+      }
+      try {
+        const resp = await fetch('/api/subscribers/tag-by-server', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({})
+        });
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => '');
+          if (statusEl) {
+            statusEl.textContent = 'Tagging failed: ' + (text || resp.status + ' ' + resp.statusText);
+            statusEl.className = 'row status-error';
+          }
+          return;
+        }
+        const data = await resp.json().catch(() => ({}));
+        const updated = typeof data.updated === 'number' ? data.updated : 0;
+        const unmatched = typeof data.unmatched === 'number' ? data.unmatched : 0;
+        if (statusEl) {
+          statusEl.textContent = `Tags updated for ${updated} subscriber${updated === 1 ? '' : 's'}. Unmatched: ${unmatched}.`;
+          statusEl.className = 'row status-ok';
+        }
+        await loadServersMap();
+        await loadSubscribers();
+      } catch (e) {
+        console.error('Tagging subscribers failed:', e);
+        if (statusEl) {
+          statusEl.textContent = 'Tagging failed. Check server logs.';
+          statusEl.className = 'row status-error';
+        }
+      }
     });
 
     document.getElementById('nlTemplateSelect').addEventListener('change', (ev) => {
@@ -442,8 +628,10 @@
       const statusEl = document.getElementById('nlSendStatus');
       const subjectInput = document.getElementById('nlSubject');
       const bodyInput = document.getElementById('nlBody');
+      const serverSelect = document.getElementById('nlServerSelect');
       const subject = (subjectInput.value || '').trim();
       const body = (bodyInput.value || '').trim();
+      const serverId = serverSelect ? String(serverSelect.value || '').trim() : '';
       if (!subject || !body) {
         statusEl.textContent = 'Subject and message are required.';
         statusEl.className = 'row status-error';
@@ -461,6 +649,7 @@
           body: JSON.stringify({
             subject,
             body,
+            serverId,
             startDate: reuseRange ? lastPreview.startDate : undefined,
             endDate: reuseRange ? lastPreview.endDate : undefined
           })
@@ -487,8 +676,10 @@
       const statusEl = document.getElementById('nlSendStatus');
       const subjectInput = document.getElementById('nlSubject');
       const bodyInput = document.getElementById('nlBody');
+      const serverSelect = document.getElementById('nlServerSelect');
       const subject = (subjectInput.value || '').trim();
       const body = (bodyInput.value || '').trim();
+      const serverId = serverSelect ? String(serverSelect.value || '').trim() : '';
       if (!subject || !body) {
         statusEl.textContent = 'Subject and message are required.';
         statusEl.className = 'row status-error';
@@ -500,7 +691,7 @@
         const resp = await fetch('/api/newsletter/preview', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ subject, body })
+          body: JSON.stringify({ subject, body, serverId })
         });
         if (!resp.ok) {
           const text = await resp.text().catch(() => '');
@@ -597,20 +788,49 @@
       statusEl.textContent = 'Saving...';
       statusEl.className = 'row';
       try {
-        const templateId = (document.getElementById('nlScheduleTemplateSelect').value || '').trim();
-        if (!templateId) {
-          statusEl.textContent = 'Pick a template for the weekly send.';
+        const wrap = document.getElementById('nlSchedulesWrap');
+        if (!wrap) {
+          statusEl.textContent = 'No schedules to save.';
           statusEl.className = 'row status-error';
           return;
         }
-        const payload = {
-          newsletterSchedule: {
-            enabled: document.getElementById('nlScheduleEnabled').checked,
-            templateId,
-            dayOfWeek: Number(document.getElementById('nlScheduleDay').value),
-            time: document.getElementById('nlScheduleTime').value
+        const rows = Array.from(wrap.querySelectorAll('tr[data-server-id]'));
+        if (!rows.length) {
+          statusEl.textContent = 'No schedules to save.';
+          statusEl.className = 'row status-error';
+          return;
+        }
+
+        const schedules = [];
+        for (const tr of rows) {
+          const serverId = tr.dataset.serverId ? String(tr.dataset.serverId) : '';
+          const enabled = !!tr.querySelector('input[type="checkbox"]') && tr.querySelector('input[type="checkbox"]').checked;
+          const selects = Array.from(tr.querySelectorAll('select'));
+          const templateSel = selects[0];
+          const daySel = selects[1];
+          const timeInput = tr.querySelector('input[type="time"]');
+          const templateId = templateSel ? String(templateSel.value || '').trim() : '';
+          const dayOfWeek = daySel ? Number(daySel.value) : 0;
+          const time = timeInput ? String(timeInput.value || '').trim() : '';
+
+          if (enabled && (!templateId || !time)) {
+            statusEl.textContent = 'Each enabled schedule must have template and time.';
+            statusEl.className = 'row status-error';
+            return;
           }
-        };
+
+          schedules.push({
+            id: `server-${serverId}`,
+            serverId,
+            enabled,
+            templateId,
+            dayOfWeek,
+            time,
+            lastSentDate: tr.dataset.lastSentDate ? String(tr.dataset.lastSentDate) : ''
+          });
+        }
+
+        const payload = { newsletterSchedules: schedules };
         const resp = await fetch('/api/config/app', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -621,7 +841,7 @@
           throw new Error(text || ('HTTP ' + resp.status));
         }
         await resp.json().catch(() => ({}));
-        statusEl.textContent = 'Weekly schedule saved.';
+        statusEl.textContent = 'Schedules saved.';
         statusEl.className = 'row status-ok';
         loadNewsletterConfig();
       } catch (e) {
@@ -633,7 +853,8 @@
 
     loadNewsletterConfig();
     loadSubscriberSummary();
-    loadSubscribers();
+    loadServersMap().then(() => loadSubscribers());
+    loadNewsletterServerSelect();
   </script>
 </body>
 </html>

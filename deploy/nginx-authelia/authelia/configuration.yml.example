@@ -1,0 +1,51 @@
+# Authelia configuration (example)
+# Docs: https://www.authelia.com/configuration/
+
+server:
+  address: tcp://0.0.0.0:9091/
+
+log:
+  level: info
+
+# IMPORTANT: Set real secrets before using.
+identity_validation:
+  reset_password:
+    jwt_secret: "CHANGE_ME_jwt_secret_please"
+
+default_redirection_url: "http://localhost:8080/"
+
+authentication_backend:
+  file:
+    path: /config/users_database.yml
+
+access_control:
+  default_policy: deny
+  rules:
+    # Protect everything on this host.
+    - domain: "localhost"
+      policy: two_factor
+
+session:
+  name: authelia_session
+  # IMPORTANT: change this.
+  secret: "CHANGE_ME_session_secret_please"
+  expiration: 1h
+  inactivity: 15m
+  # For HTTPS deployments, set this to true.
+  cookies:
+    - domain: "localhost"
+      authelia_url: "http://localhost:8080/authelia"
+      default_redirection_url: "http://localhost:8080/"
+      same_site: lax
+      insecure: true
+
+storage:
+  # For production use, prefer Postgres/MySQL.
+  local:
+    path: /config/db.sqlite3
+  # IMPORTANT: change this.
+  encryption_key: "CHANGE_ME_storage_encryption_key_please"
+
+notifier:
+  filesystem:
+    filename: /config/notification.txt

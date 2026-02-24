@@ -105,9 +105,11 @@ time of day)<!doctype html>
       const themeSelect = document.getElementById('themeSelect');
       const layoutSelect = document.getElementById('layoutSelect');
       const settingsToggle = document.querySelector('.settings-toggle');
-      const settingsSubmenu = document.querySelector('.settings-submenu');
+      const settingsGroup = settingsToggle ? settingsToggle.closest('.settings-group') : null;
+      const settingsSubmenu = settingsGroup ? settingsGroup.querySelector('.settings-submenu') : null;
       const newsletterToggle = document.querySelector('.newsletter-toggle');
-      const newsletterSubmenu = document.querySelector('.newsletter-submenu');
+      const newsletterGroup = newsletterToggle ? newsletterToggle.closest('.settings-group') : null;
+      const newsletterSubmenu = newsletterGroup ? newsletterGroup.querySelector('.newsletter-submenu') : null;
       const savedTheme = localStorage.getItem('omnistreamTheme') || 'default';
       if (savedTheme && savedTheme !== 'default') {
         document.documentElement.setAttribute('data-theme', savedTheme);

@@ -410,7 +410,10 @@
         meta.textContent = `${s.type || 'generic'} \u2022 ${st.online ? 'Online' : 'Offline'}`;
 
         const small = document.createElement('div'); small.className = 'small';
-        small.innerHTML = `Latency: ${st.latency ?? '-'}ms<br/>Last: ${st.lastChecked ? new Date(st.lastChecked).toLocaleTimeString() : '-'}`;
+        const latencyVal = (st && st.latency != null) ? String(st.latency) : '-';
+        small.appendChild(document.createTextNode(`Latency: ${latencyVal}ms`));
+        small.appendChild(document.createElement('br'));
+        small.appendChild(document.createTextNode(`Last: ${st.lastChecked ? new Date(st.lastChecked).toLocaleTimeString() : '-'}`));
 
         card.appendChild(title); 
         card.appendChild(meta); 
@@ -453,7 +456,23 @@
           }
           const summaryDiv = document.createElement('div');
           summaryDiv.className = 'meta';
-          summaryDiv.innerHTML = `Total Streams: <b>${totalStreams}</b> &nbsp;|&nbsp; Direct Play: <b>${directPlays}</b> &nbsp;|&nbsp; Transcoding: <b>${transcodes}</b><br>Bandwidth: ${totalBandwidth.toFixed(1)} Mbps (LAN: ${lanBandwidth.toFixed(1)} Mbps, WAN: ${wanBandwidth.toFixed(1)} Mbps)`;
+          summaryDiv.textContent = '';
+          summaryDiv.appendChild(document.createTextNode('Total Streams: '));
+          const bTotal = document.createElement('b');
+          bTotal.textContent = String(totalStreams);
+          summaryDiv.appendChild(bTotal);
+          summaryDiv.appendChild(document.createTextNode(' | Direct Play: '));
+          const bDirect = document.createElement('b');
+          bDirect.textContent = String(directPlays);
+          summaryDiv.appendChild(bDirect);
+          summaryDiv.appendChild(document.createTextNode(' | Transcoding: '));
+          const bTrans = document.createElement('b');
+          bTrans.textContent = String(transcodes);
+          summaryDiv.appendChild(bTrans);
+          summaryDiv.appendChild(document.createElement('br'));
+          summaryDiv.appendChild(document.createTextNode(
+            `Bandwidth: ${totalBandwidth.toFixed(1)} Mbps (LAN: ${lanBandwidth.toFixed(1)} Mbps, WAN: ${wanBandwidth.toFixed(1)} Mbps)`
+          ));
           const healthSpan = document.createElement('span');
           healthSpan.className = 'badge' + (healthClass ? ' ' + healthClass : '');
           healthSpan.style.marginLeft = '6px';

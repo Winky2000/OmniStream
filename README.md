@@ -42,6 +42,25 @@ OmniStream is a dashboard to monitor multiple Plex, Jellyfin, and Emby servers o
 - Newsletter: subscriber list, templates, preview/send, and weekly scheduled sends
 - Lightweight health endpoint for external monitors (Home Assistant, Uptime Kuma)
 
+## Security notes
+
+- OmniStream has **no built-in authentication**. Treat it like an admin panel.
+- Run it on a **trusted network** (LAN/VPN) and/or put it behind a reverse proxy that enforces auth.
+- As of recent builds, **CORS is disabled by default**. If you intentionally need cross-origin API access, set `OMNISTREAM_CORS_ORIGINS` to a comma-separated allowlist (for example: `http://localhost:3000,http://my-ui-host:8080`).
+
+### Nginx + username/password (Basic Auth)
+
+If you want a quick **username/password** stopgap while you defer 2FA, you can put OmniStream behind Nginx **HTTP Basic Authentication**.
+
+- Example config + instructions: [deploy/nginx-basic-auth/README.md](deploy/nginx-basic-auth/README.md)
+
+### Nginx + 2FA
+
+If you want password + **2FA**, the recommended approach is to put OmniStream behind **Nginx + an auth gateway** (for example Authelia/Authentik). OmniStream’s UI and APIs are then only reachable after authentication.
+
+- Example config: [deploy/nginx-authelia/README.md](deploy/nginx-authelia/README.md)
+- For real domains (for example `omnistream.winkys.com`), see the production template files in that folder.
+
 ## Newsletter
 
 OmniStream includes a lightweight newsletter/broadcast email feature:

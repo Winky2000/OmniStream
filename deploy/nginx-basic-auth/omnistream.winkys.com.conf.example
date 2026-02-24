@@ -1,0 +1,53 @@
+# Nginx Basic Auth example for:
+#   - OmniStream: https://omnistream.winkys.com
+#
+# Assumptions:
+#   - OmniStream is reachable from Nginx at 192.168.1.167:3000
+#   - You have TLS certs for omnistream.winkys.com
+#   - You have created /etc/nginx/.htpasswd
+
+upstream omnistream_upstream {
+  server 192.168.1.167:3000;
+  keepalive 16;
+}
+
+server {
+  listen 80;
+  server_name omnistream.winkys.com;
+  return 301 https://$host$request_uri;
+}
+
+server {
+  listen 443 ssl http2;
+  server_name omnistream.winkys.com;
+
+  ssl_certificate     /etc/letsencrypt/live/omnistream.winkys.com/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/omnistream.winkys.com/privkey.pem;
+
+  # If you use a different path, update it here.
+  auth_basic           "OmniStream";
+  auth_basic_user_file /etc/nginx/.htpasswd;
+
+  # Optional exemption: keep status public for monitors.
+  # Remove this block if you want status protected too.
+  location = /api/status {
+    auth_basic off;
+
+    proxy_pass http://omnistream_upstream;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+
+  location / {
+    proxy_pass http://omnistream_upstream;
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+}

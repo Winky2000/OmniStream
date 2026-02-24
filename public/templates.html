@@ -45,12 +45,15 @@
     label{display:block;margin-bottom:8px;font-size:13px;}
     input[type="text"],textarea{width:100%;box-sizing:border-box;border-radius:8px;border:1px solid rgba(75,85,99,0.9);background:rgba(15,23,42,0.8);color:var(--text-main);padding:6px 8px;font-size:13px;}
     textarea{min-height:130px;resize:vertical;font-family:system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;}
+    input[type="file"]{width:100%;box-sizing:border-box;border-radius:8px;border:1px solid rgba(75,85,99,0.9);background:rgba(15,23,42,0.8);color:var(--text-main);padding:6px 8px;font-size:13px;}
     .btn{padding:6px 11px;border-radius:999px;border:1px solid var(--btn-border);background:var(--btn-bg);color:var(--btn-text);font-size:13px;cursor:pointer;}
     .btn-secondary{background:transparent;color:var(--text-muted);}
     .hint{font-size:11px;color:var(--text-muted);margin-top:4px;}
     .status{font-size:12px;margin-left:8px;}
     .status-ok{color:#22c55e;}
     .status-error{color:#f97373;}
+    .logo-preview{margin-top:8px;border:1px solid rgba(55,65,81,0.9);border-radius:12px;background:rgba(15,23,42,0.55);padding:10px;display:flex;align-items:center;justify-content:center;min-height:70px;}
+    .logo-preview img{max-width:100%;max-height:120px;object-fit:contain;}
     .preview-box{border-radius:12px;border:1px solid rgba(55,65,81,0.9);background:rgba(15,23,42,0.85);padding:10px 12px;min-height:140px;font-size:13px;white-space:pre-wrap;}
     .preview-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;font-size:12px;color:var(--text-muted);}
     .preview-title{font-weight:500;color:var(--text-main);}
@@ -124,11 +127,28 @@
               Body
               <textarea id="tplBody" placeholder="Use a friendly tone. You can click 'Preview with Plex recently added' to see how a recent-items block could look."></textarea>
             </label>
+
+            <h3 style="margin-top:12px;">Newsletter logo</h3>
+            <label>
+              Logo URL
+              <input type="text" id="nlLogoUrl" placeholder="https://... or /uploads/your-logo.png" />
+            </label>
+            <div class="row" style="align-items:flex-end;">
+              <label style="flex:1;margin-bottom:0;">
+                Upload (optional)
+                <input type="file" id="nlLogoFile" accept="image/*" />
+              </label>
+              <button class="btn btn-secondary" id="nlLogoUploadBtn" type="button">Upload</button>
+              <button class="btn btn-secondary" id="nlLogoSaveBtn" type="button">Save logo</button>
+              <span id="nlLogoStatus" class="status"></span>
+            </div>
+            <div class="logo-preview"><img id="nlLogoPreview" alt="" style="display:none;" /></div>
+            <div class="hint">Use <code>{{NEWSLETTER_LOGO_BLOCK}}</code> in HTML templates to insert the logo only when configured. Or use <code>{{NEWSLETTER_LOGO_URL}}</code> inside your own <code>&lt;img src&gt;</code>.</div>
             <div class="row">
               <button class="btn" id="tplSaveBtn">Save template</button>
               <button class="btn btn-secondary" id="tplRevertBtn">Revert changes</button>
             </div>
-            <div class="hint">Changes are not saved until you click "Save template". Placeholders supported: <code>{{START_DATE}}</code>, <code>{{END_DATE}}</code>, <code>{{RECENTLY_ADDED}}</code>, <code>{{CUSTOM_SECTIONS}}</code>. Custom header blocks are managed on the <a href="custom-header.html" style="color:inherit;">Custom header</a> page. If you omit <code>{{CUSTOM_SECTIONS}}</code>, OmniStream will auto-insert your custom blocks near the top (under the header/logo) for HTML templates. If the body contains <code>&lt;html&gt;</code>/<code>&lt;!DOCTYPE html&gt;</code>, OmniStream sends it as HTML email.</div>
+            <div class="hint">Changes are not saved until you click "Save template". Placeholders supported: <code>{{START_DATE}}</code>, <code>{{END_DATE}}</code>, <code>{{RECENTLY_ADDED}}</code>, <code>{{CUSTOM_SECTIONS}}</code>, <code>{{NEWSLETTER_LOGO_URL}}</code>, <code>{{NEWSLETTER_LOGO_BLOCK}}</code>. Custom header blocks are managed on the <a href="custom-header.html" style="color:inherit;">Custom header</a> page. If you omit <code>{{CUSTOM_SECTIONS}}</code>, OmniStream will auto-insert your custom blocks near the top (under the header/logo) for HTML templates. If the body contains <code>&lt;html&gt;</code>/<code>&lt;!DOCTYPE html&gt;</code>, OmniStream sends it as HTML email.</div>
 
             <h3 style="margin-top:14px;">Preview</h3>
             <div class="row" style="margin-bottom:6px;">
@@ -186,6 +206,7 @@
     let templates = [];
     let selectedId = null;
     let originalSnapshot = null;
+    let newsletterLogoUrl = '';
 
     function deepCopy(obj){
       return JSON.parse(JSON.stringify(obj || null));
@@ -208,7 +229,14 @@
         row.className = 'template-item' + (t.id === selectedId ? ' template-item-active' : '');
         row.dataset.id = t.id;
         const left = document.createElement('div');
-        left.innerHTML = `<div class="template-item-name">${t.name || '(unnamed template)'}</div><div class="template-item-subject">${t.subject || ''}</div>`;
+        const nameDiv = document.createElement('div');
+        nameDiv.className = 'template-item-name';
+        nameDiv.textContent = t.name || '(unnamed template)';
+        const subjDiv = document.createElement('div');
+        subjDiv.className = 'template-item-subject';
+        subjDiv.textContent = t.subject || '';
+        left.appendChild(nameDiv);
+        left.appendChild(subjDiv);
         const right = document.createElement('div');
         right.className = 'template-actions';
         const useBtn = document.createElement('button');
@@ -260,6 +288,13 @@
         if (!r.ok) throw new Error('HTTP ' + r.status);
         const data = await r.json();
 
+        newsletterLogoUrl = (data && data.newsletterBranding && typeof data.newsletterBranding.logoUrl === 'string')
+          ? data.newsletterBranding.logoUrl
+          : '';
+        const logoInput = document.getElementById('nlLogoUrl');
+        if (logoInput) logoInput.value = newsletterLogoUrl || '';
+        updateLogoPreview();
+
         const list = Array.isArray(data.newsletterTemplates) ? data.newsletterTemplates : [];
         templates = list.map((t, idx) => ({
           id: t.id || String(idx+1),
@@ -281,6 +316,94 @@
         console.error('Failed to load templates', e);
         status.textContent = 'Failed to load templates. See console/logs.';
         status.className = 'status status-error';
+      }
+    }
+
+    function setLogoStatus(msg, kind){
+      const el = document.getElementById('nlLogoStatus');
+      if (!el) return;
+      el.textContent = msg || '';
+      el.className = 'status' + (kind === 'ok' ? ' status-ok' : (kind === 'error' ? ' status-error' : ''));
+    }
+
+    function updateLogoPreview(){
+      const input = document.getElementById('nlLogoUrl');
+      const img = document.getElementById('nlLogoPreview');
+      if (!input || !img) return;
+      const url = String(input.value || '').trim();
+      if (!url) {
+        img.style.display = 'none';
+        img.removeAttribute('src');
+        return;
+      }
+      img.src = url;
+      img.style.display = 'block';
+    }
+
+    async function saveLogoUrl(){
+      const input = document.getElementById('nlLogoUrl');
+      if (!input) return;
+      const url = String(input.value || '').trim();
+      setLogoStatus('Saving...', '');
+      try{
+        const resp = await fetch('/api/config/app', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ newsletterBranding: { logoUrl: url } })
+        });
+        if (!resp.ok){
+          const text = await resp.text().catch(() => '');
+          throw new Error(text || ('HTTP ' + resp.status));
+        }
+        const data = await resp.json().catch(() => ({}));
+        newsletterLogoUrl = (data && data.newsletterBranding && typeof data.newsletterBranding.logoUrl === 'string')
+          ? data.newsletterBranding.logoUrl
+          : url;
+        input.value = newsletterLogoUrl || '';
+        updateLogoPreview();
+        setLogoStatus('Saved.', 'ok');
+      }catch(e){
+        console.error('Failed to save logo', e);
+        setLogoStatus('Save failed.', 'error');
+      }
+    }
+
+    async function uploadLogo(){
+      const fileInput = document.getElementById('nlLogoFile');
+      const urlInput = document.getElementById('nlLogoUrl');
+      if (!fileInput || !urlInput) return;
+      const f = fileInput.files && fileInput.files[0];
+      if (!f){
+        setLogoStatus('Pick a file first.', 'error');
+        return;
+      }
+      setLogoStatus('Uploading...', '');
+      try{
+        const dataUrl = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result || ''));
+          reader.onerror = () => reject(new Error('File read failed'));
+          reader.readAsDataURL(f);
+        });
+
+        const resp = await fetch('/api/newsletter/logo/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dataUrl, filename: f.name || '' })
+        });
+        if (!resp.ok){
+          const text = await resp.text().catch(() => '');
+          throw new Error(text || ('HTTP ' + resp.status));
+        }
+        const out = await resp.json().catch(() => ({}));
+        const logoUrl = out && typeof out.logoUrl === 'string' ? out.logoUrl : '';
+        if (!logoUrl) throw new Error('Upload succeeded but no logoUrl returned');
+        urlInput.value = logoUrl;
+        updateLogoPreview();
+        setLogoStatus('Uploaded.', 'ok');
+      }catch(e){
+        console.error('Failed to upload logo', e);
+        setLogoStatus('Upload failed.', 'error');
       }
     }
 
@@ -433,6 +556,26 @@
           updatePreviewStatic();
         });
       });
+
+      const logoUrlInput = document.getElementById('nlLogoUrl');
+      if (logoUrlInput) {
+        logoUrlInput.addEventListener('input', () => {
+          updateLogoPreview();
+          setLogoStatus('', '');
+        });
+      }
+      const logoSaveBtn = document.getElementById('nlLogoSaveBtn');
+      if (logoSaveBtn) {
+        logoSaveBtn.addEventListener('click', () => {
+          saveLogoUrl();
+        });
+      }
+      const logoUploadBtn = document.getElementById('nlLogoUploadBtn');
+      if (logoUploadBtn) {
+        logoUploadBtn.addEventListener('click', () => {
+          uploadLogo();
+        });
+      }
 
       document.getElementById('previewReloadBtn').addEventListener('click', () => {
         loadPreview();
