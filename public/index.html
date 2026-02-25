@@ -573,7 +573,11 @@
             let displayTitle;
             let seasonEpisodeLabel = '';
             const isLive = !!sess.isLive;
-            const hasEpisode = !!(sess.episode || sess.episodeTitle);
+            const mediaType = (sess.mediaType || '').toString().toLowerCase();
+            const hasEpisode = (mediaType === 'episode')
+              || !!(sess.episode || sess.episodeTitle)
+              || (typeof sess.seasonNumber === 'number')
+              || (typeof sess.episodeNumber === 'number');
             if (isLive) {
               const channelName = sess.channel || 'Live TV';
               const program = sess.title || sess.episodeTitle || '';

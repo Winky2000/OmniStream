@@ -2795,15 +2795,18 @@ function summaryFromResponse(resp) {
             : (rawType === 'episode' ? 'episode' : (isLive ? 'live' : (rawType === 'audio' ? 'track' : rawType)));
           if (resp.config && resp.config.serverConfig) {
             const serverId = resp.config.serverConfig.id;
-            let itemId = s.NowPlayingItem.Id;
+            const itemId = s.NowPlayingItem.Id;
             const seriesId = s.NowPlayingItem.SeriesId;
-            if (s.NowPlayingItem.Type === 'Episode' && seriesId) {
-              itemId = seriesId;
-            }
-            if (itemId) {
-              const embyPath = `/Items/${itemId}/Images/Primary`;
+            const nowPlayingType = String(s.NowPlayingItem.Type || rawType || '').toLowerCase();
+
+            // For episode sessions, prefer the series (show) artwork over season/episode artwork.
+            const posterItemId = (nowPlayingType === 'episode' && seriesId) ? seriesId : itemId;
+            const backdropItemId = posterItemId;
+
+            if (posterItemId) {
+              const embyPath = `/Items/${posterItemId}/Images/Primary`;
               posterUrl = `/api/poster?serverId=${encodeURIComponent(serverId)}&path=${encodeURIComponent(embyPath)}`;
-              const backdropPath = `/Items/${itemId}/Images/Backdrop`;
+              const backdropPath = `/Items/${backdropItemId}/Images/Backdrop`;
               backgroundUrl = `/api/poster?serverId=${encodeURIComponent(serverId)}&path=${encodeURIComponent(backdropPath)}`;
             }
           }
@@ -2916,7 +2919,8 @@ function summaryFromResponse(resp) {
             title: s.NowPlayingItem?.Name || 'Idle',
             // Standard Jellyfin/Emby: SeriesName + EpisodeTitle
             seriesTitle: s.NowPlayingItem?.SeriesName || undefined,
-            episode: s.NowPlayingItem?.EpisodeTitle,
+            // Jellyfin sometimes leaves EpisodeTitle null; for episodes, fall back to Name.
+            episode: s.NowPlayingItem?.EpisodeTitle || (mediaType === 'episode' ? s.NowPlayingItem?.Name : undefined),
             year: s.NowPlayingItem?.ProductionYear,
             mediaType,
             platform: s.Client || s.DeviceName || '',
