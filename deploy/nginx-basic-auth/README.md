@@ -41,12 +41,12 @@ printf "omnistream_admin:$(openssl passwd -apr1)\n" | sudo tee /etc/nginx/.htpas
 Copy the example vhost and adjust:
 
 - TLS certificate paths
-- OmniStream upstream (`192.168.1.167:3000` is shown)
+- OmniStream upstream (`YOUR_OMNISTREAM_UPSTREAM_HOST:3000` is shown)
 - Whether `/api/status` stays public
 
 Example config:
 
-- [omnistream.winkys.com.conf.example](omnistream.winkys.com.conf.example)
+- [YOUR_OMNISTREAM_DOMAIN.conf.example](YOUR_OMNISTREAM_DOMAIN.conf.example)
 
 ## Notes
 

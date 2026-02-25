@@ -37,7 +37,7 @@ docker compose -f deploy/nginx-authelia/docker-compose.yml up -d
 
 4) Browse to Nginx:
 
-- `http://localhost:8080/`
+- `http://YOUR_NGINX_HOST:8080/`
 
 > This example uses **HTTP** on port 8080 to keep it simple.
 > For real deployments, put Nginx on HTTPS and set secure cookies in Authelia.
@@ -49,12 +49,12 @@ docker compose -f deploy/nginx-authelia/docker-compose.yml up -d
 
 ## Production hostname example
 
-If your real hostname is `omnistream.winkys.com`, prefer running Authelia on a dedicated auth subdomain:
+If your real hostname is `YOUR_OMNISTREAM_DOMAIN`, prefer running Authelia on a dedicated auth subdomain:
 
-- App: `https://omnistream.winkys.com`
-- Auth portal: `https://auth.omnistream.winkys.com`
+- App: `https://YOUR_OMNISTREAM_DOMAIN`
+- Auth portal: `https://YOUR_AUTH_DOMAIN`
 
 Templates you can copy and adjust:
 
-- Nginx: `deploy/nginx-authelia/nginx/omnistream.winkys.com.conf.example`
-- Authelia: `deploy/nginx-authelia/authelia/configuration.omnistream.winkys.com.yml.example`
+- Nginx: `deploy/nginx-authelia/nginx/YOUR_OMNISTREAM_DOMAIN.conf.example`
+- Authelia: `deploy/nginx-authelia/authelia/configuration.YOUR_OMNISTREAM_DOMAIN.yml.example`
