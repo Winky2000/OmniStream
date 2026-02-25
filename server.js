@@ -2426,10 +2426,10 @@ function summaryFromResponse(resp) {
         const isLive = mediaType === 'live';
         let posterUrl;
         let backgroundUrl;
-        // Prefer season/show poster for TV episodes so we avoid episode stills
+        // Prefer show poster for TV episodes so we avoid episode/season stills
         let rawThumb;
         if (m.type === 'episode' || m.grandparentTitle) {
-          rawThumb = m.parentThumb || m.grandparentThumb || m.thumb || m.art || '';
+          rawThumb = m.grandparentThumb || m.parentThumb || m.thumb || m.art || '';
         } else {
           rawThumb = m.thumb || m.grandparentThumb || m.parentThumb || m.art || '';
         }
