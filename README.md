@@ -46,7 +46,7 @@ OmniStream is a dashboard to monitor multiple Plex, Jellyfin, and Emby servers o
 
 - OmniStream has **no built-in authentication**. Treat it like an admin panel.
 - Run it on a **trusted network** (LAN/VPN) and/or put it behind a reverse proxy that enforces auth.
-- As of recent builds, **CORS is disabled by default**. If you intentionally need cross-origin API access, set `OMNISTREAM_CORS_ORIGINS` to a comma-separated allowlist (for example: `http://localhost:3000,http://my-ui-host:8080`).
+- As of recent builds, **CORS is disabled by default**. If you intentionally need cross-origin API access, set `OMNISTREAM_CORS_ORIGINS` to a comma-separated allowlist (for example: `http://YOUR_UI_HOST_1:3000,http://YOUR_UI_HOST_2:8080`).
 
 ### Nginx + username/password (Basic Auth)
 
@@ -59,7 +59,7 @@ If you want a quick **username/password** stopgap while you defer 2FA, you can p
 If you want password + **2FA**, the recommended approach is to put OmniStream behind **Nginx + an auth gateway** (for example Authelia/Authentik). OmniStream’s UI and APIs are then only reachable after authentication.
 
 - Example config: [deploy/nginx-authelia/README.md](deploy/nginx-authelia/README.md)
-- For real domains (for example `omnistream.winkys.com`), see the production template files in that folder.
+- For real domains (for example `YOUR_OMNISTREAM_DOMAIN`), see the production template files in that folder.
 
 ## Newsletter
 
@@ -155,7 +155,7 @@ docker compose up -d
 
 Then open:
 
-- http://localhost:3000
+- http://YOUR_OMNISTREAM_HOST:3000
 
 ### 3. Run with plain docker
 
@@ -176,14 +176,14 @@ docker run -d \
 ## First-time setup
 
 1. Start the container.
-2. Open http://localhost:3000.
+2. Open http://YOUR_OMNISTREAM_HOST:3000.
 3. You will see a welcome card if no servers are configured.
 4. Click **Start Setup (Servers)** or go to the **Admin → Servers** tab.
 5. Add your servers:
 	 - **Name**: Friendly name.
 	 - **Base URL**:
-		 - Plex: e.g. `http://192.168.1.138:32400`
-		 - Jellyfin: e.g. `http://192.168.1.138:8096`
+		 - Plex: e.g. `http://YOUR_PLEX_HOST:32400`
+		 - Jellyfin: e.g. `http://YOUR_JELLYFIN_HOST:8096`
 		 - Emby: your Emby URL + port.
 	 - **Type**: `plex`, `jellyfin`, or `emby`.
 	 - **Token**:
@@ -216,7 +216,7 @@ printf "[]\n" > servers.json
 node server.js
 ```
 
-Open http://localhost:3000 and add servers via the Admin UI.
+Open http://YOUR_OMNISTREAM_HOST:3000 and add servers via the Admin UI.
 
 ---
 
@@ -244,7 +244,7 @@ OmniStream exposes a small health endpoint that external tools can poll without 
 
 ### Uptime Kuma
 
-You can monitor OmniStream itself (and indirectly your media servers) from [Uptime Kuma](https://github.com/louislam/uptime-kuma):
+You can monitor OmniStream itself (and indirectly your media servers) from [Uptime Kuma](<UPTIME_KUMA_URL>):
 
 1. In Uptime Kuma, click **Add New Monitor**.
 2. Choose type **HTTP(s)**.
@@ -376,7 +376,7 @@ Each server entry uses this shape (fields with defaults are optional):
 	"id": "plex-1",
 	"name": "Gold Tower",
 	"type": "plex",        // "plex" | "jellyfin" | "emby"
-	"baseUrl": "http://192.168.1.138:32400",
+	"baseUrl": "http://YOUR_PLEX_HOST:32400",
 	"token": "...",
 	"enabled": true
 }
@@ -403,7 +403,7 @@ You can edit servers via the Admin → Servers UI rather than hand-editing `serv
 		- `chmod 664 /home/youruser/omnistream/servers.json`
 
 - **Jellyfin shows offline / 401**
-	- Confirm `baseUrl` and port are correct (e.g. `http://192.168.1.138:8096`).
+	- Confirm `baseUrl` and port are correct (e.g. `http://YOUR_JELLYFIN_HOST:8096`).
 	- Use a valid API key; OmniStream sends it using the expected Jellyfin headers/query.
 
 Once servers are online, the main dashboard shows live sessions, and the Admin tabs (Servers, Reports, Notifications, History) provide management and insights.
