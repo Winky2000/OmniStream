@@ -294,6 +294,34 @@ function pbkdf2VerifyPassword(password, stored) {
   }
 }
 
+function maybeResetInternalAuthFromEnv() {
+  try {
+    const raw = String(process.env.OMNISTREAM_RESET_INTERNAL_AUTH || '').trim().toLowerCase();
+    if (!raw || (raw !== '1' && raw !== 'true' && raw !== 'yes')) return;
+
+    if (!appConfig || typeof appConfig !== 'object') {
+      appConfig = {};
+    }
+    if (!appConfig.auth || typeof appConfig.auth !== 'object') {
+      appConfig.auth = {};
+    }
+
+    appConfig.auth.mode = 'internal';
+    appConfig.auth.username = 'admin';
+    appConfig.auth.passwordHash = pbkdf2HashPassword('omnistream');
+    appConfig.auth.passwordChangeRequired = true;
+
+    try {
+      fs.writeFileSync(CONFIG_FILE, JSON.stringify(appConfig, null, 2));
+      console.log('[OmniStream] Reset internal auth credentials (admin/omnistream) due to OMNISTREAM_RESET_INTERNAL_AUTH');
+    } catch (e) {
+      console.error('[OmniStream] Failed to persist auth reset:', e.message);
+    }
+  } catch (e) {
+    console.error('[OmniStream] maybeResetInternalAuthFromEnv failed:', e.message);
+  }
+}
+
 function ensureDefaultInternalAuthConfig() {
   try {
     if (!appConfig || typeof appConfig !== 'object') {
@@ -330,7 +358,23 @@ function ensureDefaultInternalAuthConfig() {
   }
 }
 
+maybeResetInternalAuthFromEnv();
 ensureDefaultInternalAuthConfig();
+
+try {
+  const raw = String(process.env.OMNISTREAM_AUTH_DEBUG || '').trim().toLowerCase();
+  if (raw === '1' || raw === 'true' || raw === 'yes') {
+    const authCfg = getAuthConfig();
+    console.log('[OmniStream] Auth debug:', {
+      mode: getAuthMode(),
+      username: String(authCfg.username || 'admin'),
+      hasPasswordHash: Boolean(authCfg.passwordHash),
+      passwordChangeRequired: authCfg.passwordChangeRequired === true
+    });
+  }
+} catch (_) {
+  // ignore
+}
 
 function getSessionIdFromReq(req) {
   const cookies = parseCookies(req.headers.cookie);
