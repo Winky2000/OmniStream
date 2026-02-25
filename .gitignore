@@ -1,6 +1,5 @@
 node_modules/
 servers.json
-servers.test.json
 config.json
 history.db
 sent_newsletters/
