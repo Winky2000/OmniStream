@@ -13,9 +13,12 @@ OmniStream is a dashboard to monitor multiple Plex, Jellyfin, and Emby servers o
 	# On your host
 	mkdir -p /home/youruser/omnistream
 	printf "[]\n" > /home/youruser/omnistream/servers.json
+	# Persist internal auth + settings (password changes are written here)
+	printf "{}\n" > /home/youruser/omnistream/config.json
 
-	# Optionally point SERVERS_PATH at your host file
+	# Optionally point SERVERS_PATH / CONFIG_PATH at your host files
 	export SERVERS_PATH=/home/youruser/omnistream/servers.json
+	export CONFIG_PATH=/home/youruser/omnistream/config.json
 
 	# From the project root (where docker-compose.yml lives):
 	docker compose up -d
@@ -50,6 +53,7 @@ OmniStream is a dashboard to monitor multiple Plex, Jellyfin, and Emby servers o
 	- Password: `omnistream`
 	- You will be forced to change the password on first login.
 - If you see **Invalid credentials**, the password has likely already been changed in `config.json`. To reset back to the default for local testing, stop OmniStream and delete `auth.passwordHash` from `config.json` (or delete the whole `auth` block), then start OmniStream again.
+- If you are running OmniStream in Docker and your password **keeps reverting after restarts/updates**, you are likely not persisting `config.json`. Bind-mount it into the container (see Docker section below).
 - If you are running OmniStream behind Nginx + Basic Auth / 2FA, set **Authentication mode** to **Nginx** in **Settings → System** to disable internal auth completely.
 - Regardless of auth mode, treat OmniStream like an admin panel: keep it on a **trusted network** (LAN/VPN) and/or restrict inbound access so only your reverse proxy can reach it.
 - As of recent builds, **CORS is disabled by default**. If you intentionally need cross-origin API access, set `OMNISTREAM_CORS_ORIGINS` to a comma-separated allowlist (for example: `http://YOUR_UI_HOST_1:3000,http://YOUR_UI_HOST_2:8080`).
@@ -145,6 +149,7 @@ services:
 		environment:
 			- NODE_ENV=production
 		volumes:
+			- ${CONFIG_PATH:-./config.json}:/usr/src/app/config.json
 			- ${SERVERS_PATH:-./servers.json}:/usr/src/app/servers.json
 			# Optional: override bundled UI with local files
 			# - ./public:/usr/src/app/public:ro
@@ -155,6 +160,7 @@ From the project root:
 ```bash
 # Optionally point SERVERS_PATH at your host file
 export SERVERS_PATH=/home/youruser/omnistream/servers.json
+export CONFIG_PATH=/home/youruser/omnistream/config.json
 
 docker compose up -d
 ```

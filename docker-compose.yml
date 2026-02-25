@@ -10,6 +10,10 @@ services:
     environment:
       - NODE_ENV=production
     volumes:
+      # Persist config.json so internal auth password changes survive container restarts/recreates.
+      # IMPORTANT: ensure the host path points to a regular file (create it first),
+      # otherwise Docker may create a directory and OmniStream won't be able to write.
+      - ${CONFIG_PATH:-./config.json}:/usr/src/app/config.json
       # Path to servers.json on the host. By default this uses
       # ./servers.json next to this compose file, but you can
       # override with SERVERS_PATH=/absolute/path/to/servers.json
