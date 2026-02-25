@@ -580,7 +580,8 @@ app.get('/logout', (req, res) => {
     const sid = getSessionIdFromReq(req);
     if (sid) authSessions.delete(sid);
     clearSessionCookie(res, { secure: shouldUseSecureCookie(req) });
-    res.redirect(302, '/login.html');
+    const mode = appConfig && appConfig.auth ? normalizeAuthMode(appConfig.auth.mode) : 'internal';
+    res.redirect(302, mode === 'nginx' ? '/' : '/login.html');
   } catch (e) {
     res.redirect(302, '/login.html');
   }

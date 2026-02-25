@@ -71,6 +71,7 @@
             <a href="about.html" class="submenu-link">About</a>
           </div>
         </div>
+        <a href="/logout" class="nav-link">Logout</a>
       </nav>
     </aside>
     <main class="main-content">
@@ -105,6 +106,9 @@
             </select>
           </label>
           <div class="hint">Internal mode requires login for all UI and APIs. Nginx mode disables internal login entirely (your reverse proxy must enforce authentication).</div>
+          <div class="hint" id="nginxRiskHint" style="display:none;">
+            <b>Warning:</b> If you switch to <b>Nginx + 2FA</b> but do not actually configure authentication in your reverse proxy, OmniStream will be accessible without a login.
+          </div>
         </div>
         <div class="config-row">
           <label>
@@ -298,6 +302,12 @@
           const mode = data && data.auth && data.auth.mode ? String(data.auth.mode) : 'internal';
           authModeSel.value = (mode === 'nginx') ? 'nginx' : 'internal';
         }
+
+        const nginxHint = document.getElementById('nginxRiskHint');
+        const authModeSel2 = document.getElementById('cfgAuthMode');
+        if (nginxHint && authModeSel2) {
+          nginxHint.style.display = (authModeSel2.value === 'nginx') ? 'block' : 'none';
+        }
       } catch (e) {
         console.error('Failed to load app config:', e);
         const status = document.getElementById('configStatus');
@@ -375,6 +385,11 @@
           payload.authMode = (authModeSel.value === 'nginx') ? 'nginx' : 'internal';
         }
 
+        const nginxHint = document.getElementById('nginxRiskHint');
+        if (nginxHint && authModeSel) {
+          nginxHint.style.display = (authModeSel.value === 'nginx') ? 'block' : 'none';
+        }
+
         const resp = await fetch('/api/config/app', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -406,6 +421,15 @@
 
     loadSystemInfo();
     loadAppConfig();
+
+    (function() {
+      const authModeSel = document.getElementById('cfgAuthMode');
+      const nginxHint = document.getElementById('nginxRiskHint');
+      if (!authModeSel || !nginxHint) return;
+      authModeSel.addEventListener('change', () => {
+        nginxHint.style.display = (authModeSel.value === 'nginx') ? 'block' : 'none';
+      });
+    })();
   </script>
 </body>
 </html>
