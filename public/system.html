@@ -33,6 +33,7 @@
     .row b{color:var(--text-main);}
     .btn{margin-top:10px;padding:6px 14px;border-radius:8px;border:1px solid var(--btn-border);background:var(--btn-bg);color:var(--btn-text);cursor:pointer;font-size:13px;}
     .btn:hover{background:var(--btn-bg-hover);color:var(--btn-text-hover);}
+    .btn:disabled{opacity:0.55;cursor:not-allowed;}
     .hint{font-size:12px;color:var(--text-muted);margin-top:4px;}
     .status-ok{color:#a5d6a7;}
     .status-warn{color:#ffcc80;}
@@ -110,6 +111,12 @@
           <div class="hint" id="nginxRiskHint" style="display:none;">
             <b>Warning:</b> If you switch to <b>Nginx + 2FA</b> but do not actually configure authentication in your reverse proxy, OmniStream will be accessible without a login.
           </div>
+        </div>
+
+        <div class="config-row" id="changePasswordRow">
+          <button class="btn" type="button" id="changePasswordBtn">Change password</button>
+          <div class="hint" id="changePasswordHint">Changes the internal OmniStream admin password.</div>
+          <div class="hint" id="changePasswordDisabledHint" style="display:none;">Internal auth is disabled in Nginx mode.</div>
         </div>
         <div class="config-row">
           <label>
@@ -309,6 +316,8 @@
         if (nginxHint && authModeSel2) {
           nginxHint.style.display = (authModeSel2.value === 'nginx') ? 'block' : 'none';
         }
+
+        updateAuthModeUI();
       } catch (e) {
         console.error('Failed to load app config:', e);
         const status = document.getElementById('configStatus');
@@ -391,6 +400,8 @@
           nginxHint.style.display = (authModeSel.value === 'nginx') ? 'block' : 'none';
         }
 
+        updateAuthModeUI();
+
         const resp = await fetch('/api/config/app', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -423,12 +434,33 @@
     loadSystemInfo();
     loadAppConfig();
 
+    function updateAuthModeUI() {
+      const authModeSel = document.getElementById('cfgAuthMode');
+      const changeBtn = document.getElementById('changePasswordBtn');
+      const disabledHint = document.getElementById('changePasswordDisabledHint');
+      if (!authModeSel || !changeBtn) return;
+      const isNginx = authModeSel.value === 'nginx';
+      changeBtn.disabled = isNginx;
+      if (disabledHint) {
+        disabledHint.style.display = isNginx ? 'block' : 'none';
+      }
+    }
+
+    (function() {
+      const changeBtn = document.getElementById('changePasswordBtn');
+      if (!changeBtn) return;
+      changeBtn.addEventListener('click', () => {
+        window.location.href = 'change-password.html';
+      });
+    })();
+
     (function() {
       const authModeSel = document.getElementById('cfgAuthMode');
       const nginxHint = document.getElementById('nginxRiskHint');
       if (!authModeSel || !nginxHint) return;
       authModeSel.addEventListener('change', () => {
         nginxHint.style.display = (authModeSel.value === 'nginx') ? 'block' : 'none';
+        updateAuthModeUI();
       });
     })();
   </script>
