@@ -8,6 +8,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 _No unreleased changes yet._
 
+## [0.3.0] - 2026-02-24
+
+### Added
+- Internal authentication (built-in login) with a required password change on first login.
+- Settings toggle for authentication mode: **Internal** vs **Nginx** (disables internal auth completely for reverse-proxy/2FA setups).
+- Auth troubleshooting controls: `OMNISTREAM_RESET_INTERNAL_AUTH` (reset to defaults) and `OMNISTREAM_AUTH_DEBUG` (debug logging).
+
+### Changed
+- Sidebar menus standardized across all pages and include a Logout link.
+- Dependency security: npm override pins `tar` to a patched version to resolve audit findings.
+
+### Fixed
+- Windows test/start scripts now have `servers.test.json` available on fresh clones.
+
 ## [0.2.3] - 2026-02-23
 
 ### Added
@@ -83,4 +97,5 @@ _No unreleased changes yet._
 [0.2.1]: https://github.com/Winky2000/OmniStream/releases/tag/v0.2.1
 [0.2.2]: https://github.com/Winky2000/OmniStream/releases/tag/v0.2.2
 [0.2.3]: https://github.com/Winky2000/OmniStream/releases/tag/v0.2.3
-[Unreleased]: https://github.com/Winky2000/OmniStream/compare/v0.2.3...HEAD
+[0.3.0]: https://github.com/Winky2000/OmniStream/releases/tag/v0.3.0
+[Unreleased]: https://github.com/Winky2000/OmniStream/compare/v0.3.0...HEAD

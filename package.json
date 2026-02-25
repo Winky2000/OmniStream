@@ -1,6 +1,6 @@
 {
   "name": "omnistream",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "description": "OmniStream — monitor multiple Plex, Jellyfin, and Emby servers",
   "main": "server.js",
   "scripts": {
