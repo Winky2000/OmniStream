@@ -4,6 +4,7 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 const cors = require('cors');
+const crypto = require('crypto');
 const sqlite3 = require('sqlite3').verbose();
 const https = require('https');
 let nodemailer = null;
@@ -75,7 +76,7 @@ app.use((req, res, next) => {
   }
   next();
 });
-app.use(express.static('public'));
+
 
 const SERVERS_FILE = path.join(__dirname, 'servers.json');
 const CONFIG_FILE = path.join(__dirname, 'config.json');
@@ -203,6 +204,387 @@ try {
 }
 
 console.log('[OmniStream] Using servers file at', SERVERS_FILE);
+
+// ---------------------------------------------------------------------------
+// Internal authentication (optional, default enabled)
+//
+// Modes:
+// - internal: OmniStream enforces login itself (session cookie)
+// - nginx: OmniStream does NOT enforce internal auth (assume reverse proxy auth)
+// ---------------------------------------------------------------------------
+
+const AUTH_COOKIE_NAME = 'omnistream_session';
+const AUTH_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const AUTH_PBKDF2_ITERS = 120000;
+const AUTH_PBKDF2_KEYLEN = 32;
+const AUTH_PBKDF2_DIGEST = 'sha256';
+
+const authSessions = new Map(); // sid -> { username, createdAtMs, lastSeenAtMs }
+
+function normalizeAuthMode(input) {
+  const raw = String(input || '').trim().toLowerCase();
+  if (raw === 'nginx') return 'nginx';
+  return 'internal';
+}
+
+function getAuthConfig() {
+  const cfg = (appConfig && typeof appConfig === 'object') ? appConfig : {};
+  const auth = (cfg.auth && typeof cfg.auth === 'object') ? cfg.auth : {};
+  return auth;
+}
+
+function getAuthMode() {
+  return normalizeAuthMode(getAuthConfig().mode);
+}
+
+function internalAuthEnabled() {
+  return getAuthMode() !== 'nginx';
+}
+
+function parseCookies(header) {
+  const out = {};
+  const raw = String(header || '').trim();
+  if (!raw) return out;
+  raw.split(';').forEach(part => {
+    const idx = part.indexOf('=');
+    if (idx === -1) return;
+    const k = part.slice(0, idx).trim();
+    const v = part.slice(idx + 1).trim();
+    if (!k) return;
+    out[k] = decodeURIComponent(v);
+  });
+  return out;
+}
+
+function pbkdf2HashPassword(password) {
+  const salt = crypto.randomBytes(16);
+  const derived = crypto.pbkdf2Sync(
+    Buffer.from(String(password || ''), 'utf8'),
+    salt,
+    AUTH_PBKDF2_ITERS,
+    AUTH_PBKDF2_KEYLEN,
+    AUTH_PBKDF2_DIGEST
+  );
+  return `pbkdf2$${AUTH_PBKDF2_DIGEST}$${AUTH_PBKDF2_ITERS}$${salt.toString('base64')}$${derived.toString('base64')}`;
+}
+
+function pbkdf2VerifyPassword(password, stored) {
+  try {
+    const raw = String(stored || '').trim();
+    const parts = raw.split('$');
+    if (parts.length !== 5) return false;
+    const [kind, digest, itersRaw, saltB64, hashB64] = parts;
+    if (kind !== 'pbkdf2') return false;
+    const iters = Number(itersRaw);
+    if (!Number.isFinite(iters) || iters < 10000) return false;
+    const salt = Buffer.from(String(saltB64 || ''), 'base64');
+    const expected = Buffer.from(String(hashB64 || ''), 'base64');
+    if (!salt.length || !expected.length) return false;
+    const derived = crypto.pbkdf2Sync(
+      Buffer.from(String(password || ''), 'utf8'),
+      salt,
+      iters,
+      expected.length,
+      String(digest || AUTH_PBKDF2_DIGEST)
+    );
+    if (derived.length !== expected.length) return false;
+    return crypto.timingSafeEqual(derived, expected);
+  } catch (_) {
+    return false;
+  }
+}
+
+function ensureDefaultInternalAuthConfig() {
+  try {
+    if (!appConfig || typeof appConfig !== 'object') {
+      appConfig = {};
+    }
+    if (!appConfig.auth || typeof appConfig.auth !== 'object') {
+      appConfig.auth = {};
+    }
+
+    if (!appConfig.auth.mode) {
+      appConfig.auth.mode = 'internal';
+    }
+    if (!appConfig.auth.username) {
+      appConfig.auth.username = 'admin';
+    }
+
+    // Only seed a default password when one has never been set.
+    if (!appConfig.auth.passwordHash) {
+      appConfig.auth.passwordHash = pbkdf2HashPassword('omnistream');
+      appConfig.auth.passwordChangeRequired = true;
+      try {
+        fs.writeFileSync(CONFIG_FILE, JSON.stringify(appConfig, null, 2));
+        console.log('[OmniStream] Seeded default internal auth credentials (admin/omnistream) into config.json');
+      } catch (e) {
+        console.error('[OmniStream] Failed to persist default auth config:', e.message);
+      }
+    }
+
+    if (typeof appConfig.auth.passwordChangeRequired !== 'boolean') {
+      appConfig.auth.passwordChangeRequired = false;
+    }
+  } catch (e) {
+    console.error('[OmniStream] ensureDefaultInternalAuthConfig failed:', e.message);
+  }
+}
+
+ensureDefaultInternalAuthConfig();
+
+function getSessionIdFromReq(req) {
+  const cookies = parseCookies(req.headers.cookie);
+  const sid = cookies[AUTH_COOKIE_NAME];
+  return sid ? String(sid) : '';
+}
+
+function getSessionForReq(req) {
+  const sid = getSessionIdFromReq(req);
+  if (!sid) return null;
+  const sess = authSessions.get(sid);
+  if (!sess) return null;
+  const now = Date.now();
+  if (sess.lastSeenAtMs && (now - sess.lastSeenAtMs) > AUTH_SESSION_TTL_MS) {
+    authSessions.delete(sid);
+    return null;
+  }
+  sess.lastSeenAtMs = now;
+  return { sid, ...sess };
+}
+
+function setSessionCookie(res, sid, { secure } = {}) {
+  const parts = [
+    `${AUTH_COOKIE_NAME}=${encodeURIComponent(String(sid))}`,
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Lax',
+    `Max-Age=${Math.floor(AUTH_SESSION_TTL_MS / 1000)}`
+  ];
+  if (secure) parts.push('Secure');
+  res.setHeader('Set-Cookie', parts.join('; '));
+}
+
+function clearSessionCookie(res, { secure } = {}) {
+  const parts = [
+    `${AUTH_COOKIE_NAME}=`,
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Lax',
+    'Max-Age=0'
+  ];
+  if (secure) parts.push('Secure');
+  res.setHeader('Set-Cookie', parts.join('; '));
+}
+
+function shouldUseSecureCookie(req) {
+  const xfProto = String(req.headers['x-forwarded-proto'] || '').toLowerCase();
+  if (xfProto === 'https') return true;
+  return Boolean(req.secure);
+}
+
+function isHtmlLikeRequest(req) {
+  const accept = String(req.headers.accept || '');
+  if (req.path === '/' || req.path.endsWith('.html')) return true;
+  return accept.includes('text/html');
+}
+
+function isPublicAuthAssetPath(p) {
+  // Keep this list intentionally tight: only what's required to render login pages.
+  if (p === '/theme.css') return true;
+  if (p === '/omnistream_logo.png') return true;
+  return false;
+}
+
+// Auth gate: enforces internal login for ALL UI and API routes when mode=internal.
+app.use((req, res, next) => {
+  try {
+    if (!internalAuthEnabled()) {
+      return next();
+    }
+
+    const p = req.path;
+    const isApi = p.startsWith('/api/');
+    const isLoginPage = p === '/login.html';
+    const isChangePwPage = p === '/change-password.html';
+    const isAuthApi = p.startsWith('/api/auth/');
+
+    // Allow static assets needed for login/change-password UI
+    if (isPublicAuthAssetPath(p)) {
+      return next();
+    }
+
+    // Login page is always accessible
+    if (isLoginPage) {
+      return next();
+    }
+
+    const sess = getSessionForReq(req);
+    const authed = Boolean(sess && sess.username);
+
+    if (!authed) {
+      if (isApi) {
+        // Allow calling auth endpoints without a session (login + me)
+        if (isAuthApi) return next();
+        return res.status(401).json({ error: 'Unauthorized', code: 'UNAUTHENTICATED' });
+      }
+      // Non-API: redirect to login
+      if (isHtmlLikeRequest(req)) {
+        return res.redirect(302, '/login.html');
+      }
+      return res.status(401).send('Unauthorized');
+    }
+
+    // Force password change after first login
+    const authCfg = getAuthConfig();
+    const mustChange = authCfg && authCfg.passwordChangeRequired === true;
+    if (mustChange) {
+      if (isApi) {
+        // Allow only auth endpoints while password change is required
+        if (isAuthApi) return next();
+        return res.status(403).json({ error: 'Password change required', code: 'PASSWORD_CHANGE_REQUIRED' });
+      }
+      // Allow change-password page, block everything else
+      if (isChangePwPage) return next();
+      return res.redirect(302, '/change-password.html');
+    }
+
+    return next();
+  } catch (e) {
+    console.error('[OmniStream] auth gate error:', e.message);
+    return res.status(500).json({ error: 'Auth gate failed' });
+  }
+});
+
+// Now that auth gate is installed, serve the static UI.
+app.use(express.static('public'));
+
+// Auth API
+app.get('/api/auth/me', (req, res) => {
+  try {
+    const mode = getAuthMode();
+    if (mode === 'nginx') {
+      return res.json({ mode, internalAuthEnabled: false, authenticated: true, username: null, mustChangePassword: false });
+    }
+
+    const sess = getSessionForReq(req);
+    const authCfg = getAuthConfig();
+    return res.json({
+      mode,
+      internalAuthEnabled: true,
+      authenticated: Boolean(sess && sess.username),
+      username: sess && sess.username ? sess.username : null,
+      mustChangePassword: authCfg && authCfg.passwordChangeRequired === true
+    });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to get auth status' });
+  }
+});
+
+app.post('/api/auth/login', (req, res) => {
+  try {
+    if (!internalAuthEnabled()) {
+      return res.status(400).json({ error: 'Internal auth is disabled', code: 'INTERNAL_AUTH_DISABLED' });
+    }
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const username = typeof body.username === 'string' ? body.username.trim() : '';
+    const password = typeof body.password === 'string' ? body.password : '';
+
+    const authCfg = getAuthConfig();
+    const expectedUser = String(authCfg.username || 'admin');
+    const storedHash = String(authCfg.passwordHash || '');
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Missing username or password' });
+    }
+    if (username !== expectedUser) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    if (!storedHash || !pbkdf2VerifyPassword(password, storedHash)) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const sid = crypto.randomBytes(32).toString('hex');
+    const now = Date.now();
+    authSessions.set(sid, { username: expectedUser, createdAtMs: now, lastSeenAtMs: now });
+    setSessionCookie(res, sid, { secure: shouldUseSecureCookie(req) });
+    return res.json({ ok: true, mustChangePassword: authCfg.passwordChangeRequired === true });
+  } catch (e) {
+    console.error('[OmniStream] login failed:', e.message);
+    res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+app.post('/api/auth/logout', (req, res) => {
+  try {
+    const sid = getSessionIdFromReq(req);
+    if (sid) authSessions.delete(sid);
+    clearSessionCookie(res, { secure: shouldUseSecureCookie(req) });
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: 'Logout failed' });
+  }
+});
+
+app.post('/api/auth/change-password', (req, res) => {
+  try {
+    if (!internalAuthEnabled()) {
+      return res.status(400).json({ error: 'Internal auth is disabled', code: 'INTERNAL_AUTH_DISABLED' });
+    }
+
+    const sess = getSessionForReq(req);
+    if (!sess || !sess.username) {
+      return res.status(401).json({ error: 'Unauthorized', code: 'UNAUTHENTICATED' });
+    }
+
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const currentPassword = typeof body.currentPassword === 'string' ? body.currentPassword : '';
+    const newPassword = typeof body.newPassword === 'string' ? body.newPassword : '';
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Missing currentPassword or newPassword' });
+    }
+    if (String(newPassword).length < 8) {
+      return res.status(400).json({ error: 'New password must be at least 8 characters' });
+    }
+
+    const authCfg = getAuthConfig();
+    const storedHash = String(authCfg.passwordHash || '');
+    if (!storedHash || !pbkdf2VerifyPassword(currentPassword, storedHash)) {
+      return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+
+    if (!appConfig.auth || typeof appConfig.auth !== 'object') {
+      appConfig.auth = {};
+    }
+    appConfig.auth.passwordHash = pbkdf2HashPassword(newPassword);
+    appConfig.auth.passwordChangeRequired = false;
+    appConfig.auth.username = String(appConfig.auth.username || 'admin');
+    appConfig.auth.mode = normalizeAuthMode(appConfig.auth.mode);
+
+    // Persist
+    try {
+      fs.writeFileSync(CONFIG_FILE, JSON.stringify(appConfig, null, 2));
+    } catch (e) {
+      console.error('[OmniStream] Failed to persist password change:', e.message);
+      return res.status(500).json({ error: 'Failed to persist new password' });
+    }
+
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[OmniStream] change-password failed:', e.message);
+    res.status(500).json({ error: 'Change password failed' });
+  }
+});
+
+// Convenience: allow manual logout via browser navigation.
+app.get('/logout', (req, res) => {
+  try {
+    const sid = getSessionIdFromReq(req);
+    if (sid) authSessions.delete(sid);
+    clearSessionCookie(res, { secure: shouldUseSecureCookie(req) });
+    res.redirect(302, '/login.html');
+  } catch (e) {
+    res.redirect(302, '/login.html');
+  }
+});
 
 // Edit/update server info (must be after app is defined)
 app.put('/api/servers/:id', (req, res) => {
@@ -4806,6 +5188,8 @@ app.put('/api/config/notifiers', (req, res) => {
 // Read/update global application config (history retention, Overseerr, etc.) from config.json
 app.get('/api/config/app', (req, res) => {
   try {
+    const authCfg = getAuthConfig();
+    const authMode = normalizeAuthMode(authCfg.mode);
     const overseerrCfg = appConfig.overseerr || {};
     const rawSchedules = Array.isArray(appConfig.newsletterSchedules) ? appConfig.newsletterSchedules : [];
     const normalizedSchedules = rawSchedules.length
@@ -4831,6 +5215,9 @@ app.get('/api/config/app', (req, res) => {
       ];
     res.json({
       maxHistory: typeof MAX_HISTORY === 'number' ? MAX_HISTORY : DEFAULT_MAX_HISTORY,
+      auth: {
+        mode: authMode
+      },
       publicBaseUrl: (appConfig && typeof appConfig.publicBaseUrl === 'string') ? String(appConfig.publicBaseUrl) : '',
       overseerr: {
         baseUrl: overseerrCfg.baseUrl || '',
@@ -4885,6 +5272,21 @@ app.get('/api/config/app', (req, res) => {
 app.put('/api/config/app', (req, res) => {
   try {
     const body = req.body && typeof req.body === 'object' ? req.body : {};
+
+    // Auth mode toggle
+    if (Object.prototype.hasOwnProperty.call(body, 'authMode')) {
+      const nextMode = normalizeAuthMode(body.authMode);
+      if (!appConfig.auth || typeof appConfig.auth !== 'object') {
+        appConfig.auth = {};
+      }
+      appConfig.auth.mode = nextMode;
+      // If switching to internal and no password has ever been set, seed the default.
+      if (nextMode === 'internal' && !appConfig.auth.passwordHash) {
+        appConfig.auth.username = appConfig.auth.username || 'admin';
+        appConfig.auth.passwordHash = pbkdf2HashPassword('omnistream');
+        appConfig.auth.passwordChangeRequired = true;
+      }
+    }
 
     if (Object.prototype.hasOwnProperty.call(body, 'publicBaseUrl')) {
       const v = body.publicBaseUrl;
@@ -5077,6 +5479,9 @@ app.put('/api/config/app', (req, res) => {
       ];
     res.json({
       maxHistory: typeof MAX_HISTORY === 'number' ? MAX_HISTORY : DEFAULT_MAX_HISTORY,
+      auth: {
+        mode: normalizeAuthMode(getAuthConfig().mode)
+      },
       publicBaseUrl: (appConfig && typeof appConfig.publicBaseUrl === 'string') ? String(appConfig.publicBaseUrl) : '',
       overseerr: {
         baseUrl: overseerrCfg.baseUrl || '',

@@ -1,0 +1,117 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>OmniStream Login</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="theme.css">
+  <style>
+    body{font-family:Segoe UI,Arial;background:var(--bg);color:var(--text-main);margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;}
+    .card{width:100%;max-width:420px;background:var(--card-bg);border-radius:14px;padding:18px 18px;box-shadow:0 12px 30px rgba(15,23,42,0.85);border:1px solid rgba(148,163,184,0.35);}
+    .brand{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
+    .brand img{width:28px;height:28px;}
+    h1{margin:0;font-size:18px;letter-spacing:0.5px;font-weight:600;}
+    .hint{margin:8px 0 0 0;font-size:12px;color:var(--text-muted);}
+    label{display:block;font-size:13px;margin:10px 0 6px 0;color:var(--text-main);}
+    input{width:100%;padding:8px 10px;border-radius:8px;border:1px solid #444;background:var(--bg);color:var(--text-main);box-sizing:border-box;}
+    .row{display:flex;gap:10px;align-items:center;margin-top:12px;}
+    .btn{padding:8px 14px;border-radius:8px;border:1px solid var(--btn-border);background:var(--btn-bg);color:var(--btn-text);cursor:pointer;font-size:13px;}
+    .btn:hover{background:var(--btn-bg-hover);color:var(--btn-text-hover);}
+    .status{margin-top:10px;font-size:12px;color:var(--text-muted);min-height:16px;}
+    .status.error{color:#ff8a80;}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="brand">
+      <img src="omnistream_logo.png" alt="OmniStream">
+      <h1>OmniStream</h1>
+    </div>
+
+    <div class="hint">Sign in to continue.</div>
+
+    <form id="loginForm">
+      <label for="username">Username</label>
+      <input id="username" name="username" autocomplete="username" placeholder="admin" required>
+
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required>
+
+      <div class="row">
+        <button class="btn" type="submit" id="loginBtn">Login</button>
+      </div>
+
+      <div class="status" id="status"></div>
+    </form>
+  </div>
+
+  <script>
+    (function() {
+      const statusEl = document.getElementById('status');
+      const form = document.getElementById('loginForm');
+      const btn = document.getElementById('loginBtn');
+
+      function setStatus(msg, isError) {
+        statusEl.textContent = msg || '';
+        statusEl.className = 'status' + (isError ? ' error' : '');
+      }
+
+      async function checkMode() {
+        try {
+          const r = await fetch('/api/auth/me', { headers: { 'Cache-Control': 'no-cache' } });
+          if (!r.ok) return;
+          const data = await r.json();
+          if (data && data.mode === 'nginx') {
+            setStatus('Internal login is disabled (Nginx + 2FA mode).', true);
+            btn.disabled = true;
+          }
+          if (data && data.authenticated) {
+            if (data.mustChangePassword) {
+              window.location.href = '/change-password.html';
+            } else {
+              window.location.href = '/index.html';
+            }
+          }
+        } catch (_) {
+          // ignore
+        }
+      }
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        setStatus('');
+        btn.disabled = true;
+        btn.textContent = 'Logging in...';
+
+        try {
+          const username = document.getElementById('username').value || '';
+          const password = document.getElementById('password').value || '';
+
+          const r = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+          });
+          const data = await r.json().catch(() => ({}));
+          if (!r.ok) {
+            setStatus(data && data.error ? data.error : ('Login failed (HTTP ' + r.status + ')'), true);
+            return;
+          }
+          if (data.mustChangePassword) {
+            window.location.href = '/change-password.html';
+          } else {
+            window.location.href = '/index.html';
+          }
+        } catch (err) {
+          setStatus('Login failed.', true);
+        } finally {
+          btn.disabled = false;
+          btn.textContent = 'Login';
+        }
+      });
+
+      checkMode();
+    })();
+  </script>
+</body>
+</html>

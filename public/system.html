@@ -98,6 +98,16 @@
         </div>
         <div class="config-row">
           <label>
+            Authentication mode
+            <select id="cfgAuthMode" style="width:100%;max-width:420px;padding:6px 10px;border-radius:6px;border:1px solid #444;background:var(--bg);color:var(--text-main);box-sizing:border-box;">
+              <option value="internal">Internal password</option>
+              <option value="nginx">Nginx + 2FA (external)</option>
+            </select>
+          </label>
+          <div class="hint">Internal mode requires login for all UI and APIs. Nginx mode disables internal login entirely (your reverse proxy must enforce authentication).</div>
+        </div>
+        <div class="config-row">
+          <label>
             History retention (maxHistory)
             <input type="number" id="cfgMaxHistory" placeholder="500">
           </label>
@@ -282,6 +292,12 @@
             maxHistoryInput.value = '';
           }
         }
+
+        const authModeSel = document.getElementById('cfgAuthMode');
+        if (authModeSel) {
+          const mode = data && data.auth && data.auth.mode ? String(data.auth.mode) : 'internal';
+          authModeSel.value = (mode === 'nginx') ? 'nginx' : 'internal';
+        }
       } catch (e) {
         console.error('Failed to load app config:', e);
         const status = document.getElementById('configStatus');
@@ -352,6 +368,11 @@
               payload.maxHistory = n;
             }
           }
+        }
+
+        const authModeSel = document.getElementById('cfgAuthMode');
+        if (authModeSel) {
+          payload.authMode = (authModeSel.value === 'nginx') ? 'nginx' : 'internal';
         }
 
         const resp = await fetch('/api/config/app', {
