@@ -44,8 +44,13 @@ OmniStream is a dashboard to monitor multiple Plex, Jellyfin, and Emby servers o
 
 ## Security notes
 
-- OmniStream has **no built-in authentication**. Treat it like an admin panel.
-- Run it on a **trusted network** (LAN/VPN) and/or put it behind a reverse proxy that enforces auth.
+- OmniStream supports two authentication modes: **Internal** (built-in login) and **Nginx** (no built-in auth; you enforce auth at your reverse proxy).
+- If **Internal** auth is enabled, the default credentials are:
+	- Username: `admin`
+	- Password: `omnistream`
+	- You will be forced to change the password on first login.
+- If you are running OmniStream behind Nginx + Basic Auth / 2FA, set **Authentication mode** to **Nginx** in **Settings → System** to disable internal auth completely.
+- Regardless of auth mode, treat OmniStream like an admin panel: keep it on a **trusted network** (LAN/VPN) and/or restrict inbound access so only your reverse proxy can reach it.
 - As of recent builds, **CORS is disabled by default**. If you intentionally need cross-origin API access, set `OMNISTREAM_CORS_ORIGINS` to a comma-separated allowlist (for example: `http://YOUR_UI_HOST_1:3000,http://YOUR_UI_HOST_2:8080`).
 
 ### Nginx + username/password (Basic Auth)
