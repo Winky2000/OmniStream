@@ -190,10 +190,35 @@
       }
     }
 
+    const EXPANDED_KEY = 'omnistreamGlanceExpandedServers';
     const expandedServers = new Set();
     let lastData = null;
 
+    function loadExpandedServers() {
+      try {
+        const raw = localStorage.getItem(EXPANDED_KEY);
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return;
+        expandedServers.clear();
+        parsed.forEach(id => {
+          if (id !== null && id !== undefined) expandedServers.add(String(id));
+        });
+      } catch (_) {
+        // ignore
+      }
+    }
+
+    function saveExpandedServers() {
+      try {
+        localStorage.setItem(EXPANDED_KEY, JSON.stringify(Array.from(expandedServers)));
+      } catch (_) {
+        // ignore
+      }
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
+      loadExpandedServers();
       // Expand/collapse submenus for both Newsletter and Settings groups
       document.querySelectorAll('.settings-group').forEach(group => {
         const toggle = group.querySelector('.newsletter-toggle, .settings-toggle');
@@ -402,6 +427,7 @@
               const id = String(s.id);
               if (expandedServers.has(id)) expandedServers.delete(id);
               else expandedServers.add(id);
+              saveExpandedServers();
               if (lastData) render(lastData);
             });
             footer.appendChild(btn);
