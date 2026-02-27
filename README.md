@@ -15,10 +15,13 @@ OmniStream is a dashboard to monitor multiple Plex, Jellyfin, and Emby servers o
 	printf "[]\n" > /home/youruser/omnistream/servers.json
 	# Persist internal auth + settings (password changes are written here)
 	printf "{}\n" > /home/youruser/omnistream/config.json
+	# Persist history/reports (SQLite) across restarts
+	touch /home/youruser/omnistream/history.db
 
-	# Optionally point SERVERS_PATH / CONFIG_PATH at your host files
+	# Optionally point SERVERS_PATH / CONFIG_PATH / HISTORY_DB_PATH at your host files
 	export SERVERS_PATH=/home/youruser/omnistream/servers.json
 	export CONFIG_PATH=/home/youruser/omnistream/config.json
+	export HISTORY_DB_PATH=/home/youruser/omnistream/history.db
 
 	# From the project root (where docker-compose.yml lives):
 	docker compose up -d
@@ -151,6 +154,7 @@ services:
 		volumes:
 			- ${CONFIG_PATH:-./config.json}:/usr/src/app/config.json
 			- ${SERVERS_PATH:-./servers.json}:/usr/src/app/servers.json
+			- ${HISTORY_DB_PATH:-./history.db}:/usr/src/app/history.db
 			# Optional: override bundled UI with local files
 			# - ./public:/usr/src/app/public:ro
 ```
@@ -161,6 +165,7 @@ From the project root:
 # Optionally point SERVERS_PATH at your host file
 export SERVERS_PATH=/home/youruser/omnistream/servers.json
 export CONFIG_PATH=/home/youruser/omnistream/config.json
+	export HISTORY_DB_PATH=/home/youruser/omnistream/history.db
 
 docker compose up -d
 ```
@@ -174,11 +179,13 @@ Then open:
 ```bash
 mkdir -p /home/youruser/omnistream
 printf "[]\n" > /home/youruser/omnistream/servers.json
+	touch /home/youruser/omnistream/history.db
 
 docker run -d \
 	--name omnistream \
 	-p 3000:3000 \
 	-v /home/youruser/omnistream/servers.json:/usr/src/app/servers.json \
+		-v /home/youruser/omnistream/history.db:/usr/src/app/history.db \
 	-e NODE_ENV=production \
 	ghcr.io/winky2000/omnistream:latest
 ```

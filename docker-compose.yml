@@ -18,6 +18,10 @@ services:
       # ./servers.json next to this compose file, but you can
       # override with SERVERS_PATH=/absolute/path/to/servers.json
       - ${SERVERS_PATH:-./servers.json}:/usr/src/app/servers.json
+      # Persist history.db (SQLite) so History/Reports survive container restarts/recreates.
+      # IMPORTANT: ensure the host path points to a regular file (create it first),
+      # otherwise Docker may create a directory and OmniStream won't be able to write.
+      - ${HISTORY_DB_PATH:-./history.db}:/usr/src/app/history.db
       # Optional: uncomment to override the bundled UI with the
       # public/ folder from this checkout (useful for local dev)
       # - ./public:/usr/src/app/public:ro
