@@ -3490,28 +3490,76 @@ app.get('/api/reports/watch-statistics', async (req, res) => {
       )
     ]);
 
-    // Current concurrency (live)
+    // Peak concurrency (max) over the selected window, based on history intervals.
     // IMPORTANT: match the dashboard behavior by excluding disabled servers.
     const enabledIds = new Set((Array.isArray(servers) ? servers : [])
       .filter(s => s && !s.disabled)
       .map(s => String(s.id)));
 
-    let concurrentStreams = 0;
-    let concurrentTranscodes = 0;
-    let concurrentDirectPlays = 0;
-    Object.values(statuses || {}).forEach(st => {
-      if (!st || !st.online || !Array.isArray(st.sessions)) return;
-      if (st.id != null && !enabledIds.has(String(st.id))) return;
-      st.sessions.forEach(sess => {
-        concurrentStreams++;
-        const stream = (sess.stream || sess.state || '').toString().toLowerCase();
-        const isTranscoding = (typeof sess.transcoding === 'boolean')
-          ? sess.transcoding
-          : (stream.includes('transcode'));
-        if (isTranscoding) concurrentTranscodes++;
-        else concurrentDirectPlays++;
-      });
-    });
+    const computePeakConcurrencyFromHistory = async () => {
+      const rangeStartMs = Date.parse(startIso);
+      const rangeEndIso = new Date(now).toISOString();
+      const rangeEndMs = now;
+      if (!Number.isFinite(rangeStartMs) || !Number.isFinite(rangeEndMs) || rangeEndMs <= rangeStartMs) {
+        return { streams: 0, transcodes: 0, directPlays: 0 };
+      }
+
+      const enabledIdList = Array.from(enabledIds);
+      if (!enabledIdList.length) return { streams: 0, transcodes: 0, directPlays: 0 };
+      const inSql = enabledIdList.map(() => '?').join(',');
+
+      const rows = await dbAll(
+        `SELECT time AS startedAt,
+                COALESCE(endedAt, lastSeenAt, time) AS endedAt,
+                serverId,
+                transcoding,
+                stream
+           FROM history
+          WHERE time <= ?
+            AND COALESCE(endedAt, lastSeenAt, time) >= ?
+            AND serverId IN (${inSql})`,
+        [rangeEndIso, startIso, ...enabledIdList]
+      );
+
+      const events = [];
+      for (const r of rows) {
+        const startMsRaw = Date.parse(r.startedAt);
+        const endMsRaw = Date.parse(r.endedAt);
+        if (!Number.isFinite(startMsRaw) || !Number.isFinite(endMsRaw)) continue;
+
+        const startMs = Math.max(startMsRaw, rangeStartMs);
+        const endMs = Math.min(endMsRaw, rangeEndMs);
+        if (!(endMs > startMs)) continue;
+
+        const streamTxt = String(r.stream || '').toLowerCase();
+        const isTranscoding = (r.transcoding === 1 || r.transcoding === true) || streamTxt.includes('transcode');
+        const isDirect = !isTranscoding;
+
+        // Use [start, end) intervals. Apply end before start at the same timestamp.
+        events.push({ t: startMs, order: 1, all: +1, trans: isTranscoding ? +1 : 0, direct: isDirect ? +1 : 0 });
+        events.push({ t: endMs, order: 0, all: -1, trans: isTranscoding ? -1 : 0, direct: isDirect ? -1 : 0 });
+      }
+
+      events.sort((a, b) => (a.t - b.t) || (a.order - b.order));
+      let curAll = 0, curTrans = 0, curDirect = 0;
+      let peakAll = 0, peakTrans = 0, peakDirect = 0;
+      for (const ev of events) {
+        curAll += ev.all;
+        curTrans += ev.trans;
+        curDirect += ev.direct;
+        if (curAll > peakAll) peakAll = curAll;
+        if (curTrans > peakTrans) peakTrans = curTrans;
+        if (curDirect > peakDirect) peakDirect = curDirect;
+      }
+
+      return {
+        streams: peakAll,
+        transcodes: peakTrans,
+        directPlays: peakDirect
+      };
+    };
+
+    const peakConcurrent = await computePeakConcurrencyFromHistory();
 
     res.json({
       metric,
@@ -3530,9 +3578,9 @@ app.get('/api/reports/watch-statistics', async (req, res) => {
         mostActiveUsers,
         mostActivePlatforms,
         mostConcurrentStreams: {
-          streams: concurrentStreams,
-          transcodes: concurrentTranscodes,
-          directPlays: concurrentDirectPlays
+          streams: peakConcurrent.streams,
+          transcodes: peakConcurrent.transcodes,
+          directPlays: peakConcurrent.directPlays
         }
       }
     });

@@ -349,7 +349,7 @@
         { name: 'Concurrent Transcodes', value: c.transcodes ?? 0 },
         { name: 'Concurrent Direct Plays', value: c.directPlays ?? 0 }
       ];
-      return renderPanel({ title: 'Most Concurrent Streams', right: 'STREAMS', items, valueLabel: 'count', showThumb: false });
+      return renderPanel({ title: 'Peak Concurrent Streams', right: 'STREAMS', items, valueLabel: 'count', showThumb: false });
     }
 
     async function fetchWatchStats(metric, days) {
