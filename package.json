@@ -4,7 +4,8 @@
   "description": "OmniStream — monitor multiple Plex, Jellyfin, and Emby servers",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node scripts/e2e-test.js"
   },
   "overrides": {
     "tar": "7.5.9"
