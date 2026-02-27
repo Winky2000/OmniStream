@@ -901,6 +901,9 @@ function buildCustomSectionsBlocks(sections) {
       const headerSize = normalizeCustomHeaderSize(s && s.headerSize);
       const headerColor = normalizeHexColor(s && s.headerColor);
 
+      let columnCount = parseInt((s && s.columnCount != null) ? s.columnCount : 3, 10);
+      if (![1, 2, 3].includes(columnCount)) columnCount = 3;
+
       const cols = s && Array.isArray(s.columns) ? s.columns : [];
       const c1 = normalizeCustomHeaderColumn(cols[0]);
       const c2 = normalizeCustomHeaderColumn(cols[1]);
@@ -908,8 +911,9 @@ function buildCustomSectionsBlocks(sections) {
       const v1 = (c1 && typeof c1.value === 'string') ? c1.value.trim() : '';
       const v2 = (c2 && typeof c2.value === 'string') ? c2.value.trim() : '';
       const v3 = (c3 && typeof c3.value === 'string') ? c3.value.trim() : '';
-      const hasAny = !!(header || v1 || v2 || v3);
-      return hasAny ? { header, headerSize, headerColor, columns: [c1, c2, c3] } : null;
+      const activeVals = columnCount === 1 ? [v1] : (columnCount === 2 ? [v1, v2] : [v1, v2, v3]);
+      const hasAny = !!(header || activeVals.some(Boolean));
+      return hasAny ? { header, headerSize, headerColor, columnCount, columns: [c1, c2, c3] } : null;
     })
     .filter(Boolean);
 
@@ -924,11 +928,14 @@ function buildCustomSectionsBlocks(sections) {
     const headerColor = normalizeHexColor(sec.headerColor) || '#e5e7eb';
     const sizePx = headerSize === 'sm' ? 18 : (headerSize === 'lg' ? 26 : 22);
 
+    let columnCount = parseInt(sec.columnCount != null ? sec.columnCount : 3, 10);
+    if (![1, 2, 3].includes(columnCount)) columnCount = 3;
+
     const [col1, col2, col3] = sec.columns;
     const c1 = col1 && typeof col1.value === 'string' ? col1.value.trim() : '';
     const c2 = col2 && typeof col2.value === 'string' ? col2.value.trim() : '';
     const c3 = col3 && typeof col3.value === 'string' ? col3.value.trim() : '';
-    const hasAnyColumnData = Boolean(c1 || c2 || c3);
+    const hasAnyColumnData = columnCount === 1 ? Boolean(c1) : (columnCount === 2 ? Boolean(c1 || c2) : Boolean(c1 || c2 || c3));
 
     if (header) {
       textParts.push(header);
@@ -944,19 +951,34 @@ function buildCustomSectionsBlocks(sections) {
         }
         return raw.split(/\r\n|\r|\n/).filter(Boolean);
       };
-      const lines1 = linesFor(col1);
-      const lines2 = linesFor(col2);
-      const lines3 = linesFor(col3);
-      const max = Math.max(lines1.length, lines2.length, lines3.length);
+
+      const activeCols = columnCount === 1 ? [col1] : (columnCount === 2 ? [col1, col2] : [col1, col2, col3]);
+      const lines = activeCols.map(linesFor);
+      const max = Math.max(0, ...lines.map(a => a.length));
       for (let i = 0; i < max; i++) {
-        const a = lines1[i] || '';
-        const b = lines2[i] || '';
-        const c = lines3[i] || '';
-        const row = [a, b, c].filter(Boolean).join(' | ');
+        const row = lines.map(arr => arr[i] || '').filter(Boolean).join(' | ');
         if (row) textParts.push(row);
       }
     }
     textParts.push('');
+
+    const renderColumnCell = (rawCol, rawValue, widthPct, isFirst) => {
+      const normalized = normalizeCustomHeaderColumn(rawCol);
+      const content = normalized.type === 'url' ? renderUrlColumnHtml(rawValue) : linkifyAndPreserveLines(rawValue);
+      const borderLeft = isFirst ? '' : 'border-left:1px solid rgba(148,163,184,0.18);';
+      return `<td width="${widthPct}%" valign="top" style="padding:12px 10px;background:#0b1226;color:#e5e7eb;font-size:13px;line-height:1.5;${borderLeft}" class="dark-mode-card">${content}</td>`;
+    };
+
+    const htmlColumns = (() => {
+      if (!hasAnyColumnData) return '';
+      if (columnCount === 1) {
+        return renderColumnCell(col1, c1, 100, true);
+      }
+      if (columnCount === 2) {
+        return renderColumnCell(col1, c1, 50, true) + renderColumnCell(col2, c2, 50, false);
+      }
+      return renderColumnCell(col1, c1, 33, true) + renderColumnCell(col2, c2, 33, false) + renderColumnCell(col3, c3, 34, false);
+    })();
 
     htmlParts.push(
       `<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width:600px;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">` +
@@ -971,9 +993,7 @@ function buildCustomSectionsBlocks(sections) {
           `<td style="padding: 0 20px 18px 20px;">` +
           `<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="border-radius:10px;overflow:hidden;border:1px solid rgba(148,163,184,0.25);">` +
           `<tr>` +
-          `<td width="33%" valign="top" style="padding:12px 10px;background:#0b1226;color:#e5e7eb;font-size:13px;line-height:1.5;" class="dark-mode-card">${normalizeCustomHeaderColumn(col1).type === 'url' ? renderUrlColumnHtml(c1) : linkifyAndPreserveLines(c1)}</td>` +
-          `<td width="33%" valign="top" style="padding:12px 10px;background:#0b1226;color:#e5e7eb;font-size:13px;line-height:1.5;border-left:1px solid rgba(148,163,184,0.18);" class="dark-mode-card">${normalizeCustomHeaderColumn(col2).type === 'url' ? renderUrlColumnHtml(c2) : linkifyAndPreserveLines(c2)}</td>` +
-          `<td width="34%" valign="top" style="padding:12px 10px;background:#0b1226;color:#e5e7eb;font-size:13px;line-height:1.5;border-left:1px solid rgba(148,163,184,0.18);" class="dark-mode-card">${normalizeCustomHeaderColumn(col3).type === 'url' ? renderUrlColumnHtml(c3) : linkifyAndPreserveLines(c3)}</td>` +
+          htmlColumns +
           `</tr>` +
           `</table>` +
           `</td>` +
@@ -5350,6 +5370,11 @@ app.get('/api/config/app', (req, res) => {
           header: s && typeof s.header === 'string' ? s.header : '',
           headerSize: normalizeCustomHeaderSize(s && s.headerSize),
           headerColor: normalizeHexColor(s && s.headerColor) || '#e5e7eb',
+          columnCount: (() => {
+            let cc = parseInt((s && s.columnCount != null) ? s.columnCount : 3, 10);
+            if (![1, 2, 3].includes(cc)) cc = 3;
+            return cc;
+          })(),
           columns: Array.isArray(s && s.columns)
             ? [
               normalizeCustomHeaderColumn(s.columns[0]),
@@ -5492,6 +5517,9 @@ app.put('/api/config/app', (req, res) => {
           const headerSize = normalizeCustomHeaderSize(s && s.headerSize);
           const headerColor = normalizeHexColor(s && s.headerColor) || '#e5e7eb';
 
+          let columnCount = parseInt((s && s.columnCount != null) ? s.columnCount : 3, 10);
+          if (![1, 2, 3].includes(columnCount)) columnCount = 3;
+
           const cols = s && Array.isArray(s.columns) ? s.columns : [];
           const c1 = normalizeCustomHeaderColumn(cols[0]);
           const c2 = normalizeCustomHeaderColumn(cols[1]);
@@ -5501,6 +5529,7 @@ app.put('/api/config/app', (req, res) => {
             header,
             headerSize,
             headerColor,
+            columnCount,
             columns: [c1, c2, c3]
           };
         });
@@ -5614,6 +5643,11 @@ app.put('/api/config/app', (req, res) => {
           header: s && typeof s.header === 'string' ? s.header : '',
           headerSize: normalizeCustomHeaderSize(s && s.headerSize),
           headerColor: normalizeHexColor(s && s.headerColor) || '#e5e7eb',
+          columnCount: (() => {
+            let cc = parseInt((s && s.columnCount != null) ? s.columnCount : 3, 10);
+            if (![1, 2, 3].includes(cc)) cc = 3;
+            return cc;
+          })(),
           columns: Array.isArray(s && s.columns)
             ? [
               normalizeCustomHeaderColumn(s.columns[0]),

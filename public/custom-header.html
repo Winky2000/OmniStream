@@ -53,8 +53,11 @@
     .section-meta label{margin:0;}
     .col-type-row{display:flex;gap:8px;align-items:center;margin-bottom:6px;}
     .col-type-row select{max-width:120px;}
-    .section-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;}
-    @media (max-width: 960px){.section-grid{grid-template-columns:minmax(0,1fr);} }
+    .section-grid{display:grid;gap:10px;}
+    .section-grid[data-cols="1"]{grid-template-columns:repeat(1,minmax(0,1fr));}
+    .section-grid[data-cols="2"]{grid-template-columns:repeat(2,minmax(0,1fr));}
+    .section-grid[data-cols="3"]{grid-template-columns:repeat(3,minmax(0,1fr));}
+    @media (max-width: 960px){.section-grid{grid-template-columns:minmax(0,1fr)!important;} }
   </style>
 </head>
 <body>
@@ -101,7 +104,7 @@
         <h2>Custom header blocks</h2>
         <div class="hint">
           Use this to create optional blocks that appear under the newsletter logo/header.
-          If all 3 columns are empty, OmniStream renders it as a header-only note (no columns).
+          If all columns are empty, OmniStream renders it as a header-only note (no columns).
           You can still place <code>{{CUSTOM_SECTIONS}}</code> manually in a template, but if you omit it, OmniStream will auto-insert these blocks near the top.
         </div>
 
@@ -171,11 +174,15 @@
 
     function normalizeSection(sec, idx){
       const cols = sec && Array.isArray(sec.columns) ? sec.columns : [];
+      const rawCount = (sec && (sec.columnCount != null ? sec.columnCount : (sec.columnsCount != null ? sec.columnsCount : sec.columnsToShow)));
+      let columnCount = parseInt(rawCount, 10);
+      if (![1, 2, 3].includes(columnCount)) columnCount = 3;
       return {
         id: sec && sec.id != null ? String(sec.id) : `sec-${idx + 1}`,
         header: sec && typeof sec.header === 'string' ? sec.header : '',
         headerSize: sec && typeof sec.headerSize === 'string' ? sec.headerSize : 'md',
         headerColor: sec && typeof sec.headerColor === 'string' ? sec.headerColor : '#e5e7eb',
+        columnCount,
         columns: [normalizeCol(cols[0]), normalizeCol(cols[1]), normalizeCol(cols[2])]
       };
     }
@@ -274,12 +281,34 @@
 
         meta.appendChild(sizeLabel);
         meta.appendChild(colorLabel);
+
+        const countLabel = document.createElement('label');
+        countLabel.textContent = 'Columns';
+        countLabel.style.minWidth = '140px';
+        const countSelect = document.createElement('select');
+        [1,2,3].forEach(n => {
+          const opt = document.createElement('option');
+          opt.value = String(n);
+          opt.textContent = String(n);
+          countSelect.appendChild(opt);
+        });
+        countSelect.value = String([1,2,3].includes(sec.columnCount) ? sec.columnCount : 3);
+        countSelect.addEventListener('change', () => {
+          const next = parseInt(countSelect.value, 10);
+          sec.columnCount = [1,2,3].includes(next) ? next : 3;
+          renderCustomSections();
+        });
+        countLabel.appendChild(countSelect);
+        meta.appendChild(countLabel);
         wrap.appendChild(meta);
 
         const grid = document.createElement('div');
         grid.className = 'section-grid';
 
-        for (let c = 0; c < 3; c++){
+        const effectiveCount = [1, 2, 3].includes(sec.columnCount) ? sec.columnCount : 3;
+        grid.setAttribute('data-cols', String(effectiveCount));
+
+        for (let c = 0; c < effectiveCount; c++){
           const colLabel = document.createElement('label');
           colLabel.textContent = `Column ${c + 1}`;
 
@@ -365,6 +394,7 @@
           header: s.header || '',
           headerSize: (s.headerSize === 'sm' || s.headerSize === 'lg') ? s.headerSize : 'md',
           headerColor: typeof s.headerColor === 'string' ? s.headerColor : '#e5e7eb',
+          columnCount: [1,2,3].includes(parseInt(s.columnCount, 10)) ? parseInt(s.columnCount, 10) : 3,
           columns: Array.isArray(s.columns) ? [normalizeCol(s.columns[0]), normalizeCol(s.columns[1]), normalizeCol(s.columns[2])] : [normalizeCol(''), normalizeCol(''), normalizeCol('')]
         }));
         const resp = await fetch('/api/config/app', {
@@ -396,6 +426,7 @@
           header: '',
           headerSize: 'md',
           headerColor: '#e5e7eb',
+          columnCount: 3,
           columns: [
             { type: 'text', value: '' },
             { type: 'text', value: '' },
