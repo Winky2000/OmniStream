@@ -61,6 +61,31 @@
       scrollbar-width:thin;
     }
 
+    .sessions-glance.wrap{
+      flex-wrap:wrap;
+      overflow-x:hidden;
+      overflow-y:visible;
+    }
+
+    .sessions-footer{
+      margin-top:10px;
+      display:flex;
+      justify-content:flex-end;
+      align-items:center;
+      gap:10px;
+    }
+    .sessions-footer-note{font-size:12px;color:var(--text-faint);}
+    .sessions-footer-btn{
+      padding:4px 10px;
+      border-radius:999px;
+      border:1px solid var(--btn-border);
+      background:var(--btn-bg);
+      color:var(--btn-text);
+      cursor:pointer;
+      font-size:12px;
+    }
+    .sessions-footer-btn:hover{background:var(--btn-bg-hover);color:var(--btn-text-hover);}
+
     .session-tiny{
       border-radius:10px;
       border:1px solid rgba(148,163,184,0.20);
@@ -164,6 +189,9 @@
         return { servers: [], statuses: {} };
       }
     }
+
+    const expandedServers = new Set();
+    let lastData = null;
 
     document.addEventListener('DOMContentLoaded', () => {
       // Expand/collapse submenus for both Newsletter and Settings groups
@@ -276,10 +304,12 @@
 
         if (st.online && visibleSessions.length > 0) {
           const sessionsDiv = document.createElement('div');
-          sessionsDiv.className = 'sessions-glance';
+          const expanded = expandedServers.has(String(s.id));
+          sessionsDiv.className = 'sessions-glance' + (expanded ? ' wrap' : '');
 
           const maxCards = 25;
-          visibleSessions.slice(0, maxCards).forEach(sess => {
+          const sliceCount = expanded ? visibleSessions.length : maxCards;
+          visibleSessions.slice(0, sliceCount).forEach(sess => {
             let isTranscoding = false;
             if (typeof sess.transcoding === 'boolean') {
               isTranscoding = sess.transcoding;
@@ -352,6 +382,32 @@
           });
 
           card.appendChild(sessionsDiv);
+
+          if (visibleSessions.length > maxCards) {
+            const footer = document.createElement('div');
+            footer.className = 'sessions-footer';
+
+            const note = document.createElement('div');
+            note.className = 'sessions-footer-note';
+            note.textContent = expanded
+              ? `Showing all ${visibleSessions.length}`
+              : `Showing ${maxCards} of ${visibleSessions.length}`;
+            footer.appendChild(note);
+
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'sessions-footer-btn';
+            btn.textContent = expanded ? 'Show less' : `Show all (${visibleSessions.length})`;
+            btn.addEventListener('click', () => {
+              const id = String(s.id);
+              if (expandedServers.has(id)) expandedServers.delete(id);
+              else expandedServers.add(id);
+              if (lastData) render(lastData);
+            });
+            footer.appendChild(btn);
+
+            card.appendChild(footer);
+          }
         } else if (st.online) {
           const empty = document.createElement('div');
           empty.className = 'empty-sessions';
@@ -384,6 +440,7 @@
 
     async function loop() {
       const data = await fetchStatus();
+      lastData = data;
       const sig = signature(data);
       if (sig && sig === lastSig) return;
       lastSig = sig;
