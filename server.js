@@ -177,7 +177,8 @@ let appConfig = {};
 try {
   if (fs.existsSync(CONFIG_FILE)) {
     const rawCfg = fs.readFileSync(CONFIG_FILE, 'utf8');
-    appConfig = rawCfg ? JSON.parse(rawCfg) : {};
+    const cfgText = rawCfg ? String(rawCfg).replace(/^\uFEFF/, '').trim() : '';
+    appConfig = cfgText ? JSON.parse(cfgText) : {};
     console.log('[OmniStream] Loaded config from', CONFIG_FILE);
   }
 } catch (e) {
@@ -192,7 +193,8 @@ try {
       console.error('[OmniStream] servers.json path is a directory, cannot use as config:', SERVERS_FILE);
     } else {
       const raw = fs.readFileSync(SERVERS_FILE, 'utf8');
-      servers = raw ? JSON.parse(raw) : [];
+      const serversText = raw ? String(raw).replace(/^\uFEFF/, '').trim() : '';
+      servers = serversText ? JSON.parse(serversText) : [];
     }
   } else {
     // Auto-create an empty servers.json file if it doesn't exist
