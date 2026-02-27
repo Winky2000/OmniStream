@@ -5,27 +5,11 @@
   <title>OmniStream - At a glance</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link rel="stylesheet" href="theme.css">
+  <link rel="stylesheet" href="shell.css">
+  <script src="shell.js" defer></script>
   <style>
     body{font-family:Segoe UI,Arial;background:var(--bg);color:var(--text-main);margin:0;padding:0}
-    .app-shell{display:flex;min-height:100vh;}
-    .sidebar{width:220px;background:#050814;border-right:1px solid rgba(15,23,42,0.8);padding:18px 16px;box-sizing:border-box;display:flex;flex-direction:column;gap:18px;}
-    .sidebar-brand{font-size:13px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:var(--text-muted);}
-    .sidebar-nav{display:flex;flex-direction:column;gap:4px;margin-top:8px;}
-    .nav-link{display:block;padding:8px 10px;border-radius:8px;font-size:13px;color:var(--text-muted);text-decoration:none;transition:background 0.15s,color 0.15s;}
-    .nav-link:hover{background:rgba(148,163,184,0.15);color:var(--text-main);}
-    .nav-link-active{background:rgba(59,130,246,0.18);color:#e5edff;border-left:3px solid var(--btn-border);padding-left:7px;}
-    .nav-group-toggle{display:block;width:100%;text-align:left;padding:8px 10px;border-radius:8px;font-size:13px;color:var(--text-muted);background:transparent;border:0;cursor:pointer;font-family:inherit;transition:color 0.15s;}
-    .nav-group-toggle:hover{color:var(--text-main);}
-    .settings-group{margin-top:4px;}
-    .settings-submenu{display:none;flex-direction:column;gap:2px;padding-left:14px;margin-top:3px;}
-    .settings-submenu.open{display:flex;}
-    .submenu-link{display:block;padding:6px 10px;border-radius:8px;font-size:12px;color:var(--text-muted);text-decoration:none;}
-    .submenu-link:hover{background:rgba(148,163,184,0.15);color:var(--text-main);}
-    .submenu-link-active{background:rgba(59,130,246,0.18);color:#e5edff;}
-    .sidebar-toggle{margin-bottom:10px;padding:4px 10px;border-radius:999px;border:1px solid var(--btn-border);background:var(--btn-bg);color:var(--btn-text);cursor:pointer;font-size:12px;}
-    .sidebar-toggle:hover{background:var(--btn-bg-hover);color:var(--btn-text-hover);}
-    .app-shell.sidebar-collapsed .sidebar{display:none;}
-    .main-content{flex:1;box-sizing:border-box;padding:20px;}
+    .main-content{padding:20px;}
 
     .header-flex{display:flex;align-items:center;gap:14px;margin-bottom:18px;}
     h1{margin:0;color:var(--text-main);letter-spacing:0.5px;display:inline-block;vertical-align:middle;font-size:1.8em;font-weight:600;}
@@ -170,16 +154,6 @@
   </div>
 
   <script>
-    // Apply saved theme from Settings
-    (function() {
-      const savedTheme = localStorage.getItem('omnistreamTheme') || 'default';
-      if (savedTheme && savedTheme !== 'default') {
-        document.documentElement.setAttribute('data-theme', savedTheme);
-      } else {
-        document.documentElement.removeAttribute('data-theme');
-      }
-    })();
-
     async function fetchStatus() {
       try {
         const r = await fetch('/api/status');
@@ -219,31 +193,6 @@
 
     document.addEventListener('DOMContentLoaded', () => {
       loadExpandedServers();
-      // Expand/collapse submenus for both Newsletter and Settings groups
-      document.querySelectorAll('.settings-group').forEach(group => {
-        const toggle = group.querySelector('.newsletter-toggle, .settings-toggle');
-        const submenu = group.querySelector('.settings-submenu');
-        if (toggle && submenu) {
-          toggle.addEventListener('click', () => {
-            submenu.classList.toggle('open');
-          });
-        }
-      });
-
-      const appShell = document.querySelector('.app-shell');
-      const sidebarToggle = document.getElementById('sidebarToggle');
-      if (appShell && sidebarToggle) {
-        const savedSidebar = localStorage.getItem('omnistreamSidebar') || 'open';
-        if (savedSidebar === 'collapsed') {
-          appShell.classList.add('sidebar-collapsed');
-          sidebarToggle.textContent = 'Show menu';
-        }
-        sidebarToggle.addEventListener('click', () => {
-          const collapsed = appShell.classList.toggle('sidebar-collapsed');
-          sidebarToggle.textContent = collapsed ? 'Show menu' : 'Hide menu';
-          localStorage.setItem('omnistreamSidebar', collapsed ? 'collapsed' : 'open');
-        });
-      }
     });
 
     function nowPlayingLabel(sess) {

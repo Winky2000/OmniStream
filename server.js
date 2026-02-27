@@ -1631,6 +1631,7 @@ let lastNotificationIds = new Set();
 let lastPollAt = null;           // ISO string of last completed pollAll
 let lastPollDurationMs = null;   // Duration of last pollAll in milliseconds
 let lastPollError = null;        // Last top-level pollAll error message, if any
+let pollAllInFlight = false;     // Prevent overlapping pollAll runs when one poll takes longer than the interval
 
 // Track currently active sessions so history can record one row per session
 // (insert on first sight, update while active, and mark ended when it disappears).
@@ -3143,24 +3144,27 @@ async function pollServer(s) {
 }
 
 async function pollAll() {
-  if (!servers || servers.length === 0) {
-    lastPollAt = new Date().toISOString();
-    lastPollDurationMs = 0;
-    lastPollError = null;
-    return;
-  }
-  const start = Date.now();
-  lastPollError = null;
+  if (pollAllInFlight) return;
+  pollAllInFlight = true;
   try {
-    await Promise.all(servers.map((s) => pollServer(s)));
-  } catch (e) {
-    // Capture any unexpected top-level error from Promise.all; individual server
-    // errors are already recorded on their respective status entries.
-    lastPollError = e && e.message ? e.message : String(e);
-  }
-  const duration = Date.now() - start;
-  lastPollAt = new Date().toISOString();
-  lastPollDurationMs = duration;
+    if (!servers || servers.length === 0) {
+      lastPollAt = new Date().toISOString();
+      lastPollDurationMs = 0;
+      lastPollError = null;
+      return;
+    }
+    const start = Date.now();
+    lastPollError = null;
+    try {
+      await Promise.all(servers.map((s) => pollServer(s)));
+    } catch (e) {
+      // Capture any unexpected top-level error from Promise.all; individual server
+      // errors are already recorded on their respective status entries.
+      lastPollError = e && e.message ? e.message : String(e);
+    }
+    const duration = Date.now() - start;
+    lastPollAt = new Date().toISOString();
+    lastPollDurationMs = duration;
 
   // After polling all servers, record one row per session in history database.
   // We insert when a session is first seen, update while active, and mark ended when it disappears.
@@ -3319,6 +3323,9 @@ async function pollAll() {
   }
   // After updating statuses and history, evaluate and send any outbound notifications
   triggerNotifiers();
+  } finally {
+    pollAllInFlight = false;
+  }
 }
 
 pollAll();
