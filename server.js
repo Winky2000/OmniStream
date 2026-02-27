@@ -3491,11 +3491,17 @@ app.get('/api/reports/watch-statistics', async (req, res) => {
     ]);
 
     // Current concurrency (live)
+    // IMPORTANT: match the dashboard behavior by excluding disabled servers.
+    const enabledIds = new Set((Array.isArray(servers) ? servers : [])
+      .filter(s => s && !s.disabled)
+      .map(s => String(s.id)));
+
     let concurrentStreams = 0;
     let concurrentTranscodes = 0;
     let concurrentDirectPlays = 0;
     Object.values(statuses || {}).forEach(st => {
       if (!st || !st.online || !Array.isArray(st.sessions)) return;
+      if (st.id != null && !enabledIds.has(String(st.id))) return;
       st.sessions.forEach(sess => {
         concurrentStreams++;
         const stream = (sess.stream || sess.state || '').toString().toLowerCase();
