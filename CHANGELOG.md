@@ -1,4 +1,4 @@
-# Changelog
+﻿# Changelog
 
 All notable changes to this project will be documented in this file.
 
@@ -7,6 +7,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 _No unreleased changes yet._
+
+## [0.3.1] - 2026-02-27
+
+### Added
+- New **At a glance** page for a compact multi-server view.
+
+### Changed
+- Frontend shell/sidebar CSS + wiring is deduplicated into shared assets (shell.css / shell.js).
+
+### Fixed
+- Prevent overlapping polling runs when a poll takes longer than the interval.
+- Docker Compose now persists history.db so history survives container rebuilds.
 
 ## [0.3.0] - 2026-02-24
 
@@ -98,4 +110,5 @@ _No unreleased changes yet._
 [0.2.2]: https://github.com/Winky2000/OmniStream/releases/tag/v0.2.2
 [0.2.3]: https://github.com/Winky2000/OmniStream/releases/tag/v0.2.3
 [0.3.0]: https://github.com/Winky2000/OmniStream/releases/tag/v0.3.0
-[Unreleased]: https://github.com/Winky2000/OmniStream/compare/v0.3.0...HEAD
+[0.3.1]: https://github.com/Winky2000/OmniStream/releases/tag/v0.3.1
+[Unreleased]: https://github.com/Winky2000/OmniStream/compare/v0.3.1...HEAD
