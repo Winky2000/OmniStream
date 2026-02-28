@@ -7,6 +7,14 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+$BaseUrl = [string]$BaseUrl
+$BaseUrl = $BaseUrl.Trim()
+if ([string]::IsNullOrWhiteSpace($BaseUrl)) {
+  Write-Output 'BaseUrl is required.'
+  exit 1
+}
+$BaseUrl = $BaseUrl.TrimEnd('/')
+
 $pages = @(
   'index.html','glance.html','history.html','reports.html','notifications.html',
   'admin.html','servers.html','display.html','notifiers.html','system.html','about.html',
@@ -14,6 +22,30 @@ $pages = @(
 )
 
 $assets = @('shell.css','shell.js','theme.css')
+
+function Read-HttpErrorDetails($err) {
+  $status = $null
+  $body = ''
+  try {
+    if ($err -and $err.Exception -and $err.Exception.Response) {
+      $resp = $err.Exception.Response
+      try { $status = [int]$resp.StatusCode } catch { }
+      try {
+        $stream = $resp.GetResponseStream()
+        if ($stream) {
+          $reader = New-Object System.IO.StreamReader($stream)
+          try { $body = $reader.ReadToEnd() } finally { $reader.Close(); $stream.Close() }
+        }
+      } catch { }
+    }
+
+    if ([string]::IsNullOrWhiteSpace($body) -and $err -and $err.ErrorDetails -and $err.ErrorDetails.Message) {
+      $body = [string]$err.ErrorDetails.Message
+    }
+  } catch { }
+
+  return [pscustomobject]@{ Status = $status; Body = $body }
+}
 
 function ConvertFrom-SecureStringToPlain([securestring]$Secure) {
   if (-not $Secure) { return '' }
@@ -42,7 +74,20 @@ function Get-Ok([string]$Url, $WebSession) {
 
 $sess = New-Object Microsoft.PowerShell.Commands.WebRequestSession
 
-if ($PromptPassword -or [string]::IsNullOrWhiteSpace($Password)) {
+$authMode = 'unknown'
+try {
+  $me0 = Invoke-RestMethod -Uri "$BaseUrl/api/auth/me" -Method Get -TimeoutSec 10
+  if ($me0 -and $me0.mode) { $authMode = [string]$me0.mode }
+} catch {
+  # If /api/auth/me isn't reachable, the subsequent login/page checks will surface it.
+}
+
+$shouldLogin = ($authMode -eq 'internal')
+if (-not $shouldLogin -and $authMode -ne 'unknown') {
+  Write-Output "Auth mode is '$authMode' (skipping internal login)."
+}
+
+if ($shouldLogin -and ($PromptPassword -or [string]::IsNullOrWhiteSpace($Password))) {
   try {
     $secure = Read-Host -Prompt "Password for $Username" -AsSecureString
     $Password = ConvertFrom-SecureStringToPlain $secure
@@ -52,25 +97,35 @@ if ($PromptPassword -or [string]::IsNullOrWhiteSpace($Password)) {
   }
 }
 
-try {
-  $loginBody = @{ username = $Username; password = $Password } | ConvertTo-Json
-  Invoke-RestMethod -Uri "$BaseUrl/api/auth/login" -Method Post -ContentType 'application/json' -Body $loginBody -WebSession $sess | Out-Null
-} catch {
-  Write-Output "Login failed for $Username at $BaseUrl/api/auth/login"
-  Write-Output $_.Exception.Message
-  exit 1
+if ($shouldLogin) {
+  try {
+    $loginBody = @{ username = $Username; password = $Password } | ConvertTo-Json
+    Invoke-RestMethod -Uri "$BaseUrl/api/auth/login" -Method Post -ContentType 'application/json' -Body $loginBody -WebSession $sess -TimeoutSec 10 | Out-Null
+  } catch {
+    $d = Read-HttpErrorDetails $_
+    Write-Output "Login failed for $Username at $BaseUrl/api/auth/login"
+    if ($d.Status) { Write-Output ("HTTP {0}" -f $d.Status) }
+    if (-not [string]::IsNullOrWhiteSpace($d.Body)) {
+      Write-Output 'Response body:'
+      Write-Output $d.Body
+    } else {
+      Write-Output $_.Exception.Message
+    }
+    Write-Output "Hint: if you forgot the internal admin password, start OmniStream with OMNISTREAM_RESET_INTERNAL_AUTH=1 to reset credentials to admin/omnistream."
+    exit 1
+  }
 }
 
 $mustChange = $false
 try {
-  $me = Invoke-RestMethod -Uri "$BaseUrl/api/auth/me" -Method Get -WebSession $sess
+  $me = Invoke-RestMethod -Uri "$BaseUrl/api/auth/me" -Method Get -WebSession $sess -TimeoutSec 10
   $mustChange = ($me -and $me.mustChangePassword -eq $true)
 } catch {
   # ignore; we'll just continue and validate by content checks.
 }
 
 if ($mustChange) {
-  Write-Output "Auth is forcing password change (admin/$Password default). Validating change-password page only."
+  Write-Output "Auth is forcing password change. Validating change-password page only."
   try {
     $r = Get-Ok "$BaseUrl/change-password.html" $sess
     $hasThemeCss = ($r.Content -match 'href="theme\.css"')
