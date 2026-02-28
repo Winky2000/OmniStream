@@ -55,7 +55,9 @@ OmniStream is a dashboard to monitor multiple Plex, Jellyfin, and Emby servers o
 	- Username: `admin`
 	- Password: `omnistream`
 	- You will be forced to change the password on first login.
-- If you see **Invalid credentials**, the password has likely already been changed in `config.json`. To reset back to the default for local testing, stop OmniStream and delete `auth.passwordHash` from `config.json` (or delete the whole `auth` block), then start OmniStream again.
+- If you see **Invalid credentials**, the password has likely already been changed in `config.json`. To reset back to the default for local testing, either:
+	- Start OmniStream once with `OMNISTREAM_RESET_INTERNAL_AUTH=1` (forces `admin/omnistream` and sets `passwordChangeRequired=true`), or
+	- Stop OmniStream and delete `auth.passwordHash` from `config.json` (or delete the whole `auth` block), then start OmniStream again.
 - If you are running OmniStream in Docker and your password **keeps reverting after restarts/updates**, you are likely not persisting `config.json`. Bind-mount it into the container (see Docker section below).
 - If you are running OmniStream behind Nginx + Basic Auth / 2FA, set **Authentication mode** to **Nginx** in **Settings → System** to disable internal auth completely.
 - Regardless of auth mode, treat OmniStream like an admin panel: keep it on a **trusted network** (LAN/VPN) and/or restrict inbound access so only your reverse proxy can reach it.
