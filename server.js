@@ -880,8 +880,16 @@ function buildSignedNewsletterPosterUrl({ publicBaseUrl, serverId, path: posterP
 
 function isSafeSentNewsletterId(id) {
   const s = String(id || '').trim();
-  // saveSentNewsletterToDisk uses `${timestamp}_${safeFilename(subject)}`
-  return /^[A-Za-z0-9][A-Za-z0-9._-]{0,240}$/.test(s);
+  if (!s) return false;
+  // These IDs are derived from the subject, so they often include spaces and punctuation.
+  // Safety requirements here are about preventing path traversal and weird control chars,
+  // not about restricting to URL-safe characters (callers should URL-encode).
+  if (s.length > 240) return false;
+  if (s.includes('\0')) return false;
+  if (s.includes('/') || s.includes('\\')) return false;
+  // Prevent sneaky dot-segments even if separators aren't present.
+  if (s === '.' || s === '..') return false;
+  return true;
 }
 
 function resolveSentNewsletterPath(id, ext) {

@@ -8,7 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 _No unreleased changes yet._
 
-## [0.3.2] - 2026-03-01
+## [0.3.3] - 2026-02-28
+
+### Fixed
+- Newsletter: Sent history no longer appears blank when saved subjects contain spaces/punctuation.
+
+## [0.3.2] - 2026-02-28
 
 ### Added
 - Newsletter: sent-newsletter history API + UI page for browsing previously sent newsletters.
@@ -127,4 +132,5 @@ _No unreleased changes yet._
 [0.3.0]: https://github.com/Winky2000/OmniStream/releases/tag/v0.3.0
 [0.3.1]: https://github.com/Winky2000/OmniStream/releases/tag/v0.3.1
 [0.3.2]: https://github.com/Winky2000/OmniStream/releases/tag/v0.3.2
-[Unreleased]: https://github.com/Winky2000/OmniStream/compare/v0.3.2...HEAD
+[0.3.3]: https://github.com/Winky2000/OmniStream/releases/tag/v0.3.3
+[Unreleased]: https://github.com/Winky2000/OmniStream/compare/v0.3.3...HEAD
