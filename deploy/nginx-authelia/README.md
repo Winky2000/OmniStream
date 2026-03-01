@@ -35,6 +35,14 @@ Putting OmniStream behind Nginx + Authelia provides:
 docker compose -f deploy/nginx-authelia/docker-compose.yml up -d
 ```
 
+> This compose file expects host persistence for `config.json`, `history.db`, and `sent_newsletters/`.
+> Make sure the host paths exist before first run:
+>
+> - `config.json` and `history.db` must be regular files (Docker will create directories if they don't exist).
+> - `sent_newsletters` must be a directory.
+>
+> You can override locations with `CONFIG_PATH`, `HISTORY_DB_PATH`, `SERVERS_PATH`, and `SENT_NEWSLETTERS_PATH`.
+
 4) Browse to Nginx:
 
 - `http://YOUR_NGINX_HOST:8080/`
@@ -46,6 +54,7 @@ docker compose -f deploy/nginx-authelia/docker-compose.yml up -d
 
 - If you already run Nginx on the host (not in Docker), use `deploy/nginx-authelia/nginx/omnistream.conf` as a starting point.
 - Keep `/api/status` public only if you need it for monitors. Otherwise, remove the exemption.
+- Newsletter state (Subscribers + Sent history) lives in `history.db` and `sent_newsletters/`. If these aren't persisted, those pages will look empty after container recreates.
 
 ### Newsletter posters in emails
 

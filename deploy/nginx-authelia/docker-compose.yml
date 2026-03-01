@@ -11,9 +11,14 @@ services:
       # - OMNISTREAM_CORS_ORIGINS=
     volumes:
       - ${SERVERS_PATH:-./servers.json}:/usr/src/app/servers.json
-      # If you also want the UI and config/history persisted, add bind mounts here.
-      # - ./config.json:/usr/src/app/config.json
-      # - ./history.db:/usr/src/app/history.db
+      # Persist config + history so Subscribers and auth settings survive container recreates.
+      # IMPORTANT: ensure the host paths point to regular files (create them first),
+      # otherwise Docker may create directories and OmniStream won't be able to write.
+      - ${CONFIG_PATH:-./config.json}:/usr/src/app/config.json
+      - ${HISTORY_DB_PATH:-./history.db}:/usr/src/app/history.db
+      # Persist sent newsletter artifacts (Sent history page).
+      # IMPORTANT: this must be a directory on the host.
+      - ${SENT_NEWSLETTERS_PATH:-./sent_newsletters}:/usr/src/app/sent_newsletters
     networks:
       - internal
 
