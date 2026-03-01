@@ -2,6 +2,7 @@ node_modules/
 servers.json
 config.json
 history.db
+history.db-*
 sent_newsletters/
 public/uploads/
 omnistream-mock.pid

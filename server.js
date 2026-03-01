@@ -857,11 +857,62 @@ function normalizeCustomHeaderColumn(input) {
   }
   if (input && typeof input === 'object') {
     const rawType = String(input.type || input.kind || 'text').trim().toLowerCase();
-    const type = rawType === 'url' ? 'url' : 'text';
+    const type = rawType === 'url' ? 'url' : (rawType === 'email' ? 'email' : 'text');
     const value = typeof input.value === 'string' ? input.value : '';
     return { type, value };
   }
   return { type: 'text', value: '' };
+}
+
+function normalizeOneLineValue(input) {
+  const raw = typeof input === 'string' ? input : '';
+  if (!raw) return '';
+  const lines = raw.split(/\r\n|\r|\n/);
+  for (const line of lines) {
+    const trimmed = String(line || '').trim();
+    if (trimmed) return trimmed;
+  }
+  return '';
+}
+
+function looksLikeEmailAddress(input) {
+  const s = String(input || '').trim();
+  if (!s) return false;
+  if (s.toLowerCase().startsWith('mailto:')) return true;
+  // Deliberately permissive; just avoid spaces and require '@'.
+  return /^[^\s@]+@[^\s@]+$/.test(s);
+}
+
+function renderOneLineColumnHtml(col) {
+  const normalized = normalizeCustomHeaderColumn(col);
+  const type = normalized.type === 'url' ? 'url' : (normalized.type === 'email' ? 'email' : 'text');
+  const value = normalizeOneLineValue(normalized.value);
+  if (!value) return '';
+
+  if (type === 'url') {
+    const href = safeLinkHref(value);
+    if (href) {
+      const escapedHref = escapeHtml(href);
+      const escapedLabel = escapeHtml(value);
+      return `<a href="${escapedHref}" target="_blank" rel="noopener noreferrer" style="color:#E5A00D;text-decoration:none;">${escapedLabel}</a>`;
+    }
+    return escapeHtml(value);
+  }
+
+  if (type === 'email') {
+    const href = value.toLowerCase().startsWith('mailto:')
+      ? value
+      : (looksLikeEmailAddress(value) ? `mailto:${value}` : '');
+    if (href) {
+      const escapedHref = escapeHtml(href);
+      const label = value.toLowerCase().startsWith('mailto:') ? value.slice('mailto:'.length) : value;
+      const escapedLabel = escapeHtml(label);
+      return `<a href="${escapedHref}" target="_blank" rel="noopener noreferrer" style="color:#E5A00D;text-decoration:none;">${escapedLabel}</a>`;
+    }
+    return escapeHtml(value);
+  }
+
+  return escapeHtml(value);
 }
 
 function safeLinkHref(input) {
@@ -903,19 +954,38 @@ function buildCustomSectionsBlocks(sections) {
       const headerSize = normalizeCustomHeaderSize(s && s.headerSize);
       const headerColor = normalizeHexColor(s && s.headerColor);
 
-      let columnCount = parseInt((s && s.columnCount != null) ? s.columnCount : 3, 10);
-      if (![1, 2, 3].includes(columnCount)) columnCount = 3;
+      const normalizeRow = (rowLike) => {
+        let columnCount = parseInt((rowLike && rowLike.columnCount != null) ? rowLike.columnCount : 3, 10);
+        if (![1, 2, 3].includes(columnCount)) columnCount = 3;
 
-      const cols = s && Array.isArray(s.columns) ? s.columns : [];
-      const c1 = normalizeCustomHeaderColumn(cols[0]);
-      const c2 = normalizeCustomHeaderColumn(cols[1]);
-      const c3 = normalizeCustomHeaderColumn(cols[2]);
-      const v1 = (c1 && typeof c1.value === 'string') ? c1.value.trim() : '';
-      const v2 = (c2 && typeof c2.value === 'string') ? c2.value.trim() : '';
-      const v3 = (c3 && typeof c3.value === 'string') ? c3.value.trim() : '';
-      const activeVals = columnCount === 1 ? [v1] : (columnCount === 2 ? [v1, v2] : [v1, v2, v3]);
-      const hasAny = !!(header || activeVals.some(Boolean));
-      return hasAny ? { header, headerSize, headerColor, columnCount, columns: [c1, c2, c3] } : null;
+        const cols = rowLike && Array.isArray(rowLike.columns)
+          ? rowLike.columns
+          : (s && Array.isArray(s.columns) ? s.columns : []);
+
+        const c1 = normalizeCustomHeaderColumn(cols[0]);
+        const c2 = normalizeCustomHeaderColumn(cols[1]);
+        const c3 = normalizeCustomHeaderColumn(cols[2]);
+
+        // New requirement: each block is a single line.
+        c1.value = normalizeOneLineValue(c1.value);
+        c2.value = normalizeOneLineValue(c2.value);
+        c3.value = normalizeOneLineValue(c3.value);
+
+        const activeVals = columnCount === 1
+          ? [c1.value]
+          : (columnCount === 2 ? [c1.value, c2.value] : [c1.value, c2.value, c3.value]);
+        const hasAny = activeVals.some(Boolean);
+        return hasAny ? { columnCount, columns: [c1, c2, c3] } : null;
+      };
+
+      // Back-compat: old format stored a single row as { columnCount, columns }.
+      const rawRows = s && Array.isArray(s.rows) ? s.rows : null;
+      const rows = (rawRows && rawRows.length)
+        ? rawRows.map(normalizeRow).filter(Boolean)
+        : [normalizeRow({ columnCount: s && s.columnCount, columns: s && s.columns })].filter(Boolean);
+
+      const hasAny = !!(header || rows.length);
+      return hasAny ? { header, headerSize, headerColor, rows } : null;
     })
     .filter(Boolean);
 
@@ -930,76 +1000,97 @@ function buildCustomSectionsBlocks(sections) {
     const headerColor = normalizeHexColor(sec.headerColor) || '#e5e7eb';
     const sizePx = headerSize === 'sm' ? 18 : (headerSize === 'lg' ? 26 : 22);
 
-    let columnCount = parseInt(sec.columnCount != null ? sec.columnCount : 3, 10);
-    if (![1, 2, 3].includes(columnCount)) columnCount = 3;
-
-    const [col1, col2, col3] = sec.columns;
-    const c1 = col1 && typeof col1.value === 'string' ? col1.value.trim() : '';
-    const c2 = col2 && typeof col2.value === 'string' ? col2.value.trim() : '';
-    const c3 = col3 && typeof col3.value === 'string' ? col3.value.trim() : '';
-    const hasAnyColumnData = columnCount === 1 ? Boolean(c1) : (columnCount === 2 ? Boolean(c1 || c2) : Boolean(c1 || c2 || c3));
+    const rows = Array.isArray(sec.rows) ? sec.rows : [];
+    const hasAnyRowData = rows.some((r) => {
+      const cc = [1, 2, 3].includes(Number(r.columnCount)) ? Number(r.columnCount) : 3;
+      const cols = Array.isArray(r.columns) ? r.columns : [];
+      const v1 = normalizeOneLineValue(cols[0] && cols[0].value);
+      const v2 = normalizeOneLineValue(cols[1] && cols[1].value);
+      const v3 = normalizeOneLineValue(cols[2] && cols[2].value);
+      return cc === 1 ? Boolean(v1) : (cc === 2 ? Boolean(v1 || v2) : Boolean(v1 || v2 || v3));
+    });
 
     if (header) {
       textParts.push(header);
       textParts.push('-'.repeat(Math.min(40, Math.max(6, header.length))));
     }
-    if (hasAnyColumnData) {
-      const linesFor = (col) => {
-        const normalized = normalizeCustomHeaderColumn(col);
-        const raw = typeof normalized.value === 'string' ? normalized.value.trim() : '';
-        if (!raw) return [];
-        if (normalized.type === 'url') {
-          return raw.split(/\r\n|\r|\n/).map(l => l.trim()).filter(Boolean);
-        }
-        return raw.split(/\r\n|\r|\n/).filter(Boolean);
-      };
-
-      const activeCols = columnCount === 1 ? [col1] : (columnCount === 2 ? [col1, col2] : [col1, col2, col3]);
-      const lines = activeCols.map(linesFor);
-      const max = Math.max(0, ...lines.map(a => a.length));
-      for (let i = 0; i < max; i++) {
-        const row = lines.map(arr => arr[i] || '').filter(Boolean).join(' | ');
-        if (row) textParts.push(row);
-      }
+    if (hasAnyRowData) {
+      rows.forEach((r) => {
+        let columnCount = parseInt(r && r.columnCount != null ? r.columnCount : 3, 10);
+        if (![1, 2, 3].includes(columnCount)) columnCount = 3;
+        const cols = r && Array.isArray(r.columns) ? r.columns : [];
+        const c1 = normalizeCustomHeaderColumn(cols[0]);
+        const c2 = normalizeCustomHeaderColumn(cols[1]);
+        const c3 = normalizeCustomHeaderColumn(cols[2]);
+        const v1 = normalizeOneLineValue(c1.value);
+        const v2 = normalizeOneLineValue(c2.value);
+        const v3 = normalizeOneLineValue(c3.value);
+        const activeVals = columnCount === 1
+          ? [v1]
+          : (columnCount === 2 ? [v1, v2] : [v1, v2, v3]);
+        const rowText = activeVals.filter(Boolean).join(' | ');
+        if (rowText) textParts.push(rowText);
+      });
     }
     textParts.push('');
 
-    const renderColumnCell = (rawCol, rawValue, widthPct, isFirst) => {
-      const normalized = normalizeCustomHeaderColumn(rawCol);
-      const content = normalized.type === 'url' ? renderUrlColumnHtml(rawValue) : linkifyAndPreserveLines(rawValue);
+    const renderColumnCell = (col, widthPct, isFirst) => {
+      const content = renderOneLineColumnHtml(col);
       const borderLeft = isFirst ? '' : 'border-left:1px solid rgba(148,163,184,0.18);';
       return `<td width="${widthPct}%" valign="top" style="padding:12px 10px;background:#0b1226;color:#e5e7eb;font-size:13px;line-height:1.5;${borderLeft}" class="dark-mode-card">${content}</td>`;
     };
 
-    const htmlColumns = (() => {
-      if (!hasAnyColumnData) return '';
-      if (columnCount === 1) {
-        return renderColumnCell(col1, c1, 100, true);
-      }
-      if (columnCount === 2) {
-        return renderColumnCell(col1, c1, 50, true) + renderColumnCell(col2, c2, 50, false);
-      }
-      return renderColumnCell(col1, c1, 33, true) + renderColumnCell(col2, c2, 33, false) + renderColumnCell(col3, c3, 34, false);
-    })();
+    const renderRowTableHtml = (row, rowIndex, totalRows) => {
+      if (!row) return '';
+      let columnCount = parseInt(row.columnCount != null ? row.columnCount : 3, 10);
+      if (![1, 2, 3].includes(columnCount)) columnCount = 3;
+      const cols = Array.isArray(row.columns) ? row.columns : [];
+      const col1 = normalizeCustomHeaderColumn(cols[0]);
+      const col2 = normalizeCustomHeaderColumn(cols[1]);
+      const col3 = normalizeCustomHeaderColumn(cols[2]);
 
-    htmlParts.push(
-      `<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width:600px;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">` +
-      `<tr><td style="padding: 10px 20px ${hasAnyColumnData ? '0' : '18px'} 20px;">` +
-      `<div style="border-top: 2px solid #E5A00D; margin: 10px 0 14px 0;" class="dark-mode-border"></div>` +
-      (header
-        ? `<div style="margin:0 0 10px 0;font-weight:700;font-size:${sizePx}px;letter-spacing:0.3px;color:${escapeHtml(headerColor)};text-align:center;" class="dark-mode-text">${escapeHtml(header)}</div>`
-        : '') +
-      `</td></tr>` +
-      (hasAnyColumnData
-        ? (`<tr>` +
-          `<td style="padding: 0 20px 18px 20px;">` +
+      // Determine if this row has content (after one-line normalization).
+      const v1 = normalizeOneLineValue(col1.value);
+      const v2 = normalizeOneLineValue(col2.value);
+      const v3 = normalizeOneLineValue(col3.value);
+      const hasAny = columnCount === 1 ? Boolean(v1) : (columnCount === 2 ? Boolean(v1 || v2) : Boolean(v1 || v2 || v3));
+      if (!hasAny) return '';
+
+      const htmlColumns = (() => {
+        if (columnCount === 1) {
+          return renderColumnCell(col1, 100, true);
+        }
+        if (columnCount === 2) {
+          return renderColumnCell(col1, 50, true) + renderColumnCell(col2, 50, false);
+        }
+        return renderColumnCell(col1, 33, true) + renderColumnCell(col2, 33, false) + renderColumnCell(col3, 34, false);
+      })();
+
+      const isLast = rowIndex === totalRows - 1;
+      const padBottom = isLast ? '18px' : '10px';
+      return (
+        `<tr>` +
+          `<td style="padding: 0 20px ${padBottom} 20px;">` +
           `<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="border-radius:10px;overflow:hidden;border:1px solid rgba(148,163,184,0.25);">` +
           `<tr>` +
           htmlColumns +
           `</tr>` +
           `</table>` +
           `</td>` +
-          `</tr>`)
+        `</tr>`
+      );
+    };
+
+    htmlParts.push(
+      `<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width:600px;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">` +
+      `<tr><td style="padding: 10px 20px ${hasAnyRowData ? '0' : '18px'} 20px;">` +
+      `<div style="border-top: 2px solid #E5A00D; margin: 10px 0 14px 0;" class="dark-mode-border"></div>` +
+      (header
+        ? `<div style="margin:0 0 10px 0;font-weight:700;font-size:${sizePx}px;letter-spacing:0.3px;color:${escapeHtml(headerColor)};text-align:center;" class="dark-mode-text">${escapeHtml(header)}</div>`
+        : '') +
+      `</td></tr>` +
+      (hasAnyRowData
+        ? (rows.map((r, idx) => renderRowTableHtml(r, idx, rows.length)).join(''))
         : '') +
       `</table>`
     );

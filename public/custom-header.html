@@ -87,7 +87,9 @@
         <h2>Custom header blocks</h2>
         <div class="hint">
           Use this to create optional blocks that appear under the newsletter logo/header.
-          If all columns are empty, OmniStream renders it as a header-only note (no columns).
+          Each block is a single line (Text, Email, or URL).
+          You can add multiple rows under the same header, and each row can show 1, 2, or 3 blocks.
+          If all blocks are empty, OmniStream renders it as a header-only note (no blocks).
           You can still place <code>{{CUSTOM_SECTIONS}}</code> manually in a template, but if you omit it, OmniStream will auto-insert these blocks near the top.
         </div>
 
@@ -111,30 +113,62 @@
       return JSON.parse(JSON.stringify(obj || null));
     }
 
+    function firstNonEmptyLine(input){
+      const raw = String(input || '');
+      if (!raw) return '';
+      const lines = raw.split(/\r\n|\r|\n/);
+      for (const line of lines) {
+        const t = String(line || '').trim();
+        if (t) return t;
+      }
+      return '';
+    }
+
     function normalizeCol(col){
-      if (typeof col === 'string') return { type: 'text', value: col };
+      if (typeof col === 'string') return { type: 'text', value: firstNonEmptyLine(col) };
       if (col && typeof col === 'object') {
         const t = String(col.type || col.kind || 'text').toLowerCase();
         return {
-          type: t === 'url' ? 'url' : 'text',
-          value: typeof col.value === 'string' ? col.value : ''
+          type: (t === 'url' ? 'url' : (t === 'email' ? 'email' : 'text')),
+          value: firstNonEmptyLine(typeof col.value === 'string' ? col.value : '')
         };
       }
       return { type: 'text', value: '' };
     }
 
-    function normalizeSection(sec, idx){
-      const cols = sec && Array.isArray(sec.columns) ? sec.columns : [];
-      const rawCount = (sec && (sec.columnCount != null ? sec.columnCount : (sec.columnsCount != null ? sec.columnsCount : sec.columnsToShow)));
+    function normalizeRow(row, idx, fallbackColumnCount, fallbackColumns){
+      const rawCount = row && (row.columnCount != null ? row.columnCount : (row.columnsCount != null ? row.columnsCount : row.columnsToShow));
       let columnCount = parseInt(rawCount, 10);
+      if (![1, 2, 3].includes(columnCount)) columnCount = fallbackColumnCount;
       if (![1, 2, 3].includes(columnCount)) columnCount = 3;
+
+      const cols = row && Array.isArray(row.columns)
+        ? row.columns
+        : (Array.isArray(fallbackColumns) ? fallbackColumns : []);
+
+      return {
+        id: row && row.id != null ? String(row.id) : `row-${idx + 1}`,
+        columnCount,
+        columns: [normalizeCol(cols[0]), normalizeCol(cols[1]), normalizeCol(cols[2])]
+      };
+    }
+
+    function normalizeSection(sec, idx){
+      const legacyCols = sec && Array.isArray(sec.columns) ? sec.columns : [];
+      const legacyRawCount = (sec && (sec.columnCount != null ? sec.columnCount : (sec.columnsCount != null ? sec.columnsCount : sec.columnsToShow)));
+      let legacyColumnCount = parseInt(legacyRawCount, 10);
+      if (![1, 2, 3].includes(legacyColumnCount)) legacyColumnCount = 3;
+
+      const rawRows = sec && Array.isArray(sec.rows) ? sec.rows : null;
+      const rows = (rawRows && rawRows.length)
+        ? rawRows.map((r, rIdx) => normalizeRow(r, rIdx, legacyColumnCount, legacyCols))
+        : [normalizeRow({ columnCount: legacyColumnCount, columns: legacyCols }, 0, legacyColumnCount, legacyCols)];
       return {
         id: sec && sec.id != null ? String(sec.id) : `sec-${idx + 1}`,
         header: sec && typeof sec.header === 'string' ? sec.header : '',
         headerSize: sec && typeof sec.headerSize === 'string' ? sec.headerSize : 'md',
         headerColor: sec && typeof sec.headerColor === 'string' ? sec.headerColor : '#e5e7eb',
-        columnCount,
-        columns: [normalizeCol(cols[0]), normalizeCol(cols[1]), normalizeCol(cols[2])]
+        rows
       };
     }
 
@@ -233,83 +267,156 @@
         meta.appendChild(sizeLabel);
         meta.appendChild(colorLabel);
 
-        const countLabel = document.createElement('label');
-        countLabel.textContent = 'Columns';
-        countLabel.style.minWidth = '140px';
-        const countSelect = document.createElement('select');
-        [1,2,3].forEach(n => {
-          const opt = document.createElement('option');
-          opt.value = String(n);
-          opt.textContent = String(n);
-          countSelect.appendChild(opt);
-        });
-        countSelect.value = String([1,2,3].includes(sec.columnCount) ? sec.columnCount : 3);
-        countSelect.addEventListener('change', () => {
-          const next = parseInt(countSelect.value, 10);
-          sec.columnCount = [1,2,3].includes(next) ? next : 3;
+        const addRowBtn = document.createElement('button');
+        addRowBtn.className = 'btn btn-secondary';
+        addRowBtn.type = 'button';
+        addRowBtn.textContent = 'Add row';
+        addRowBtn.addEventListener('click', () => {
+          sec.rows = Array.isArray(sec.rows) ? sec.rows : [];
+          sec.rows.push({
+            id: 'row-' + Date.now(),
+            columnCount: 3,
+            columns: [
+              { type: 'text', value: '' },
+              { type: 'text', value: '' },
+              { type: 'text', value: '' }
+            ]
+          });
           renderCustomSections();
         });
-        countLabel.appendChild(countSelect);
-        meta.appendChild(countLabel);
+        meta.appendChild(addRowBtn);
         wrap.appendChild(meta);
 
-        const grid = document.createElement('div');
-        grid.className = 'section-grid';
-
-        const effectiveCount = [1, 2, 3].includes(sec.columnCount) ? sec.columnCount : 3;
-        grid.setAttribute('data-cols', String(effectiveCount));
-
-        for (let c = 0; c < effectiveCount; c++){
-          const colLabel = document.createElement('label');
-          colLabel.textContent = `Column ${c + 1}`;
-
-          const col = sec.columns[c] || { type: 'text', value: '' };
-          sec.columns[c] = col;
-
-          const typeRow = document.createElement('div');
-          typeRow.className = 'col-type-row';
-
-          const typeSelect = document.createElement('select');
-          const optText = document.createElement('option');
-          optText.value = 'text';
-          optText.textContent = 'Text';
-          const optUrl = document.createElement('option');
-          optUrl.value = 'url';
-          optUrl.textContent = 'URL';
-          typeSelect.appendChild(optText);
-          typeSelect.appendChild(optUrl);
-          typeSelect.value = col.type === 'url' ? 'url' : 'text';
-          typeSelect.addEventListener('change', () => {
-            col.type = typeSelect.value;
-            renderCustomSections();
+        sec.rows = Array.isArray(sec.rows) ? sec.rows : [];
+        if (!sec.rows.length) {
+          sec.rows.push({
+            id: 'row-' + Date.now(),
+            columnCount: 3,
+            columns: [
+              { type: 'text', value: '' },
+              { type: 'text', value: '' },
+              { type: 'text', value: '' }
+            ]
           });
-
-          typeRow.appendChild(typeSelect);
-          colLabel.appendChild(typeRow);
-
-          if (col.type === 'url') {
-            const urlInput = document.createElement('input');
-            urlInput.type = 'text';
-            urlInput.value = col.value || '';
-            urlInput.placeholder = 'https://example.com (http/https/mailto)';
-            urlInput.addEventListener('input', () => {
-              col.value = urlInput.value;
-            });
-            colLabel.appendChild(urlInput);
-          } else {
-            const ta = document.createElement('textarea');
-            ta.value = col.value || '';
-            ta.placeholder = c === 0 ? 'Item names\nMore items...' : (c === 1 ? 'Descriptions\nMore...' : 'Links or notes\nMore...');
-            ta.addEventListener('input', () => {
-              col.value = ta.value;
-            });
-            colLabel.appendChild(ta);
-          }
-
-          grid.appendChild(colLabel);
         }
 
-        wrap.appendChild(grid);
+        sec.rows.forEach((row, rowIdx) => {
+          const rowWrap = document.createElement('div');
+          rowWrap.style.marginTop = '10px';
+          rowWrap.style.paddingTop = '10px';
+          rowWrap.style.borderTop = '1px solid rgba(51,65,85,0.55)';
+
+          const rowHead = document.createElement('div');
+          rowHead.className = 'section-item-head';
+          rowHead.style.marginBottom = '8px';
+
+          const rowLabel = document.createElement('div');
+          rowLabel.style.fontSize = '12px';
+          rowLabel.style.color = 'var(--text-muted)';
+          rowLabel.textContent = `Row ${rowIdx + 1}`;
+
+          const rowControls = document.createElement('div');
+          rowControls.style.display = 'flex';
+          rowControls.style.gap = '8px';
+          rowControls.style.alignItems = 'center';
+
+          const countLabel = document.createElement('label');
+          countLabel.textContent = 'Blocks';
+          countLabel.style.margin = '0';
+          countLabel.style.minWidth = '120px';
+
+          const countSelect = document.createElement('select');
+          [1,2,3].forEach(n => {
+            const opt = document.createElement('option');
+            opt.value = String(n);
+            opt.textContent = String(n);
+            countSelect.appendChild(opt);
+          });
+          countSelect.value = String([1,2,3].includes(row.columnCount) ? row.columnCount : 3);
+          countSelect.addEventListener('change', () => {
+            const next = parseInt(countSelect.value, 10);
+            row.columnCount = [1,2,3].includes(next) ? next : 3;
+            renderCustomSections();
+          });
+          countLabel.appendChild(countSelect);
+          rowControls.appendChild(countLabel);
+
+          const delRowBtn = document.createElement('button');
+          delRowBtn.className = 'btn btn-secondary';
+          delRowBtn.type = 'button';
+          delRowBtn.textContent = 'Delete row';
+          delRowBtn.addEventListener('click', () => {
+            sec.rows.splice(rowIdx, 1);
+            renderCustomSections();
+          });
+          rowControls.appendChild(delRowBtn);
+
+          rowHead.appendChild(rowLabel);
+          rowHead.appendChild(rowControls);
+          rowWrap.appendChild(rowHead);
+
+          const grid = document.createElement('div');
+          grid.className = 'section-grid';
+
+          const effectiveCount = [1, 2, 3].includes(row.columnCount) ? row.columnCount : 3;
+          grid.setAttribute('data-cols', String(effectiveCount));
+
+          row.columns = Array.isArray(row.columns) ? row.columns : [];
+          while (row.columns.length < 3) row.columns.push({ type: 'text', value: '' });
+
+          for (let c = 0; c < effectiveCount; c++){
+            const colLabel = document.createElement('label');
+            colLabel.textContent = `Block ${c + 1}`;
+
+            const col = row.columns[c] || { type: 'text', value: '' };
+            row.columns[c] = col;
+
+            const typeRow = document.createElement('div');
+            typeRow.className = 'col-type-row';
+
+            const typeSelect = document.createElement('select');
+
+            const optText = document.createElement('option');
+            optText.value = 'text';
+            optText.textContent = 'Text';
+            const optEmail = document.createElement('option');
+            optEmail.value = 'email';
+            optEmail.textContent = 'Email';
+            const optUrl = document.createElement('option');
+            optUrl.value = 'url';
+            optUrl.textContent = 'URL';
+
+            typeSelect.appendChild(optText);
+            typeSelect.appendChild(optEmail);
+            typeSelect.appendChild(optUrl);
+
+            typeSelect.value = (col.type === 'url' || col.type === 'email') ? col.type : 'text';
+            typeSelect.addEventListener('change', () => {
+              col.type = typeSelect.value;
+              renderCustomSections();
+            });
+
+            typeRow.appendChild(typeSelect);
+            colLabel.appendChild(typeRow);
+
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.value = col.value || '';
+            input.placeholder = col.type === 'url'
+              ? 'https://example.com'
+              : (col.type === 'email' ? 'name@example.com' : 'One line');
+            input.addEventListener('input', () => {
+              col.value = firstNonEmptyLine(input.value);
+            });
+            colLabel.appendChild(input);
+
+            grid.appendChild(colLabel);
+          }
+
+          rowWrap.appendChild(grid);
+          wrap.appendChild(rowWrap);
+        });
+
         host.appendChild(wrap);
       });
     }
@@ -345,8 +452,13 @@
           header: s.header || '',
           headerSize: (s.headerSize === 'sm' || s.headerSize === 'lg') ? s.headerSize : 'md',
           headerColor: typeof s.headerColor === 'string' ? s.headerColor : '#e5e7eb',
-          columnCount: [1,2,3].includes(parseInt(s.columnCount, 10)) ? parseInt(s.columnCount, 10) : 3,
-          columns: Array.isArray(s.columns) ? [normalizeCol(s.columns[0]), normalizeCol(s.columns[1]), normalizeCol(s.columns[2])] : [normalizeCol(''), normalizeCol(''), normalizeCol('')]
+          rows: (Array.isArray(s.rows) ? s.rows : []).map((r, rIdx) => ({
+            id: r && r.id != null ? String(r.id) : `row-${rIdx + 1}`,
+            columnCount: [1,2,3].includes(parseInt(r && r.columnCount, 10)) ? parseInt(r.columnCount, 10) : 3,
+            columns: Array.isArray(r && r.columns)
+              ? [normalizeCol(r.columns[0]), normalizeCol(r.columns[1]), normalizeCol(r.columns[2])]
+              : [normalizeCol(''), normalizeCol(''), normalizeCol('')]
+          }))
         }));
         const resp = await fetch('/api/config/app', {
           method: 'PUT',
@@ -377,11 +489,16 @@
           header: '',
           headerSize: 'md',
           headerColor: '#e5e7eb',
-          columnCount: 3,
-          columns: [
-            { type: 'text', value: '' },
-            { type: 'text', value: '' },
-            { type: 'text', value: '' }
+          rows: [
+            {
+              id: 'row-' + Date.now(),
+              columnCount: 3,
+              columns: [
+                { type: 'text', value: '' },
+                { type: 'text', value: '' },
+                { type: 'text', value: '' }
+              ]
+            }
           ]
         });
         renderCustomSections();
