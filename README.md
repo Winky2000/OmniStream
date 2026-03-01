@@ -157,6 +157,7 @@ services:
 			- ${CONFIG_PATH:-./config.json}:/usr/src/app/config.json
 			- ${SERVERS_PATH:-./servers.json}:/usr/src/app/servers.json
 			- ${HISTORY_DB_PATH:-./history.db}:/usr/src/app/history.db
+			- ${SENT_NEWSLETTERS_PATH:-./sent_newsletters}:/usr/src/app/sent_newsletters
 			# Optional: override bundled UI with local files
 			# - ./public:/usr/src/app/public:ro
 ```
@@ -168,6 +169,7 @@ From the project root:
 export SERVERS_PATH=/home/youruser/omnistream/servers.json
 export CONFIG_PATH=/home/youruser/omnistream/config.json
 	export HISTORY_DB_PATH=/home/youruser/omnistream/history.db
+	export SENT_NEWSLETTERS_PATH=/home/youruser/omnistream/sent_newsletters
 
 docker compose up -d
 ```
@@ -182,12 +184,14 @@ Then open:
 mkdir -p /home/youruser/omnistream
 printf "[]\n" > /home/youruser/omnistream/servers.json
 	touch /home/youruser/omnistream/history.db
+	mkdir -p /home/youruser/omnistream/sent_newsletters
 
 docker run -d \
 	--name omnistream \
 	-p 3000:3000 \
 	-v /home/youruser/omnistream/servers.json:/usr/src/app/servers.json \
 		-v /home/youruser/omnistream/history.db:/usr/src/app/history.db \
+		-v /home/youruser/omnistream/sent_newsletters:/usr/src/app/sent_newsletters \
 	-e NODE_ENV=production \
 	ghcr.io/winky2000/omnistream:latest
 ```

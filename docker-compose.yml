@@ -22,6 +22,9 @@ services:
       # IMPORTANT: ensure the host path points to a regular file (create it first),
       # otherwise Docker may create a directory and OmniStream won't be able to write.
       - ${HISTORY_DB_PATH:-./history.db}:/usr/src/app/history.db
+      # Persist sent newsletter artifacts (Sent history page).
+      # IMPORTANT: this must be a directory on the host.
+      - ${SENT_NEWSLETTERS_PATH:-./sent_newsletters}:/usr/src/app/sent_newsletters
       # Optional: uncomment to override the bundled UI with the
       # public/ folder from this checkout (useful for local dev)
       # - ./public:/usr/src/app/public:ro
