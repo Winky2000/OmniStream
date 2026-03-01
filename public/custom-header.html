@@ -59,6 +59,7 @@
             <a href="subscribers.html" class="submenu-link">Subscribers</a>
             <a href="templates.html" class="submenu-link">Templates</a>
             <a href="custom-header.html" class="submenu-link submenu-link-active">Custom header</a>
+            <a href="sent-newsletters.html" class="submenu-link">Sent history</a>
           </div>
         </div>
         <div class="settings-group">
@@ -149,6 +150,9 @@
       return {
         id: row && row.id != null ? String(row.id) : `row-${idx + 1}`,
         columnCount,
+        rowColor: (row && typeof row.rowColor === 'string') ? row.rowColor : '#0b1226',
+        rowTextColor: (row && typeof row.rowTextColor === 'string') ? row.rowTextColor : '#e5e7eb',
+        boxed: !(row && row.boxed === false),
         columns: [normalizeCol(cols[0]), normalizeCol(cols[1]), normalizeCol(cols[2])]
       };
     }
@@ -276,6 +280,9 @@
           sec.rows.push({
             id: 'row-' + Date.now(),
             columnCount: 3,
+            rowColor: '#0b1226',
+            rowTextColor: '#e5e7eb',
+            boxed: true,
             columns: [
               { type: 'text', value: '' },
               { type: 'text', value: '' },
@@ -292,6 +299,9 @@
           sec.rows.push({
             id: 'row-' + Date.now(),
             columnCount: 3,
+            rowColor: '#0b1226',
+            rowTextColor: '#e5e7eb',
+            boxed: true,
             columns: [
               { type: 'text', value: '' },
               { type: 'text', value: '' },
@@ -340,6 +350,47 @@
           });
           countLabel.appendChild(countSelect);
           rowControls.appendChild(countLabel);
+
+          const rowColorLabel = document.createElement('label');
+          rowColorLabel.textContent = 'Row color';
+          rowColorLabel.style.margin = '0';
+          rowColorLabel.style.minWidth = '140px';
+          const rowColorInput = document.createElement('input');
+          rowColorInput.type = 'color';
+          rowColorInput.value = /^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/.test(String(row.rowColor || '')) ? row.rowColor : '#0b1226';
+          rowColorInput.addEventListener('input', () => {
+            row.rowColor = rowColorInput.value;
+          });
+          rowColorLabel.appendChild(rowColorInput);
+          rowControls.appendChild(rowColorLabel);
+
+          const rowTextColorLabel = document.createElement('label');
+          rowTextColorLabel.textContent = 'Text color';
+          rowTextColorLabel.style.margin = '0';
+          rowTextColorLabel.style.minWidth = '140px';
+          const rowTextColorInput = document.createElement('input');
+          rowTextColorInput.type = 'color';
+          rowTextColorInput.value = /^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/.test(String(row.rowTextColor || '')) ? row.rowTextColor : '#e5e7eb';
+          rowTextColorInput.addEventListener('input', () => {
+            row.rowTextColor = rowTextColorInput.value;
+          });
+          rowTextColorLabel.appendChild(rowTextColorInput);
+          rowControls.appendChild(rowTextColorLabel);
+
+          const boxedLabel = document.createElement('label');
+          boxedLabel.textContent = 'Boxed';
+          boxedLabel.style.margin = '0';
+          boxedLabel.style.minWidth = '90px';
+          const boxedInput = document.createElement('input');
+          boxedInput.type = 'checkbox';
+          boxedInput.checked = row.boxed !== false;
+          boxedInput.style.marginLeft = '8px';
+          boxedInput.addEventListener('change', () => {
+            row.boxed = boxedInput.checked;
+            renderCustomSections();
+          });
+          boxedLabel.appendChild(boxedInput);
+          rowControls.appendChild(boxedLabel);
 
           const delRowBtn = document.createElement('button');
           delRowBtn.className = 'btn btn-secondary';
@@ -455,6 +506,9 @@
           rows: (Array.isArray(s.rows) ? s.rows : []).map((r, rIdx) => ({
             id: r && r.id != null ? String(r.id) : `row-${rIdx + 1}`,
             columnCount: [1,2,3].includes(parseInt(r && r.columnCount, 10)) ? parseInt(r.columnCount, 10) : 3,
+            rowColor: (r && typeof r.rowColor === 'string') ? r.rowColor : '#0b1226',
+            rowTextColor: (r && typeof r.rowTextColor === 'string') ? r.rowTextColor : '#e5e7eb',
+            boxed: !(r && r.boxed === false),
             columns: Array.isArray(r && r.columns)
               ? [normalizeCol(r.columns[0]), normalizeCol(r.columns[1]), normalizeCol(r.columns[2])]
               : [normalizeCol(''), normalizeCol(''), normalizeCol('')]
@@ -493,6 +547,9 @@
             {
               id: 'row-' + Date.now(),
               columnCount: 3,
+              rowColor: '#0b1226',
+              rowTextColor: '#e5e7eb',
+              boxed: true,
               columns: [
                 { type: 'text', value: '' },
                 { type: 'text', value: '' },

@@ -163,8 +163,9 @@ let appVersion = null;
 try {
   if (fs.existsSync(PKG_FILE)) {
     const rawPkg = fs.readFileSync(PKG_FILE, 'utf8');
-    if (rawPkg) {
-      const pkg = JSON.parse(rawPkg);
+    const pkgText = rawPkg ? String(rawPkg).replace(/^\uFEFF/, '').trim() : '';
+    if (pkgText) {
+      const pkg = JSON.parse(pkgText);
       appVersion = pkg.version || null;
     }
   }
@@ -469,6 +470,30 @@ app.use((req, res, next) => {
 
     if (!authed) {
       if (isApi) {
+        // Allow signed thumbnail proxy requests for email clients without cookies.
+        // Signature is validated inside the route handler.
+        if (p === '/api/newsletter/plex/thumb') {
+          const sig = typeof req.query.sig === 'string' ? String(req.query.sig).trim() : '';
+          const exp = typeof req.query.exp === 'string' || typeof req.query.exp === 'number' ? String(req.query.exp).trim() : '';
+          if (sig && exp) return next();
+        }
+        if (p === '/api/newsletter/plex/thumb/signed') {
+          const sig = typeof req.query.sig === 'string' ? String(req.query.sig).trim() : '';
+          const exp = typeof req.query.exp === 'string' || typeof req.query.exp === 'number' ? String(req.query.exp).trim() : '';
+          if (sig && exp) return next();
+        }
+        // Allow signed poster proxy requests for email clients without cookies.
+        // Signature is validated inside the route handler.
+        if (p === '/api/poster') {
+          const sig = typeof req.query.sig === 'string' ? String(req.query.sig).trim() : '';
+          const exp = typeof req.query.exp === 'string' || typeof req.query.exp === 'number' ? String(req.query.exp).trim() : '';
+          if (sig && exp) return next();
+        }
+        if (p === '/api/poster/signed') {
+          const sig = typeof req.query.sig === 'string' ? String(req.query.sig).trim() : '';
+          const exp = typeof req.query.exp === 'string' || typeof req.query.exp === 'number' ? String(req.query.exp).trim() : '';
+          if (sig && exp) return next();
+        }
         // Allow calling auth endpoints without a session (login + me)
         if (isAuthApi) return next();
         return res.status(401).json({ error: 'Unauthorized', code: 'UNAUTHENTICATED' });
@@ -499,6 +524,19 @@ app.use((req, res, next) => {
     console.error('[OmniStream] auth gate error:', e.message);
     return res.status(500).json({ error: 'Auth gate failed' });
   }
+});
+
+// Avoid noisy 404s for browsers requesting a favicon.
+app.get('/favicon.ico', (req, res) => {
+  try {
+    const ico = path.join(__dirname, 'public', 'favicon.ico');
+    if (fs.existsSync(ico)) {
+      return res.sendFile(ico);
+    }
+  } catch (_) {
+    // ignore
+  }
+  res.status(204).end();
 });
 
 // Now that auth gate is installed, serve the static UI.
@@ -699,6 +737,165 @@ const DEFAULT_NEWSLETTER_TEMPLATE_ID = 'tpl-default-recently-added';
 const DEFAULT_NEWSLETTER_TEMPLATE_FILE = path.join(__dirname, 'newsletter_templates', 'recently_added_default.html');
 const SENT_NEWSLETTERS_DIR = path.join(__dirname, 'sent_newsletters');
 
+const DEFAULT_NEWSLETTER_THUMB_TTL_DAYS = 30;
+const DEFAULT_NEWSLETTER_SIGNING_SECRET_ENV = 'OMNISTREAM_NEWSLETTER_SIGNING_SECRET';
+
+function base64UrlEncode(buf) {
+  return Buffer.from(buf)
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+}
+
+function getNewsletterSigningSecret() {
+  // Priority:
+  // 1) Env var (works even in read-only deployments)
+  // 2) Config value (persisted in config.json)
+  // 3) Derived from auth.passwordHash (stable if config is readable)
+  try {
+    const fromEnv = String(process.env[DEFAULT_NEWSLETTER_SIGNING_SECRET_ENV] || '').trim();
+    if (fromEnv) return fromEnv;
+  } catch (_) {}
+  try {
+    const raw = appConfig && typeof appConfig.newsletterThumbSigningSecret === 'string'
+      ? appConfig.newsletterThumbSigningSecret.trim()
+      : '';
+    if (raw) return raw;
+  } catch (_) {}
+  try {
+    const authHash = appConfig && appConfig.auth && typeof appConfig.auth.passwordHash === 'string'
+      ? String(appConfig.auth.passwordHash)
+      : '';
+    if (authHash) {
+      return crypto.createHash('sha256').update(authHash, 'utf8').digest('hex');
+    }
+  } catch (_) {}
+  return '';
+}
+
+function ensureNewsletterThumbSigningSecret() {
+  // Legacy name kept because callers assume it may persist a config value.
+  try {
+    const existing = getNewsletterSigningSecret();
+    if (existing) return existing;
+    if (!appConfig || typeof appConfig !== 'object') appConfig = {};
+    appConfig.newsletterThumbSigningSecret = crypto.randomBytes(32).toString('hex');
+    saveAppConfigToDisk();
+    return String(appConfig.newsletterThumbSigningSecret || '').trim();
+  } catch (e) {
+    console.error('[OmniStream] Failed to ensure newsletterThumbSigningSecret:', e.message);
+    return '';
+  }
+}
+
+function signNewsletterThumbParams({ serverId, thumb, exp } = {}) {
+  const secret = getNewsletterSigningSecret() || ensureNewsletterThumbSigningSecret();
+  if (!secret) return '';
+  const payload = `${String(serverId || '').trim()}\n${String(thumb || '').trim()}\n${String(exp || '').trim()}`;
+  const mac = crypto.createHmac('sha256', secret).update(payload, 'utf8').digest();
+  return base64UrlEncode(mac);
+}
+
+function verifyNewsletterThumbSignature({ serverId, thumb, exp, sig } = {}) {
+  try {
+    const expNum = Number(exp);
+    if (!Number.isFinite(expNum)) return false;
+    const nowSec = Math.floor(Date.now() / 1000);
+    // allow small clock skew
+    if (expNum < (nowSec - 60)) return false;
+    const expected = signNewsletterThumbParams({ serverId, thumb, exp: expNum });
+    if (!expected) return false;
+    const a = Buffer.from(String(expected), 'utf8');
+    const b = Buffer.from(String(sig || ''), 'utf8');
+    if (a.length !== b.length) return false;
+    return crypto.timingSafeEqual(a, b);
+  } catch (_) {
+    return false;
+  }
+}
+
+function buildSignedNewsletterThumbUrl({ publicBaseUrl, serverId, thumb } = {}) {
+  const base = String(publicBaseUrl || '').replace(/\/$/, '');
+  if (!base || !serverId || !thumb) return '';
+  const ttlDaysRaw = Number(appConfig && appConfig.newsletterThumbUrlTtlDays);
+  const ttlDays = Number.isFinite(ttlDaysRaw) ? Math.max(1, Math.min(365, Math.floor(ttlDaysRaw))) : DEFAULT_NEWSLETTER_THUMB_TTL_DAYS;
+  const exp = Math.floor(Date.now() / 1000) + ttlDays * 24 * 60 * 60;
+  const sig = signNewsletterThumbParams({ serverId, thumb, exp });
+  if (!sig) {
+    return `${base}/api/newsletter/plex/thumb/signed?serverId=${encodeURIComponent(String(serverId))}&thumb=${encodeURIComponent(String(thumb))}`;
+  }
+  const q = new URLSearchParams({
+    serverId: String(serverId),
+    thumb: String(thumb),
+    exp: String(exp),
+    sig: String(sig)
+  });
+  return `${base}/api/newsletter/plex/thumb/signed?${q.toString()}`;
+}
+
+function signNewsletterPosterParams({ serverId, path: posterPath, exp } = {}) {
+  const secret = getNewsletterSigningSecret() || ensureNewsletterThumbSigningSecret();
+  if (!secret) return '';
+  const payload = `${String(serverId || '').trim()}\n${String(posterPath || '').trim()}\n${String(exp || '').trim()}`;
+  const mac = crypto.createHmac('sha256', secret).update(payload, 'utf8').digest();
+  return base64UrlEncode(mac);
+}
+
+function verifyNewsletterPosterSignature({ serverId, path: posterPath, exp, sig } = {}) {
+  try {
+    const expNum = Number(exp);
+    if (!Number.isFinite(expNum)) return false;
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (expNum < (nowSec - 60)) return false;
+    const expected = signNewsletterPosterParams({ serverId, path: posterPath, exp: expNum });
+    if (!expected) return false;
+    const a = Buffer.from(String(expected), 'utf8');
+    const b = Buffer.from(String(sig || ''), 'utf8');
+    if (a.length !== b.length) return false;
+    return crypto.timingSafeEqual(a, b);
+  } catch (_) {
+    return false;
+  }
+}
+
+function buildSignedNewsletterPosterUrl({ publicBaseUrl, serverId, path: posterPath } = {}) {
+  const base = String(publicBaseUrl || '').replace(/\/$/, '');
+  if (!base || !serverId || !posterPath) return '';
+  const ttlDaysRaw = Number(appConfig && appConfig.newsletterThumbUrlTtlDays);
+  const ttlDays = Number.isFinite(ttlDaysRaw) ? Math.max(1, Math.min(365, Math.floor(ttlDaysRaw))) : DEFAULT_NEWSLETTER_THUMB_TTL_DAYS;
+  const exp = Math.floor(Date.now() / 1000) + ttlDays * 24 * 60 * 60;
+  const sig = signNewsletterPosterParams({ serverId, path: posterPath, exp });
+  if (!sig) {
+    return `${base}/api/poster/signed?serverId=${encodeURIComponent(String(serverId))}&path=${encodeURIComponent(String(posterPath))}`;
+  }
+  const q = new URLSearchParams({
+    serverId: String(serverId),
+    path: String(posterPath),
+    exp: String(exp),
+    sig: String(sig)
+  });
+  return `${base}/api/poster/signed?${q.toString()}`;
+}
+
+function isSafeSentNewsletterId(id) {
+  const s = String(id || '').trim();
+  // saveSentNewsletterToDisk uses `${timestamp}_${safeFilename(subject)}`
+  return /^[A-Za-z0-9][A-Za-z0-9._-]{0,240}$/.test(s);
+}
+
+function resolveSentNewsletterPath(id, ext) {
+  if (!isSafeSentNewsletterId(id)) return null;
+  const safeExt = String(ext || '').replace(/^\./, '');
+  if (!/^[A-Za-z0-9]{1,10}$/.test(safeExt)) return null;
+
+  const baseDir = path.resolve(SENT_NEWSLETTERS_DIR);
+  const filePath = path.resolve(path.join(SENT_NEWSLETTERS_DIR, `${id}.${safeExt}`));
+  if (filePath === baseDir) return null;
+  if (!filePath.startsWith(baseDir + path.sep)) return null;
+  return filePath;
+}
+
 function readDefaultNewsletterTemplateBody() {
   try {
     if (fs.existsSync(DEFAULT_NEWSLETTER_TEMPLATE_FILE)) {
@@ -883,18 +1080,20 @@ function looksLikeEmailAddress(input) {
   return /^[^\s@]+@[^\s@]+$/.test(s);
 }
 
-function renderOneLineColumnHtml(col) {
+function renderOneLineColumnHtml(col, options = {}) {
   const normalized = normalizeCustomHeaderColumn(col);
   const type = normalized.type === 'url' ? 'url' : (normalized.type === 'email' ? 'email' : 'text');
   const value = normalizeOneLineValue(normalized.value);
   if (!value) return '';
+
+  const linkColor = normalizeHexColor(options && options.linkColor) || '#E5A00D';
 
   if (type === 'url') {
     const href = safeLinkHref(value);
     if (href) {
       const escapedHref = escapeHtml(href);
       const escapedLabel = escapeHtml(value);
-      return `<a href="${escapedHref}" target="_blank" rel="noopener noreferrer" style="color:#E5A00D;text-decoration:none;">${escapedLabel}</a>`;
+      return `<a href="${escapedHref}" target="_blank" rel="noopener noreferrer" style="color:${escapeHtml(linkColor)} !important;text-decoration:none;">${escapedLabel}</a>`;
     }
     return escapeHtml(value);
   }
@@ -907,7 +1106,7 @@ function renderOneLineColumnHtml(col) {
       const escapedHref = escapeHtml(href);
       const label = value.toLowerCase().startsWith('mailto:') ? value.slice('mailto:'.length) : value;
       const escapedLabel = escapeHtml(label);
-      return `<a href="${escapedHref}" target="_blank" rel="noopener noreferrer" style="color:#E5A00D;text-decoration:none;">${escapedLabel}</a>`;
+      return `<a href="${escapedHref}" target="_blank" rel="noopener noreferrer" style="color:${escapeHtml(linkColor)} !important;text-decoration:none;">${escapedLabel}</a>`;
     }
     return escapeHtml(value);
   }
@@ -948,6 +1147,8 @@ function renderUrlColumnHtml(raw) {
 
 function buildCustomSectionsBlocks(sections) {
   const list = Array.isArray(sections) ? sections : [];
+  const DEFAULT_CUSTOM_SECTION_ROW_COLOR = '#0b1226';
+  const DEFAULT_CUSTOM_SECTION_ROW_TEXT_COLOR = '#e5e7eb';
   const cleaned = list
     .map((s) => {
       const header = s && typeof s.header === 'string' ? s.header.trim() : '';
@@ -957,6 +1158,10 @@ function buildCustomSectionsBlocks(sections) {
       const normalizeRow = (rowLike) => {
         let columnCount = parseInt((rowLike && rowLike.columnCount != null) ? rowLike.columnCount : 3, 10);
         if (![1, 2, 3].includes(columnCount)) columnCount = 3;
+
+        const rowColor = normalizeHexColor(rowLike && rowLike.rowColor) || DEFAULT_CUSTOM_SECTION_ROW_COLOR;
+        const rowTextColor = normalizeHexColor(rowLike && rowLike.rowTextColor) || DEFAULT_CUSTOM_SECTION_ROW_TEXT_COLOR;
+        const boxed = !(rowLike && rowLike.boxed === false);
 
         const cols = rowLike && Array.isArray(rowLike.columns)
           ? rowLike.columns
@@ -975,7 +1180,7 @@ function buildCustomSectionsBlocks(sections) {
           ? [c1.value]
           : (columnCount === 2 ? [c1.value, c2.value] : [c1.value, c2.value, c3.value]);
         const hasAny = activeVals.some(Boolean);
-        return hasAny ? { columnCount, columns: [c1, c2, c3] } : null;
+        return hasAny ? { columnCount, rowColor, rowTextColor, boxed, columns: [c1, c2, c3] } : null;
       };
 
       // Back-compat: old format stored a single row as { columnCount, columns }.
@@ -1034,16 +1239,29 @@ function buildCustomSectionsBlocks(sections) {
     }
     textParts.push('');
 
-    const renderColumnCell = (col, widthPct, isFirst) => {
-      const content = renderOneLineColumnHtml(col);
+    const renderColumnCell = (col, widthPct, isFirst, rowColor, rowTextColor, boxed) => {
+      const content = renderOneLineColumnHtml(col, { linkColor: rowTextColor });
+      const fg = normalizeHexColor(rowTextColor) || DEFAULT_CUSTOM_SECTION_ROW_TEXT_COLOR;
+
+      if (!boxed) {
+        // Floating text: no background, no borders, no dark-mode-card class.
+        return `<td width="${widthPct}%" valign="top" style="padding:8px 10px;background-color:transparent !important;color:${escapeHtml(fg)} !important;font-size:13px;line-height:1.5;text-align:center;">${content}</td>`;
+      }
+
       const borderLeft = isFirst ? '' : 'border-left:1px solid rgba(148,163,184,0.18);';
-      return `<td width="${widthPct}%" valign="top" style="padding:12px 10px;background:#0b1226;color:#e5e7eb;font-size:13px;line-height:1.5;${borderLeft}" class="dark-mode-card">${content}</td>`;
+      const bg = normalizeHexColor(rowColor) || DEFAULT_CUSTOM_SECTION_ROW_COLOR;
+      // Inline !important beats the template's .dark-mode-card { background-color: ... !important; }
+      // and bgcolor helps some email clients.
+      return `<td width="${widthPct}%" valign="top" bgcolor="${escapeHtml(bg)}" style="padding:12px 10px;background-color:${escapeHtml(bg)} !important;color:${escapeHtml(fg)} !important;font-size:13px;line-height:1.5;text-align:center;${borderLeft}" class="dark-mode-card">${content}</td>`;
     };
 
     const renderRowTableHtml = (row, rowIndex, totalRows) => {
       if (!row) return '';
       let columnCount = parseInt(row.columnCount != null ? row.columnCount : 3, 10);
       if (![1, 2, 3].includes(columnCount)) columnCount = 3;
+      const rowColor = normalizeHexColor(row.rowColor) || DEFAULT_CUSTOM_SECTION_ROW_COLOR;
+      const rowTextColor = normalizeHexColor(row.rowTextColor) || DEFAULT_CUSTOM_SECTION_ROW_TEXT_COLOR;
+      const boxed = !(row.boxed === false);
       const cols = Array.isArray(row.columns) ? row.columns : [];
       const col1 = normalizeCustomHeaderColumn(cols[0]);
       const col2 = normalizeCustomHeaderColumn(cols[1]);
@@ -1058,20 +1276,23 @@ function buildCustomSectionsBlocks(sections) {
 
       const htmlColumns = (() => {
         if (columnCount === 1) {
-          return renderColumnCell(col1, 100, true);
+          return renderColumnCell(col1, 100, true, rowColor, rowTextColor, boxed);
         }
         if (columnCount === 2) {
-          return renderColumnCell(col1, 50, true) + renderColumnCell(col2, 50, false);
+          return renderColumnCell(col1, 50, true, rowColor, rowTextColor, boxed) + renderColumnCell(col2, 50, false, rowColor, rowTextColor, boxed);
         }
-        return renderColumnCell(col1, 33, true) + renderColumnCell(col2, 33, false) + renderColumnCell(col3, 34, false);
+        return renderColumnCell(col1, 33, true, rowColor, rowTextColor, boxed) + renderColumnCell(col2, 33, false, rowColor, rowTextColor, boxed) + renderColumnCell(col3, 34, false, rowColor, rowTextColor, boxed);
       })();
 
       const isLast = rowIndex === totalRows - 1;
       const padBottom = isLast ? '18px' : '10px';
+      const innerTableStyle = boxed
+        ? 'border-radius:10px;overflow:hidden;border:1px solid rgba(148,163,184,0.25);'
+        : 'border:0;';
       return (
         `<tr>` +
           `<td style="padding: 0 20px ${padBottom} 20px;">` +
-          `<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="border-radius:10px;overflow:hidden;border:1px solid rgba(148,163,184,0.25);">` +
+          `<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="${innerTableStyle}">` +
           `<tr>` +
           htmlColumns +
           `</tr>` +
@@ -1086,7 +1307,7 @@ function buildCustomSectionsBlocks(sections) {
       `<tr><td style="padding: 10px 20px ${hasAnyRowData ? '0' : '18px'} 20px;">` +
       `<div style="border-top: 2px solid #E5A00D; margin: 10px 0 14px 0;" class="dark-mode-border"></div>` +
       (header
-        ? `<div style="margin:0 0 10px 0;font-weight:700;font-size:${sizePx}px;letter-spacing:0.3px;color:${escapeHtml(headerColor)};text-align:center;" class="dark-mode-text">${escapeHtml(header)}</div>`
+        ? `<div style="margin:0 0 10px 0;font-weight:700;font-size:${sizePx}px;letter-spacing:0.3px;color:${escapeHtml(headerColor)} !important;text-align:center;" class="dark-mode-text">${escapeHtml(header)}</div>`
         : '') +
       `</td></tr>` +
       (hasAnyRowData
@@ -1124,6 +1345,38 @@ function safeFilename(input) {
     .slice(0, 120)
     .trim();
   return cleaned || 'newsletter';
+}
+
+function sanitizeNewsletterSmtpForClient(smtp) {
+  const raw = (smtp && typeof smtp === 'object') ? smtp : {};
+  const auth = (raw.auth && typeof raw.auth === 'object') ? raw.auth : {};
+  const port = (() => {
+    if (typeof raw.port === 'number' && Number.isFinite(raw.port)) return raw.port;
+    if (typeof raw.port === 'string' && raw.port.trim()) {
+      const n = Number(raw.port);
+      return Number.isFinite(n) ? n : null;
+    }
+    return null;
+  })();
+  return {
+    host: typeof raw.host === 'string' ? raw.host : '',
+    port,
+    secure: raw.secure === true,
+    auth: {
+      user: typeof auth.user === 'string' ? auth.user : '',
+      hasPass: typeof auth.pass === 'string' && auth.pass.length > 0
+    }
+  };
+}
+
+function sanitizeNewsletterEmailForClient(emailCfg) {
+  const raw = (emailCfg && typeof emailCfg === 'object') ? emailCfg : {};
+  return {
+    enabled: raw.enabled !== false,
+    from: typeof raw.from === 'string' ? raw.from : '',
+    to: typeof raw.to === 'string' ? raw.to : '',
+    smtp: sanitizeNewsletterSmtpForClient(raw.smtp)
+  };
 }
 
 function formatTimestampForFilename(date) {
@@ -1197,6 +1450,12 @@ function buildPublicBaseUrl(req) {
   try {
     const proto = (req && req.headers && req.headers['x-forwarded-proto']) ? String(req.headers['x-forwarded-proto']).split(',')[0].trim() : (req && req.protocol ? req.protocol : 'http');
     const host = req && typeof req.get === 'function' ? req.get('host') : '';
+    const hostLower = String(host || '').toLowerCase();
+    // Never auto-generate localhost URLs for emails.
+    // If you want local-only access, explicitly set publicBaseUrl in config.
+    if (hostLower.startsWith('localhost') || hostLower.startsWith('127.0.0.1') || hostLower.startsWith('[::1]')) {
+      return '';
+    }
     if (host) return `${proto}://${host}`;
   } catch (_) {
     // ignore
@@ -1320,6 +1579,9 @@ async function runNewsletterScheduleIfDue() {
     const today = formatIsoDateShort(now);
     const nowMin = now.getHours() * 60 + now.getMinutes();
     const baseUrl = String(appConfig.publicBaseUrl || appConfig.httpBaseUrl || '').trim();
+    if (!baseUrl) {
+      console.warn('[OmniStream] Newsletter schedule: publicBaseUrl is not set; email posters/links may not work. Set it in System → Public base URL.');
+    }
     const windowMins = 10;
 
     for (const sched of schedules) {
@@ -1479,8 +1741,21 @@ function buildRecentlyAddedBlocks(items, { publicBaseUrl } = {}) {
         ? `TV (${totalShows} shows · ${totalSeasons} seasons, showing ${episodes.length})`
         : `TV (${totalShows} shows · ${totalSeasons} seasons)`
     );
-    episodes.forEach(e => textParts.push('- ' + formatLine(e)));
-    textParts.push('');
+    const groups = groupEpisodesByShow(episodes);
+    if (groups.length) {
+      for (const g of groups) {
+        const showTitle = String(g.showTitle || '').trim();
+        if (!showTitle) continue;
+        const serverSuffix = (!scopeServerName && g.rep && g.rep.serverName) ? ` · ${String(g.rep.serverName)}` : '';
+        textParts.push(showTitle + serverSuffix);
+        const lines = (Array.isArray(g.episodes) ? g.episodes : []).map(episodeLineFor).filter(Boolean);
+        lines.forEach(l => textParts.push('  - ' + l));
+        textParts.push('');
+      }
+    } else {
+      episodes.forEach(e => textParts.push('- ' + formatLine(e)));
+      textParts.push('');
+    }
   }
   if (!movies.length && !episodes.length) {
     textParts.push('No recently added items found.');
@@ -1493,10 +1768,39 @@ function buildRecentlyAddedBlocks(items, { publicBaseUrl } = {}) {
       const rel = String(it.thumbProxyPath);
       if (!rel) return '';
       if (rel.startsWith('http://') || rel.startsWith('https://')) return rel;
-      return base + (rel.startsWith('/') ? rel : '/' + rel);
+      const relative = (rel.startsWith('/') ? rel : '/' + rel);
+      // If this is a poster proxy, sign it for email clients.
+      if (relative.startsWith('/api/poster?')) {
+        try {
+          const u = new URL(base + relative);
+          const sid = u.searchParams.get('serverId') || '';
+          const p = u.searchParams.get('path') || '';
+          const hasSig = Boolean(u.searchParams.get('sig') && u.searchParams.get('exp'));
+          if (sid && p && !hasSig) {
+            return buildSignedNewsletterPosterUrl({ publicBaseUrl: base, serverId: sid, path: p });
+          }
+        } catch (_) {
+          // ignore
+        }
+      }
+      // If this is the Plex newsletter thumb proxy without a signature, sign it.
+      if (relative.startsWith('/api/newsletter/plex/thumb?')) {
+        try {
+          const u = new URL(base + relative);
+          const sid = u.searchParams.get('serverId') || '';
+          const th = u.searchParams.get('thumb') || '';
+          const hasSig = Boolean(u.searchParams.get('sig') && u.searchParams.get('exp'));
+          if (sid && th && !hasSig) {
+            return buildSignedNewsletterThumbUrl({ publicBaseUrl: base, serverId: sid, thumb: th });
+          }
+        } catch (_) {
+          // ignore
+        }
+      }
+      return base + relative;
     }
     if (!it || !it.serverId || !it.thumb) return '';
-    return `${base}/api/newsletter/plex/thumb?serverId=${encodeURIComponent(String(it.serverId))}&thumb=${encodeURIComponent(String(it.thumb))}`;
+    return buildSignedNewsletterThumbUrl({ publicBaseUrl: base, serverId: String(it.serverId), thumb: String(it.thumb) });
   };
 
   const metaPartsFor = (it) => {
@@ -1509,6 +1813,84 @@ function buildRecentlyAddedBlocks(items, { publicBaseUrl } = {}) {
     return parts.join(' · ');
   };
 
+  function episodeLineFor(it) {
+    if (!it) return '';
+    const seasonNum = (typeof it.seasonNumber === 'number' && Number.isFinite(it.seasonNumber)) ? it.seasonNumber : null;
+    const epNum = (typeof it.episodeNumber === 'number' && Number.isFinite(it.episodeNumber)) ? it.episodeNumber : null;
+    let epLabel = '';
+    if (seasonNum !== null && epNum !== null) {
+      epLabel = `S${String(seasonNum).padStart(2, '0')}E${String(epNum).padStart(2, '0')}`;
+    } else if (epNum !== null) {
+      epLabel = `E${String(epNum).padStart(2, '0')}`;
+    }
+
+    const show = it.showTitle ? String(it.showTitle).trim() : '';
+    let epName = String(it.title || '').trim();
+    if (show && epName.toLowerCase().startsWith(show.toLowerCase() + ' - ')) {
+      epName = epName.slice(show.length + 3).trim();
+    }
+    if (epLabel && epName.toUpperCase().startsWith(epLabel.toUpperCase() + ' - ')) {
+      epName = epName.slice(epLabel.length + 3).trim();
+    }
+    if (epLabel && epName.toUpperCase() === epLabel.toUpperCase()) {
+      epName = '';
+    }
+
+    if (epLabel && epName) return `${epLabel} - ${epName}`;
+    if (epLabel) return epLabel;
+    return String(it.title || '').trim();
+  }
+
+  function groupEpisodesByShow(eps) {
+    const arr = Array.isArray(eps) ? eps : [];
+    const keyFor = (it) => {
+      const show = it && it.showTitle ? String(it.showTitle).trim() : '';
+      if (!show) return '';
+      // Avoid mixing identical show names across different servers unless we're already scoped.
+      const serverPart = scopeServerName ? '' : `|${String(it.serverId || '')}`;
+      return `${show}${serverPart}`;
+    };
+
+    const map = new Map();
+    for (const it of arr) {
+      const k = keyFor(it);
+      if (!k) continue;
+      if (!map.has(k)) {
+        map.set(k, {
+          showTitle: String(it.showTitle || '').trim(),
+          rep: it,
+          episodes: []
+        });
+      }
+      map.get(k).episodes.push(it);
+    }
+
+    const groups = Array.from(map.values());
+    // Newest group first
+    groups.sort((a, b) => {
+      const ta = a && a.rep && a.rep.addedAt ? (Date.parse(a.rep.addedAt) || 0) : 0;
+      const tb = b && b.rep && b.rep.addedAt ? (Date.parse(b.rep.addedAt) || 0) : 0;
+      return tb - ta;
+    });
+
+    // Sort episodes within each group for readability.
+    for (const g of groups) {
+      g.episodes.sort((a, b) => {
+        const sa = (typeof a.seasonNumber === 'number' && Number.isFinite(a.seasonNumber)) ? a.seasonNumber : null;
+        const sb = (typeof b.seasonNumber === 'number' && Number.isFinite(b.seasonNumber)) ? b.seasonNumber : null;
+        const ea = (typeof a.episodeNumber === 'number' && Number.isFinite(a.episodeNumber)) ? a.episodeNumber : null;
+        const eb = (typeof b.episodeNumber === 'number' && Number.isFinite(b.episodeNumber)) ? b.episodeNumber : null;
+        if (sa !== null && sb !== null && sa !== sb) return sa - sb;
+        if (ea !== null && eb !== null && ea !== eb) return ea - eb;
+        const ta = a && a.addedAt ? (Date.parse(a.addedAt) || 0) : 0;
+        const tb = b && b.addedAt ? (Date.parse(b.addedAt) || 0) : 0;
+        return tb - ta;
+      });
+    }
+
+    return groups;
+  }
+
   const genresFor = (it) => {
     if (!it || !Array.isArray(it.genres) || !it.genres.length) return '';
     return it.genres.slice(0, 3).join(' · ');
@@ -1520,21 +1902,19 @@ function buildRecentlyAddedBlocks(items, { publicBaseUrl } = {}) {
     const genres = genresFor(it);
     const summary = it && it.summary ? String(it.summary) : '';
     const img = thumbUrl
-      ? `<img src="${escapeHtml(thumbUrl)}" width="100" height="150" alt="" style="display:block;width:100px;height:150px;border-radius:4px;object-fit:cover;background:#3F4245;" />`
-      : `<div style="width:100px;height:150px;border-radius:4px;background:#3F4245;"></div>`;
+      ? `<img src="${escapeHtml(thumbUrl)}" width="100" height="150" alt="" style="display:block;margin:0 auto;width:100px;height:150px;border-radius:6px;object-fit:cover;background:#3F4245;" />`
+      : `<div style="margin:0 auto;width:100px;height:150px;border-radius:6px;background:#3F4245;"></div>`;
 
     return (
-      `<div style="background:#0b1226;border-radius:8px;padding:15px;box-shadow:0 2px 4px rgba(0,0,0,0.25);margin:10px 0;" class="dark-mode-card">` +
+      `<div style="background:#0b1226;border-radius:10px;padding:14px 14px;box-shadow:0 2px 4px rgba(0,0,0,0.25);margin:10px 0;" class="dark-mode-card">` +
         `<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">` +
-          `<tr>` +
-            `<td style="vertical-align:top;width:110px;padding-right:12px;">${img}</td>` +
-            `<td style="vertical-align:top;">` +
-              `<div style="font-size:18px;line-height:1.2;font-weight:700;color:#e5e7eb;text-align:left;" class="dark-mode-text">${escapeHtml(it.title || '')}</div>` +
-              (meta ? `<div style="margin:6px 0 0 0;font-size:14px;color:#94a3b8;" class="dark-mode-muted">${escapeHtml(meta)}</div>` : '') +
-              (genres ? `<div style="margin:6px 0 0 0;font-size:14px;color:#94a3b8;" class="dark-mode-muted">${escapeHtml(genres)}</div>` : '') +
-              (summary ? `<div style="margin:10px 0 0 0;font-size:14px;color:#94a3b8;" class="dark-mode-muted">${escapeHtml(summary)}</div>` : '') +
-            `</td>` +
-          `</tr>` +
+          `<tr><td style="padding:0 0 12px 0;text-align:center;">${img}</td></tr>` +
+          `<tr><td style="vertical-align:top;">` +
+            `<div style="font-size:18px;line-height:1.25;font-weight:700;color:#e5e7eb;text-align:left;" class="dark-mode-text">${escapeHtml(it.title || '')}</div>` +
+            (meta ? `<div style="margin:6px 0 0 0;font-size:13px;line-height:1.3;color:#94a3b8;" class="dark-mode-muted">${escapeHtml(meta)}</div>` : '') +
+            (genres ? `<div style="margin:6px 0 0 0;font-size:13px;line-height:1.3;color:#94a3b8;" class="dark-mode-muted">${escapeHtml(genres)}</div>` : '') +
+            (summary ? `<div style="margin:10px 0 0 0;font-size:13px;line-height:1.45;color:#94a3b8;" class="dark-mode-muted">${escapeHtml(summary)}</div>` : '') +
+          `</td></tr>` +
         `</table>` +
       `</div>`
     );
@@ -1549,7 +1929,49 @@ function buildRecentlyAddedBlocks(items, { publicBaseUrl } = {}) {
     });
   };
   section(moviesTitle, movies);
-  section(tvTitle, episodes);
+  if (episodes.length) {
+    htmlParts.push(`<div style="margin: 18px 0 10px 0; font-weight: 600; font-size: 16px; color:#e5e7eb;" class="dark-mode-text">${escapeHtml(tvTitle)}</div>`);
+    const groups = groupEpisodesByShow(episodes);
+    if (groups.length) {
+      for (const g of groups) {
+        const rep = g && g.rep ? g.rep : null;
+        if (!rep) continue;
+        const title = String(g.showTitle || rep.showTitle || rep.title || '').trim();
+        if (!title) continue;
+
+        const thumbUrl = thumbUrlFor(rep);
+        const meta = (!scopeServerName && rep.serverName) ? String(rep.serverName) : '';
+        const episodeLines = (Array.isArray(g.episodes) ? g.episodes : []).map(episodeLineFor).filter(Boolean);
+
+        const img = thumbUrl
+          ? `<img src="${escapeHtml(thumbUrl)}" width="100" height="150" alt="" style="display:block;margin:0 auto;width:100px;height:150px;border-radius:6px;object-fit:cover;background:#3F4245;" />`
+          : `<div style="margin:0 auto;width:100px;height:150px;border-radius:6px;background:#3F4245;"></div>`;
+
+        const listHtml = episodeLines.length
+          ? `<div style="margin:10px 0 0 0;color:#94a3b8;font-size:13px;line-height:1.45;" class="dark-mode-muted">` +
+              episodeLines.map(l => `<div style="margin:0 0 4px 0;">• ${escapeHtml(l)}</div>`).join('') +
+            `</div>`
+          : '';
+
+        htmlParts.push(
+          `<div style="background:#0b1226;border-radius:10px;padding:14px 14px;box-shadow:0 2px 4px rgba(0,0,0,0.25);margin:10px 0;" class="dark-mode-card">` +
+            `<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">` +
+              `<tr><td style="padding:0 0 12px 0;text-align:center;">${img}</td></tr>` +
+              `<tr><td style="vertical-align:top;">` +
+                `<div style="font-size:18px;line-height:1.25;font-weight:800;color:#e5e7eb;text-align:left;" class="dark-mode-text">${escapeHtml(title)}</div>` +
+                (meta ? `<div style="margin:6px 0 0 0;font-size:13px;line-height:1.3;color:#94a3b8;" class="dark-mode-muted">${escapeHtml(meta)}</div>` : '') +
+                listHtml +
+              `</td></tr>` +
+            `</table>` +
+          `</div>`
+        );
+      }
+    } else {
+      episodes.forEach(it => {
+        htmlParts.push(cardHtml(it));
+      });
+    }
+  }
   if (!movies.length && !episodes.length) {
     htmlParts.push('<div style="color:#94a3b8;" class="dark-mode-muted">No recently added items found.</div>');
   }
@@ -3759,13 +4181,31 @@ app.get('/api/poster', async (req, res) => {
     if (!serverId || !artworkPath) {
       return res.status(400).end();
     }
+
+    const sess = internalAuthEnabled() ? getSessionForReq(req) : null;
+    const authed = !internalAuthEnabled() || Boolean(sess && sess.username);
+
+    const relRaw = String(artworkPath);
+    if (!relRaw.startsWith('/') || relRaw.includes('..') || relRaw.includes('://')) {
+      return res.status(400).end();
+    }
+
+    if (!authed) {
+      const exp = req.query.exp;
+      const sig = req.query.sig;
+      const ok = verifyNewsletterPosterSignature({ serverId: String(serverId), path: relRaw, exp, sig });
+      if (!ok) {
+        return res.status(401).json({ error: 'Unauthorized', code: 'UNAUTHENTICATED' });
+      }
+    }
+
     const server = servers.find(s => String(s.id) === String(serverId));
     if (!server || !server.baseUrl) {
       return res.status(404).end();
     }
     let base = server.baseUrl;
     if (base.endsWith('/')) base = base.slice(0, -1);
-    const rel = String(artworkPath).startsWith('/') ? String(artworkPath) : '/' + String(artworkPath);
+    const rel = relRaw;
     let url = base + rel;
     // Attach token using the same rules as pollServer
     if (server.token) {
@@ -3798,9 +4238,79 @@ app.get('/api/poster', async (req, res) => {
     if (resp.headers['content-type']) {
       res.setHeader('Content-Type', resp.headers['content-type']);
     }
+    res.setHeader('Cache-Control', 'public, max-age=3600');
     resp.data.pipe(res);
   } catch (e) {
     console.error('[OmniStream] Poster proxy failed:', e.message);
+    res.status(502).end();
+  }
+});
+
+// Signed-only poster proxy endpoint for newsletter emails.
+// Intended to be safely exposed without interactive auth at the reverse proxy.
+app.get('/api/poster/signed', async (req, res) => {
+  try {
+    const { serverId, path: artworkPath, exp, sig } = req.query;
+    if (!serverId || !artworkPath || !exp || !sig) {
+      return res.status(400).end();
+    }
+
+    const relRaw = String(artworkPath);
+    if (!relRaw.startsWith('/') || relRaw.includes('..') || relRaw.includes('://')) {
+      return res.status(400).end();
+    }
+
+    const ok = verifyNewsletterPosterSignature({ serverId: String(serverId), path: relRaw, exp, sig });
+    if (!ok) {
+      return res.status(401).json({ error: 'Unauthorized', code: 'UNAUTHENTICATED' });
+    }
+
+    const server = servers.find(s => String(s.id) === String(serverId));
+    if (!server || !server.baseUrl) {
+      return res.status(404).end();
+    }
+    let base = server.baseUrl;
+    if (base.endsWith('/')) base = base.slice(0, -1);
+    const rel = relRaw;
+    let url = base + rel;
+
+    // Attach token using the same rules as pollServer
+    if (server.token) {
+      const tokenLoc = server.tokenLocation || (server.type === 'plex' ? 'query' : 'header');
+      if (tokenLoc === 'query') {
+        const sep = url.includes('?') ? '&' : '?';
+        if (server.type === 'plex') {
+          url += `${sep}X-Plex-Token=${encodeURIComponent(server.token)}`;
+        } else if (server.type === 'jellyfin') {
+          url += `${sep}api_key=${encodeURIComponent(server.token)}`;
+        } else {
+          url += `${sep}X-Emby-Token=${encodeURIComponent(server.token)}`;
+        }
+      }
+    }
+
+    const headers = {};
+    if (server.token) {
+      const tokenLoc = server.tokenLocation || (server.type === 'plex' ? 'query' : 'header');
+      if (tokenLoc === 'header') {
+        if (server.type === 'plex') {
+          headers['X-Plex-Token'] = server.token;
+        } else if (server.type === 'jellyfin') {
+          headers['X-MediaBrowser-Token'] = server.token;
+        } else {
+          headers['X-Emby-Token'] = server.token;
+        }
+      }
+    }
+
+    const resp = await axios.get(url, { responseType: 'stream', headers });
+    if (resp.headers['content-type']) {
+      res.setHeader('Content-Type', resp.headers['content-type']);
+    }
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    resp.data.pipe(res);
+  } catch (e) {
+    console.error('[OmniStream] Signed poster proxy failed:', e.message);
     res.status(502).end();
   }
 });
@@ -4504,6 +5014,9 @@ app.get('/api/subscribers/summary', (req, res) => {
   // Proxy Plex thumbnails without exposing Plex tokens in email HTML.
   app.get('/api/newsletter/plex/thumb', async (req, res) => {
     try {
+      const sess = internalAuthEnabled() ? getSessionForReq(req) : null;
+      const authed = !internalAuthEnabled() || Boolean(sess && sess.username);
+
       const serverId = String(req.query.serverId || '').trim();
       let thumb = String(req.query.thumb || '').trim();
       if (!serverId || !thumb) {
@@ -4512,6 +5025,16 @@ app.get('/api/subscribers/summary', (req, res) => {
       if (!thumb.startsWith('/') || thumb.includes('..') || thumb.includes('://')) {
         return res.status(400).json({ error: 'Invalid thumb path' });
       }
+
+      if (!authed) {
+        const exp = req.query.exp;
+        const sig = req.query.sig;
+        const ok = verifyNewsletterThumbSignature({ serverId, thumb, exp, sig });
+        if (!ok) {
+          return res.status(401).json({ error: 'Unauthorized', code: 'UNAUTHENTICATED' });
+        }
+      }
+
       // Strip any token in the provided thumb query for safety.
       thumb = thumb.replace(/([?&])X-Plex-Token=[^&]+/ig, '$1').replace(/[?&]$/g, '');
 
@@ -4543,6 +5066,173 @@ app.get('/api/subscribers/summary', (req, res) => {
     } catch (e) {
       console.error('[OmniStream] Newsletter thumb proxy failed:', e.message);
       res.status(500).json({ error: 'Failed to proxy thumb' });
+    }
+  });
+
+  // Signed-only Plex thumbnail proxy endpoint for newsletter emails.
+  // Intended to be safely exposed without interactive auth at the reverse proxy.
+  app.get('/api/newsletter/plex/thumb/signed', async (req, res) => {
+    try {
+      const serverId = String(req.query.serverId || '').trim();
+      let thumb = String(req.query.thumb || '').trim();
+      const exp = req.query.exp;
+      const sig = req.query.sig;
+
+      if (!serverId || !thumb || !exp || !sig) {
+        return res.status(400).json({ error: 'serverId, thumb, exp, and sig are required' });
+      }
+      if (!thumb.startsWith('/') || thumb.includes('..') || thumb.includes('://')) {
+        return res.status(400).json({ error: 'Invalid thumb path' });
+      }
+
+      const ok = verifyNewsletterThumbSignature({ serverId, thumb, exp, sig });
+      if (!ok) {
+        return res.status(401).json({ error: 'Unauthorized', code: 'UNAUTHENTICATED' });
+      }
+
+      // Strip any token in the provided thumb query for safety.
+      thumb = thumb.replace(/([?&])X-Plex-Token=[^&]+/ig, '$1').replace(/[?&]$/g, '');
+
+      const server = servers.find(s => String(s.id) === serverId);
+      if (!server || server.type !== 'plex' || !server.baseUrl || !server.token) {
+        return res.status(404).json({ error: 'Plex server not found' });
+      }
+
+      const base = String(server.baseUrl).replace(/\/$/, '');
+      const urlObj = new URL(base + thumb);
+      const headers = {};
+      const tokenLoc = server.tokenLocation || 'query';
+      if (tokenLoc === 'header') {
+        headers['X-Plex-Token'] = server.token;
+      } else {
+        urlObj.searchParams.set('X-Plex-Token', server.token);
+      }
+
+      const resp = await axios.get(urlObj.toString(), {
+        headers,
+        timeout: 15000,
+        responseType: 'arraybuffer'
+      });
+
+      const contentType = (resp && resp.headers && resp.headers['content-type']) ? resp.headers['content-type'] : 'image/jpeg';
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+      res.status(200).send(Buffer.from(resp.data));
+    } catch (e) {
+      console.error('[OmniStream] Signed newsletter thumb proxy failed:', e.message);
+      res.status(500).json({ error: 'Failed to proxy thumb' });
+    }
+  });
+
+  // Sent newsletter history (saved to disk under sent_newsletters/)
+  app.get('/api/newsletter/sent', (req, res) => {
+    try {
+      const limitRaw = Number(req.query.limit ?? 200);
+      const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(500, Math.floor(limitRaw))) : 200;
+
+      if (!fs.existsSync(SENT_NEWSLETTERS_DIR)) {
+        return res.json({ items: [] });
+      }
+
+      const entries = fs.readdirSync(SENT_NEWSLETTERS_DIR, { withFileTypes: true })
+        .filter(d => d && d.isFile && d.isFile())
+        .map(d => d.name)
+        .filter(name => typeof name === 'string' && name.toLowerCase().endsWith('.json'))
+        .map(name => {
+          const id = name.slice(0, -'.json'.length);
+          const metaPath = resolveSentNewsletterPath(id, 'json');
+          if (!metaPath || !fs.existsSync(metaPath)) return null;
+
+          let meta = null;
+          try {
+            const raw = fs.readFileSync(metaPath, 'utf8');
+            const txt = raw ? String(raw).replace(/^\uFEFF/, '').trim() : '';
+            meta = txt ? JSON.parse(txt) : null;
+          } catch (_) {
+            meta = null;
+          }
+
+          const textPath = resolveSentNewsletterPath(id, 'txt');
+          const htmlPath = resolveSentNewsletterPath(id, 'html');
+          const hasText = Boolean(textPath && fs.existsSync(textPath));
+          const hasHtml = Boolean(htmlPath && fs.existsSync(htmlPath));
+
+          const savedAt = (meta && typeof meta.savedAt === 'string' && meta.savedAt) ? meta.savedAt : null;
+          let sortTs = 0;
+          if (savedAt) {
+            const t = Date.parse(savedAt);
+            sortTs = Number.isFinite(t) ? t : 0;
+          }
+          if (!sortTs) {
+            try {
+              const st = fs.statSync(metaPath);
+              sortTs = st && st.mtimeMs ? st.mtimeMs : 0;
+            } catch (_) {
+              sortTs = 0;
+            }
+          }
+
+          return {
+            id,
+            savedAt: savedAt || (sortTs ? new Date(sortTs).toISOString() : null),
+            subject: meta && typeof meta.subject === 'string' ? meta.subject : '',
+            hasHtml,
+            hasText,
+            placeholders: meta && typeof meta.placeholders === 'object' ? meta.placeholders : null
+          };
+        })
+        .filter(Boolean)
+        .sort((a, b) => {
+          const ta = a && a.savedAt ? (Date.parse(a.savedAt) || 0) : 0;
+          const tb = b && b.savedAt ? (Date.parse(b.savedAt) || 0) : 0;
+          return tb - ta;
+        })
+        .slice(0, limit);
+
+      res.json({ items: entries });
+    } catch (e) {
+      console.error('[OmniStream] Failed to list sent newsletters:', e.message);
+      res.status(500).json({ error: 'Failed to list sent newsletters' });
+    }
+  });
+
+  app.get('/api/newsletter/sent/:id/meta', (req, res) => {
+    try {
+      const id = String(req.params.id || '').trim();
+      const p = resolveSentNewsletterPath(id, 'json');
+      if (!p || !fs.existsSync(p)) return res.status(404).json({ error: 'Not found' });
+      const raw = fs.readFileSync(p, 'utf8');
+      const txt = raw ? String(raw).replace(/^\uFEFF/, '').trim() : '';
+      const meta = txt ? JSON.parse(txt) : {};
+      res.json(meta);
+    } catch (e) {
+      res.status(500).json({ error: 'Failed to read meta' });
+    }
+  });
+
+  app.get('/api/newsletter/sent/:id/text', (req, res) => {
+    try {
+      const id = String(req.params.id || '').trim();
+      const p = resolveSentNewsletterPath(id, 'txt');
+      if (!p || !fs.existsSync(p)) return res.status(404).send('Not found');
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res.setHeader('Cache-Control', 'private, max-age=0, no-store');
+      res.status(200).send(fs.readFileSync(p, 'utf8'));
+    } catch (e) {
+      res.status(500).send('Failed to read text');
+    }
+  });
+
+  app.get('/api/newsletter/sent/:id/html', (req, res) => {
+    try {
+      const id = String(req.params.id || '').trim();
+      const p = resolveSentNewsletterPath(id, 'html');
+      if (!p || !fs.existsSync(p)) return res.status(404).send('Not found');
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.setHeader('Cache-Control', 'private, max-age=0, no-store');
+      res.status(200).send(fs.readFileSync(p, 'utf8'));
+    } catch (e) {
+      res.status(500).send('Failed to read html');
     }
   });
 
@@ -5451,11 +6141,7 @@ app.get('/api/config/app', (req, res) => {
           ? String(appConfig.newsletterBranding.logoUrl)
           : ''
       },
-      newsletterEmail: {
-        enabled: appConfig.newsletterEmail?.enabled !== false,
-        from: appConfig.newsletterEmail?.from || '',
-        to: appConfig.newsletterEmail?.to || ''
-      },
+      newsletterEmail: sanitizeNewsletterEmailForClient(appConfig.newsletterEmail),
       newsletterSchedule: {
         enabled: appConfig.newsletterSchedule?.enabled === true,
         templateId: appConfig.newsletterSchedule?.templateId != null ? String(appConfig.newsletterSchedule.templateId) : DEFAULT_NEWSLETTER_TEMPLATE_ID,
@@ -5465,24 +6151,70 @@ app.get('/api/config/app', (req, res) => {
       },
       newsletterSchedules: normalizedSchedules,
       newsletterCustomSections: Array.isArray(appConfig.newsletterCustomSections)
-        ? appConfig.newsletterCustomSections.map((s, idx) => ({
-          id: s && s.id != null ? String(s.id) : `sec-${idx + 1}`,
-          header: s && typeof s.header === 'string' ? s.header : '',
-          headerSize: normalizeCustomHeaderSize(s && s.headerSize),
-          headerColor: normalizeHexColor(s && s.headerColor) || '#e5e7eb',
-          columnCount: (() => {
-            let cc = parseInt((s && s.columnCount != null) ? s.columnCount : 3, 10);
+        ? appConfig.newsletterCustomSections.map((s, idx) => {
+          const header = s && typeof s.header === 'string' ? s.header : '';
+          const headerSize = normalizeCustomHeaderSize(s && s.headerSize);
+          const headerColor = normalizeHexColor(s && s.headerColor) || '#e5e7eb';
+
+          const normalizeRowForApi = (r, rIdx) => {
+            let cc = parseInt((r && r.columnCount != null) ? r.columnCount : 3, 10);
+            if (![1, 2, 3].includes(cc)) cc = 3;
+            const rowColor = normalizeHexColor(r && r.rowColor) || '#0b1226';
+            const rowTextColor = normalizeHexColor(r && r.rowTextColor) || '#e5e7eb';
+            const boxed = !(r && r.boxed === false);
+            const cols = r && Array.isArray(r.columns)
+              ? r.columns
+              : (s && Array.isArray(s.columns) ? s.columns : []);
+            return {
+              id: r && r.id != null ? String(r.id) : `row-${rIdx + 1}`,
+              columnCount: cc,
+              rowColor,
+              rowTextColor,
+              boxed,
+              columns: [
+                normalizeCustomHeaderColumn(cols[0]),
+                normalizeCustomHeaderColumn(cols[1]),
+                normalizeCustomHeaderColumn(cols[2])
+              ]
+            };
+          };
+
+          const rawRows = s && Array.isArray(s.rows) ? s.rows : null;
+          const rows = (rawRows && rawRows.length)
+            ? rawRows.map(normalizeRowForApi)
+            : [normalizeRowForApi({ columnCount: s && s.columnCount, rowColor: s && s.rowColor, rowTextColor: s && s.rowTextColor, boxed: s && s.boxed, columns: s && s.columns }, 0)];
+
+          // Keep legacy fields populated for back-compat.
+          const firstRow = rows[0] || {};
+          const legacyColumnCount = (() => {
+            let cc = parseInt((s && s.columnCount != null) ? s.columnCount : (firstRow.columnCount != null ? firstRow.columnCount : 3), 10);
             if (![1, 2, 3].includes(cc)) cc = 3;
             return cc;
-          })(),
-          columns: Array.isArray(s && s.columns)
+          })();
+          const legacyColumns = Array.isArray(s && s.columns)
             ? [
               normalizeCustomHeaderColumn(s.columns[0]),
               normalizeCustomHeaderColumn(s.columns[1]),
               normalizeCustomHeaderColumn(s.columns[2])
             ]
-            : [normalizeCustomHeaderColumn(''), normalizeCustomHeaderColumn(''), normalizeCustomHeaderColumn('')]
-        }))
+            : (Array.isArray(firstRow.columns)
+              ? [
+                normalizeCustomHeaderColumn(firstRow.columns[0]),
+                normalizeCustomHeaderColumn(firstRow.columns[1]),
+                normalizeCustomHeaderColumn(firstRow.columns[2])
+              ]
+              : [normalizeCustomHeaderColumn(''), normalizeCustomHeaderColumn(''), normalizeCustomHeaderColumn('')]);
+
+          return {
+            id: s && s.id != null ? String(s.id) : `sec-${idx + 1}`,
+            header,
+            headerSize,
+            headerColor,
+            rows,
+            columnCount: legacyColumnCount,
+            columns: legacyColumns
+          };
+        })
         : [],
       newsletterTemplates: Array.isArray(appConfig.newsletterTemplates) ? appConfig.newsletterTemplates.map(t => ({
         id: t.id,
@@ -5589,8 +6321,66 @@ app.put('/api/config/app', (req, res) => {
       if (Object.prototype.hasOwnProperty.call(incomingNl, 'to')) {
         nextNl.to = typeof incomingNl.to === 'string' ? incomingNl.to.trim() : '';
       }
-      if (Object.prototype.hasOwnProperty.call(incomingNl, 'smtp') && typeof incomingNl.smtp === 'object') {
-        nextNl.smtp = incomingNl.smtp;
+      // SMTP settings: merge to avoid clearing auth.pass when UI doesn't send it back.
+      if (Object.prototype.hasOwnProperty.call(incomingNl, 'smtp')) {
+        if (incomingNl.smtp === null) {
+          delete nextNl.smtp;
+        } else if (incomingNl.smtp && typeof incomingNl.smtp === 'object') {
+          const currentSmtp = (currentNl.smtp && typeof currentNl.smtp === 'object') ? currentNl.smtp : {};
+          const incomingSmtp = incomingNl.smtp;
+          const nextSmtp = { ...currentSmtp };
+
+          if (Object.prototype.hasOwnProperty.call(incomingSmtp, 'host')) {
+            nextSmtp.host = typeof incomingSmtp.host === 'string' ? incomingSmtp.host.trim() : '';
+          }
+          if (Object.prototype.hasOwnProperty.call(incomingSmtp, 'port')) {
+            const p = incomingSmtp.port;
+            if (p === null || p === '') {
+              delete nextSmtp.port;
+            } else {
+              const n = typeof p === 'number' ? p : Number(p);
+              if (Number.isFinite(n) && n > 0) nextSmtp.port = n;
+            }
+          }
+          if (Object.prototype.hasOwnProperty.call(incomingSmtp, 'secure')) {
+            nextSmtp.secure = incomingSmtp.secure === true;
+          }
+
+          if (Object.prototype.hasOwnProperty.call(incomingSmtp, 'auth')) {
+            if (incomingSmtp.auth === null) {
+              delete nextSmtp.auth;
+            } else if (incomingSmtp.auth && typeof incomingSmtp.auth === 'object') {
+              const currentAuth = (currentSmtp.auth && typeof currentSmtp.auth === 'object') ? currentSmtp.auth : {};
+              const incomingAuth = incomingSmtp.auth;
+              const nextAuth = { ...currentAuth };
+
+              if (Object.prototype.hasOwnProperty.call(incomingAuth, 'user')) {
+                nextAuth.user = typeof incomingAuth.user === 'string' ? incomingAuth.user.trim() : '';
+              }
+              // Only update pass when explicitly provided.
+              if (Object.prototype.hasOwnProperty.call(incomingAuth, 'pass')) {
+                const pass = incomingAuth.pass;
+                if (typeof pass === 'string') {
+                  if (!pass.length) {
+                    // empty string means clear
+                    delete nextAuth.pass;
+                  } else {
+                    nextAuth.pass = pass;
+                  }
+                }
+              }
+
+              // Prune empty auth
+              if (Object.keys(nextAuth).length) {
+                nextSmtp.auth = nextAuth;
+              } else {
+                delete nextSmtp.auth;
+              }
+            }
+          }
+
+          nextNl.smtp = nextSmtp;
+        }
       }
       appConfig.newsletterEmail = nextNl;
     }
@@ -5617,20 +6407,68 @@ app.put('/api/config/app', (req, res) => {
           const headerSize = normalizeCustomHeaderSize(s && s.headerSize);
           const headerColor = normalizeHexColor(s && s.headerColor) || '#e5e7eb';
 
-          let columnCount = parseInt((s && s.columnCount != null) ? s.columnCount : 3, 10);
-          if (![1, 2, 3].includes(columnCount)) columnCount = 3;
+          const normalizeRowFromApi = (r, rIdx, fallbackColumnCount, fallbackColumns) => {
+            let cc = parseInt((r && r.columnCount != null) ? r.columnCount : fallbackColumnCount, 10);
+            if (![1, 2, 3].includes(cc)) cc = 3;
+            const rowColor = normalizeHexColor(r && r.rowColor) || '#0b1226';
+            const rowTextColor = normalizeHexColor(r && r.rowTextColor) || '#e5e7eb';
+            const boxed = !(r && r.boxed === false);
+            const cols = r && Array.isArray(r.columns)
+              ? r.columns
+              : (Array.isArray(fallbackColumns) ? fallbackColumns : []);
+            const c1 = normalizeCustomHeaderColumn(cols[0]);
+            const c2 = normalizeCustomHeaderColumn(cols[1]);
+            const c3 = normalizeCustomHeaderColumn(cols[2]);
+            return {
+              id: r && r.id != null ? String(r.id) : `row-${rIdx + 1}`,
+              columnCount: cc,
+              rowColor,
+              rowTextColor,
+              boxed,
+              columns: [c1, c2, c3]
+            };
+          };
 
-          const cols = s && Array.isArray(s.columns) ? s.columns : [];
-          const c1 = normalizeCustomHeaderColumn(cols[0]);
-          const c2 = normalizeCustomHeaderColumn(cols[1]);
-          const c3 = normalizeCustomHeaderColumn(cols[2]);
+          // Legacy fallback (section-level columns + columnCount)
+          let legacyColumnCount = parseInt((s && s.columnCount != null) ? s.columnCount : 3, 10);
+          if (![1, 2, 3].includes(legacyColumnCount)) legacyColumnCount = 3;
+          const legacyColumns = s && Array.isArray(s.columns) ? s.columns : [];
+
+          const rawRows = s && Array.isArray(s.rows) ? s.rows : null;
+          const rows = (rawRows && rawRows.length)
+            ? rawRows.map((r, rIdx) => normalizeRowFromApi(r, rIdx, legacyColumnCount, legacyColumns))
+            : [normalizeRowFromApi({ columnCount: legacyColumnCount, rowColor: s && s.rowColor, rowTextColor: s && s.rowTextColor, boxed: s && s.boxed, columns: legacyColumns }, 0, legacyColumnCount, legacyColumns)];
+
+          // Keep legacy fields populated too.
+          const firstRow = rows[0] || {};
+          const finalColumnCount = (() => {
+            let cc = legacyColumnCount;
+            if (![1, 2, 3].includes(cc)) cc = parseInt(firstRow.columnCount != null ? firstRow.columnCount : 3, 10);
+            if (![1, 2, 3].includes(cc)) cc = 3;
+            return cc;
+          })();
+          const finalColumns = Array.isArray(legacyColumns) && legacyColumns.length
+            ? [
+              normalizeCustomHeaderColumn(legacyColumns[0]),
+              normalizeCustomHeaderColumn(legacyColumns[1]),
+              normalizeCustomHeaderColumn(legacyColumns[2])
+            ]
+            : (Array.isArray(firstRow.columns)
+              ? [
+                normalizeCustomHeaderColumn(firstRow.columns[0]),
+                normalizeCustomHeaderColumn(firstRow.columns[1]),
+                normalizeCustomHeaderColumn(firstRow.columns[2])
+              ]
+              : [normalizeCustomHeaderColumn(''), normalizeCustomHeaderColumn(''), normalizeCustomHeaderColumn('')]);
+
           return {
             id: s && s.id != null ? String(s.id) : `sec-${idx + 1}`,
             header,
             headerSize,
             headerColor,
-            columnCount,
-            columns: [c1, c2, c3]
+            rows,
+            columnCount: finalColumnCount,
+            columns: finalColumns
           };
         });
       }
@@ -5724,11 +6562,7 @@ app.put('/api/config/app', (req, res) => {
           ? String(appConfig.newsletterBranding.logoUrl)
           : ''
       },
-      newsletterEmail: {
-        enabled: appConfig.newsletterEmail?.enabled !== false,
-        from: appConfig.newsletterEmail?.from || '',
-        to: appConfig.newsletterEmail?.to || ''
-      },
+      newsletterEmail: sanitizeNewsletterEmailForClient(appConfig.newsletterEmail),
       newsletterSchedule: {
         enabled: appConfig.newsletterSchedule?.enabled === true,
         templateId: appConfig.newsletterSchedule?.templateId != null ? String(appConfig.newsletterSchedule.templateId) : DEFAULT_NEWSLETTER_TEMPLATE_ID,
@@ -5738,24 +6572,69 @@ app.put('/api/config/app', (req, res) => {
       },
       newsletterSchedules: normalizedSchedules,
       newsletterCustomSections: Array.isArray(appConfig.newsletterCustomSections)
-        ? appConfig.newsletterCustomSections.map((s, idx) => ({
-          id: s && s.id != null ? String(s.id) : `sec-${idx + 1}`,
-          header: s && typeof s.header === 'string' ? s.header : '',
-          headerSize: normalizeCustomHeaderSize(s && s.headerSize),
-          headerColor: normalizeHexColor(s && s.headerColor) || '#e5e7eb',
-          columnCount: (() => {
-            let cc = parseInt((s && s.columnCount != null) ? s.columnCount : 3, 10);
+        ? appConfig.newsletterCustomSections.map((s, idx) => {
+          const header = s && typeof s.header === 'string' ? s.header : '';
+          const headerSize = normalizeCustomHeaderSize(s && s.headerSize);
+          const headerColor = normalizeHexColor(s && s.headerColor) || '#e5e7eb';
+
+          const normalizeRowForApi = (r, rIdx) => {
+            let cc = parseInt((r && r.columnCount != null) ? r.columnCount : 3, 10);
+            if (![1, 2, 3].includes(cc)) cc = 3;
+            const rowColor = normalizeHexColor(r && r.rowColor) || '#0b1226';
+            const rowTextColor = normalizeHexColor(r && r.rowTextColor) || '#e5e7eb';
+            const boxed = !(r && r.boxed === false);
+            const cols = r && Array.isArray(r.columns)
+              ? r.columns
+              : (s && Array.isArray(s.columns) ? s.columns : []);
+            return {
+              id: r && r.id != null ? String(r.id) : `row-${rIdx + 1}`,
+              columnCount: cc,
+              rowColor,
+              rowTextColor,
+              boxed,
+              columns: [
+                normalizeCustomHeaderColumn(cols[0]),
+                normalizeCustomHeaderColumn(cols[1]),
+                normalizeCustomHeaderColumn(cols[2])
+              ]
+            };
+          };
+
+          const rawRows = s && Array.isArray(s.rows) ? s.rows : null;
+          const rows = (rawRows && rawRows.length)
+            ? rawRows.map(normalizeRowForApi)
+            : [normalizeRowForApi({ columnCount: s && s.columnCount, rowColor: s && s.rowColor, rowTextColor: s && s.rowTextColor, boxed: s && s.boxed, columns: s && s.columns }, 0)];
+
+          const firstRow = rows[0] || {};
+          const legacyColumnCount = (() => {
+            let cc = parseInt((s && s.columnCount != null) ? s.columnCount : (firstRow.columnCount != null ? firstRow.columnCount : 3), 10);
             if (![1, 2, 3].includes(cc)) cc = 3;
             return cc;
-          })(),
-          columns: Array.isArray(s && s.columns)
+          })();
+          const legacyColumns = Array.isArray(s && s.columns)
             ? [
               normalizeCustomHeaderColumn(s.columns[0]),
               normalizeCustomHeaderColumn(s.columns[1]),
               normalizeCustomHeaderColumn(s.columns[2])
             ]
-            : [normalizeCustomHeaderColumn(''), normalizeCustomHeaderColumn(''), normalizeCustomHeaderColumn('')]
-        }))
+            : (Array.isArray(firstRow.columns)
+              ? [
+                normalizeCustomHeaderColumn(firstRow.columns[0]),
+                normalizeCustomHeaderColumn(firstRow.columns[1]),
+                normalizeCustomHeaderColumn(firstRow.columns[2])
+              ]
+              : [normalizeCustomHeaderColumn(''), normalizeCustomHeaderColumn(''), normalizeCustomHeaderColumn('')]);
+
+          return {
+            id: s && s.id != null ? String(s.id) : `sec-${idx + 1}`,
+            header,
+            headerSize,
+            headerColor,
+            rows,
+            columnCount: legacyColumnCount,
+            columns: legacyColumns
+          };
+        })
         : [],
       newsletterTemplates: Array.isArray(appConfig.newsletterTemplates) ? appConfig.newsletterTemplates.map(t => ({
         id: t.id,

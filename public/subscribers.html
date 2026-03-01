@@ -49,6 +49,7 @@
             <a href="subscribers.html" class="submenu-link submenu-link-active">Subscribers</a>
             <a href="templates.html" class="submenu-link">Templates</a>
             <a href="custom-header.html" class="submenu-link">Custom header</a>
+            <a href="sent-newsletters.html" class="submenu-link">Sent history</a>
           </div>
         </div>
         <div class="settings-group">
@@ -209,7 +210,12 @@
         if (portInput) portInput.value = smtp.port != null ? smtp.port : '';
         if (secureInput) secureInput.checked = !!smtp.secure;
         if (userInput) userInput.value = auth.user || '';
-        if (passInput && auth.pass) passInput.value = auth.pass;
+        if (passInput) {
+          // The API never returns the SMTP password. If one is saved, indicate that.
+          const hasPass = auth && auth.hasPass === true;
+          passInput.value = '';
+          passInput.placeholder = hasPass ? 'Saved (leave blank to keep)' : 'smtp password';
+        }
 
         const templates = Array.isArray(data.newsletterTemplates) ? data.newsletterTemplates : [];
         const sel = document.getElementById('nlTemplateSelect');

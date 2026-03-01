@@ -53,3 +53,13 @@ Example config:
 - Put OmniStream behind HTTPS so credentials aren’t sent in cleartext.
 - This protects **both the UI and APIs** (since they share the same origin).
 - Later, you can replace this with Authelia/Authentik without changing OmniStream.
+
+### Newsletter posters in emails
+
+If you enable newsletter posters, email clients will fetch images without any browser session.
+If you protect OmniStream with Basic Auth, you must exempt the **signed** image proxy endpoints:
+
+- `/api/poster/signed`
+- `/api/newsletter/plex/thumb/signed`
+
+The example vhost config includes these exemptions.

@@ -47,6 +47,16 @@ docker compose -f deploy/nginx-authelia/docker-compose.yml up -d
 - If you already run Nginx on the host (not in Docker), use `deploy/nginx-authelia/nginx/omnistream.conf` as a starting point.
 - Keep `/api/status` public only if you need it for monitors. Otherwise, remove the exemption.
 
+### Newsletter posters in emails
+
+If you enable newsletter posters, email clients will fetch images without any browser session/cookies.
+This means your gateway (Authelia) must allow access to the **signed** image proxy endpoints:
+
+- `/api/poster/signed`
+- `/api/newsletter/plex/thumb/signed`
+
+The provided Nginx configs already exempt these paths from `auth_request`.
+
 ## Production hostname example
 
 If your real hostname is `YOUR_OMNISTREAM_DOMAIN`, prefer running Authelia on a dedicated auth subdomain:

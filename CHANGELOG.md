@@ -8,6 +8,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 _No unreleased changes yet._
 
+## [0.3.2] - 2026-03-01
+
+### Added
+- Newsletter: sent-newsletter history API + UI page for browsing previously sent newsletters.
+- Newsletter/email images: signed, time-limited image URLs plus signed-only endpoints designed for safe reverse-proxy auth bypass.
+
+### Changed
+- Newsletter “Recently Added” rendering: poster centered above text; TV episodes are grouped by show and listed as `SxxExx - Title`.
+- Newsletter custom header sections: supports multi-row sections with per-row background/text colors and improved alignment.
+
+### Fixed
+- SMTP settings: config round-trip no longer drops SMTP fields; password updates are merge-safe (blank password preserves existing).
+- Startup: tolerate UTF-8 BOM when parsing `package.json`.
+- Deployment docs/examples: Nginx Basic Auth and Nginx + Authelia examples exempt only signed image endpoints for email clients.
+
 ## [0.3.1] - 2026-02-27
 
 ### Added
@@ -111,4 +126,5 @@ _No unreleased changes yet._
 [0.2.3]: https://github.com/Winky2000/OmniStream/releases/tag/v0.2.3
 [0.3.0]: https://github.com/Winky2000/OmniStream/releases/tag/v0.3.0
 [0.3.1]: https://github.com/Winky2000/OmniStream/releases/tag/v0.3.1
-[Unreleased]: https://github.com/Winky2000/OmniStream/compare/v0.3.1...HEAD
+[0.3.2]: https://github.com/Winky2000/OmniStream/releases/tag/v0.3.2
+[Unreleased]: https://github.com/Winky2000/OmniStream/compare/v0.3.2...HEAD

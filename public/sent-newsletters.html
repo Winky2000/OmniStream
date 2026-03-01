@@ -1,0 +1,178 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>OmniStream Sent newsletters</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="theme.css">
+  <link rel="stylesheet" href="shell.css">
+  <script src="shell.js" defer></script>
+  <style>
+    body{font-family:Segoe UI,Arial;background:var(--bg);color:var(--text-main);margin:0;padding:0}
+    h1{margin:0 0 8px 0;color:var(--text-main);letter-spacing:0.5px;font-size:1.8em;font-weight:600;}
+    .card{background:var(--card-bg);border-radius:14px;padding:16px 18px;box-shadow:0 12px 30px rgba(15,23,42,0.85);border:1px solid rgba(148,163,184,0.35);max-width:980px;margin-bottom:18px;}
+    .row{font-size:13px;margin:4px 0;color:var(--text-muted);display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+    .btn{padding:6px 14px;border-radius:8px;border:1px solid var(--btn-border);background:var(--btn-bg);color:var(--btn-text);cursor:pointer;font-size:13px;}
+    .btn:hover{background:var(--btn-bg-hover);color:var(--btn-text-hover);}
+    .status-ok{color:#a5d6a7;}
+    .status-error{color:#ff8a80;}
+    table{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px;}
+    th,td{padding:8px 10px;border-bottom:1px solid rgba(148,163,184,0.25);text-align:left;vertical-align:top;}
+    th{color:var(--text-main);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:0.04em;}
+    tbody tr:nth-child(even){background:rgba(15,23,42,0.35);}
+    a{color:inherit;}
+    .muted{color:var(--text-muted);}
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="sidebar-brand">OmniStream</div>
+      <nav class="sidebar-nav">
+        <a href="index.html" class="nav-link">Dashboard</a>
+        <a href="glance.html" class="nav-link">At a glance</a>
+        <a href="history.html" class="nav-link">History</a>
+        <a href="reports.html" class="nav-link">Reports</a>
+        <a href="notifications.html" class="nav-link">Notifications</a>
+        <div class="settings-group">
+          <button type="button" class="nav-group-toggle newsletter-toggle">Newsletter</button>
+          <div class="settings-submenu newsletter-submenu open">
+            <a href="overseerr.html" class="submenu-link">Overseerr</a>
+            <a href="subscribers.html" class="submenu-link">Subscribers</a>
+            <a href="templates.html" class="submenu-link">Templates</a>
+            <a href="custom-header.html" class="submenu-link">Custom header</a>
+            <a href="sent-newsletters.html" class="submenu-link submenu-link-active">Sent history</a>
+          </div>
+        </div>
+        <div class="settings-group">
+          <button type="button" class="nav-group-toggle settings-toggle">Settings</button>
+          <div class="settings-submenu">
+            <a href="admin.html" class="submenu-link">Connected servers</a>
+            <a href="servers.html" class="submenu-link">Servers</a>
+            <a href="display.html" class="submenu-link">Themes &amp; layout</a>
+            <a href="notifiers.html" class="submenu-link">Notifiers</a>
+            <a href="system.html" class="submenu-link">System</a>
+            <a href="about.html" class="submenu-link">About</a>
+          </div>
+        </div>
+        <a href="/logout" class="nav-link">Logout</a>
+      </nav>
+    </aside>
+
+    <main class="main-content">
+      <button class="sidebar-toggle" id="sidebarToggle">Hide menu</button>
+      <h1>Sent newsletters</h1>
+
+      <div class="card">
+        <div class="row">
+          <button class="btn" id="refreshBtn" type="button">Refresh</button>
+          <span id="status" class="muted"></span>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th style="width:190px;">Sent at</th>
+              <th>Subject</th>
+              <th style="width:220px;">Files</th>
+            </tr>
+          </thead>
+          <tbody id="rows">
+            <tr><td colspan="3" class="muted">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    function escapeHtml(s){
+      return String(s||'')
+        .replace(/&/g,'&amp;')
+        .replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;')
+        .replace(/"/g,'&quot;')
+        .replace(/'/g,'&#39;');
+    }
+
+    function fmtDate(iso){
+      try{
+        if(!iso) return '';
+        const d = new Date(iso);
+        if(Number.isNaN(d.getTime())) return String(iso);
+        return d.toLocaleString();
+      }catch(_){
+        return String(iso||'');
+      }
+    }
+
+    async function loadSent(){
+      const status = document.getElementById('status');
+      const tbody = document.getElementById('rows');
+      status.textContent = 'Loading…';
+      status.className = 'muted';
+      tbody.innerHTML = '<tr><td colspan="3" class="muted">Loading…</td></tr>';
+      try{
+        if (window.location && window.location.protocol === 'file:') {
+          throw new Error('This page is opened from disk (file://). Open it from OmniStream (e.g. http://localhost:3000/sent-newsletters.html) so /api calls work.');
+        }
+
+        try {
+          const meResp = await fetch('/api/auth/me');
+          if (meResp && meResp.ok) {
+            const me = await meResp.json().catch(() => null);
+            if (me && me.internalAuthEnabled === true && me.authenticated === false) {
+              throw new Error('Not authenticated. Please log in, then refresh this page.');
+            }
+          }
+        } catch (e) {
+          const msg = (e && e.message) ? String(e.message) : '';
+          if (msg && msg.toLowerCase().includes('not authenticated')) {
+            throw e;
+          }
+          // If auth status can't be checked, continue and let the main request explain.
+        }
+
+        const resp = await fetch('/api/newsletter/sent');
+        if(!resp.ok){
+          const txt = await resp.text();
+          const msg = (txt && String(txt).trim()) ? String(txt).trim() : ('HTTP ' + resp.status);
+          throw new Error(msg);
+        }
+        const data = await resp.json();
+        const items = Array.isArray(data && data.items) ? data.items : [];
+        if(!items.length){
+          tbody.innerHTML = '<tr><td colspan="3" class="muted">No sent newsletters found yet.</td></tr>';
+          status.textContent = 'Ready';
+          return;
+        }
+
+        tbody.innerHTML = items.map(it => {
+          const id = it && it.id ? String(it.id) : '';
+          const subject = it && it.subject ? String(it.subject) : '';
+          const when = fmtDate(it && it.savedAt);
+          const htmlLink = it && it.hasHtml ? `<a href="/api/newsletter/sent/${encodeURIComponent(id)}/html" target="_blank" rel="noopener">HTML</a>` : '<span class="muted">HTML</span>';
+          const textLink = it && it.hasText ? `<a href="/api/newsletter/sent/${encodeURIComponent(id)}/text" target="_blank" rel="noopener">Text</a>` : '<span class="muted">Text</span>';
+          const metaLink = `<a href="/api/newsletter/sent/${encodeURIComponent(id)}/meta" target="_blank" rel="noopener">Meta</a>`;
+          return `<tr>`+
+            `<td>${escapeHtml(when)}</td>`+
+            `<td>${escapeHtml(subject || '(no subject)')}</td>`+
+            `<td>${htmlLink} · ${textLink} · ${metaLink}</td>`+
+          `</tr>`;
+        }).join('');
+
+        status.textContent = `Loaded ${items.length}`;
+        status.className = 'muted';
+      }catch(e){
+        const msg = (e && e.message) ? String(e.message) : 'Failed to load sent newsletters.';
+        tbody.innerHTML = `<tr><td colspan="3" class="muted">Failed to load sent newsletters.<br><span class="status-error">${escapeHtml(msg)}</span></td></tr>`;
+        status.textContent = msg;
+        status.className = 'status-error';
+      }
+    }
+
+    document.getElementById('refreshBtn').addEventListener('click', loadSent);
+    loadSent();
+  </script>
+</body>
+</html>
