@@ -4468,11 +4468,15 @@ async function fetchOverseerrUsers() {
   // Map down to a safe shape for the client
   const mapped = allUsers.map(u => {
     const email = u.email || u.emailAddress || u.userEmail || null;
-    const name = u.displayName || u.username || u.name || email || null;
+    const username = u.username || u.userName || u.plexUsername || u.plexUserName || null;
+    const displayName = u.displayName || u.name || u.fullName || null;
+    const name = displayName || username || email || null;
     return {
       id: u.id ?? u.userId ?? null,
       name,
-      email
+      email,
+      username,
+      displayName
     };
   });
   return mapped;
@@ -4592,8 +4596,11 @@ async function importOverseerrSubscribers() {
       let processed = 0;
       withEmail.forEach(u => {
         const externalId = u.id != null ? String(u.id) : null;
-        const name = u.name || u.email;
-        const watchUser = name;
+        const name = (u.displayName || u.name || u.username || u.email || '').trim();
+        // Tag-by-server matches subscriber.watchUser to history.user.
+        // Overseerr's stable identifier is typically username (often matches Plex/Jellyfin username),
+        // while displayName may be a friendly name and not match watch history.
+        const watchUser = (u.username || '').trim() || name;
         stmt.run('overseerr', externalId, name, watchUser, u.email, now, now, (err) => {
           if (err) {
             console.error('[OmniStream] Failed to upsert subscriber from Overseerr:', err.message);
@@ -4744,7 +4751,7 @@ app.get('/api/subscribers/summary', (req, res) => {
     const cutoffIso = days ? new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString() : null;
 
     historyDb.all(
-      'SELECT id, COALESCE(NULLIF(watchUser,\'\'), NULLIF(name,\'\')) AS watchUser FROM newsletter_subscribers',
+      'SELECT id, watchUser, name FROM newsletter_subscribers',
       [],
       (err, subs) => {
         if (err) {
@@ -4755,69 +4762,120 @@ app.get('/api/subscribers/summary', (req, res) => {
         const list = Array.isArray(subs) ? subs : [];
         const userKeys = [];
         const userKeySet = new Set();
-        const watchUserBySubId = new Map();
+        const candidateKeysBySubId = new Map();
+
+        function addKeyForAll(keyRaw) {
+          const key = String(keyRaw || '').trim().toLowerCase();
+          if (!key) return;
+          if (userKeySet.has(key)) return;
+          userKeySet.add(key);
+          userKeys.push(key);
+        }
+
         list.forEach(s => {
+          const id = s && typeof s.id === 'number' ? s.id : null;
+          if (!id) return;
           const wu = s && typeof s.watchUser === 'string' ? s.watchUser.trim() : '';
-          watchUserBySubId.set(s.id, wu);
-          if (!wu) return;
-          const key = wu.toLowerCase();
-          if (!userKeySet.has(key)) {
-            userKeySet.add(key);
-            userKeys.push(key);
-          }
+          const nm = s && typeof s.name === 'string' ? s.name.trim() : '';
+
+          const candidates = [];
+          if (wu) candidates.push(wu);
+          if (nm && nm.toLowerCase() !== wu.toLowerCase()) candidates.push(nm);
+
+          candidateKeysBySubId.set(id, candidates);
+          candidates.forEach(addKeyForAll);
         });
 
         if (!userKeys.length) {
           return res.json({ total: list.length, updated: 0, unmatched: list.length, days: days || null });
         }
 
-        const placeholders = userKeys.map(() => '?').join(',');
-        const params = [];
-        let sql = `SELECT LOWER(user) AS u, GROUP_CONCAT(DISTINCT serverId) AS serverIds FROM history WHERE user IS NOT NULL AND serverId IS NOT NULL`;
-        if (cutoffIso) {
-          sql += ' AND time >= ?';
-          params.push(cutoffIso);
-        }
-        sql += ` AND LOWER(user) IN (${placeholders}) GROUP BY LOWER(user)`;
-        params.push(...userKeys);
-
-        historyDb.all(sql, params, (err2, rows) => {
-          if (err2) {
-            console.error('[OmniStream] Failed to compute subscriber tags from history:', err2.message);
-            return res.status(500).json({ error: 'Failed to compute tags' });
+        // SQLite has a variable limit (commonly 999). Batch keys to stay safely under it.
+        const MAX_KEYS_PER_BATCH = 900;
+        const tagsByUserLower = new Map();
+        const baseParamsPrefix = cutoffIso ? [cutoffIso] : [];
+        const baseSql = (() => {
+          let sql = `SELECT LOWER(user) AS u, GROUP_CONCAT(DISTINCT serverId) AS serverIds FROM history WHERE user IS NOT NULL AND serverId IS NOT NULL`;
+          if (cutoffIso) {
+            sql += ' AND time >= ?';
           }
+          return sql;
+        })();
 
-          const tagsByUserLower = new Map();
+        function mergeRows(rows) {
           (rows || []).forEach(r => {
             const key = r && typeof r.u === 'string' ? r.u : '';
             const raw = r && typeof r.serverIds === 'string' ? r.serverIds : '';
             const parts = raw ? raw.split(',').map(x => String(x).trim()).filter(Boolean) : [];
             const uniq = Array.from(new Set(parts));
             uniq.sort();
-            if (key) tagsByUserLower.set(key, uniq);
+            if (!key) return;
+            tagsByUserLower.set(key, uniq);
           });
+        }
 
-          const now = new Date().toISOString();
-          const stmt = historyDb.prepare('UPDATE newsletter_subscribers SET serverTags = ?, updatedAt = ? WHERE id = ?');
-          let updated = 0;
-          let unmatched = 0;
+        const batches = [];
+        for (let i = 0; i < userKeys.length; i += MAX_KEYS_PER_BATCH) {
+          batches.push(userKeys.slice(i, i + MAX_KEYS_PER_BATCH));
+        }
 
-          list.forEach(s => {
-            const id = s.id;
-            const wu = watchUserBySubId.get(id) || '';
-            const key = wu ? wu.toLowerCase() : '';
-            const tags = key && tagsByUserLower.has(key) ? tagsByUserLower.get(key) : [];
-            if (!tags.length) unmatched++;
-            try {
-              stmt.run(JSON.stringify(tags), now, id);
-              updated++;
-            } catch (_) {
-              // ignore
+        let pending = batches.length;
+        let failed = false;
+        if (!pending) {
+          pending = 1;
+          batches.push([]);
+        }
+
+        batches.forEach(keys => {
+          const placeholders = keys.map(() => '?').join(',');
+          let sql = baseSql;
+          const params = baseParamsPrefix.slice();
+          if (keys.length) {
+            sql += ` AND LOWER(user) IN (${placeholders})`;
+            params.push(...keys);
+          }
+          sql += ' GROUP BY LOWER(user)';
+
+          historyDb.all(sql, params, (err2, rows) => {
+            if (failed) return;
+            if (err2) {
+              failed = true;
+              console.error('[OmniStream] Failed to compute subscriber tags from history:', err2.message);
+              return res.status(500).json({ error: 'Failed to compute tags' });
             }
-          });
+            mergeRows(rows);
+            pending--;
+            if (pending > 0) return;
 
-          stmt.finalize(() => {
-            res.json({ total: list.length, updated, unmatched, days: days || null });
+            const now = new Date().toISOString();
+            const stmt = historyDb.prepare('UPDATE newsletter_subscribers SET serverTags = ?, updatedAt = ? WHERE id = ?');
+            let updated = 0;
+            let unmatched = 0;
+
+            list.forEach(s => {
+              const id = s && typeof s.id === 'number' ? s.id : null;
+              if (!id) return;
+              const candidates = candidateKeysBySubId.get(id) || [];
+              let tags = [];
+              for (const cand of candidates) {
+                const key = String(cand || '').trim().toLowerCase();
+                if (key && tagsByUserLower.has(key)) {
+                  tags = tagsByUserLower.get(key) || [];
+                  if (tags && tags.length) break;
+                }
+              }
+              if (!tags.length) unmatched++;
+              try {
+                stmt.run(JSON.stringify(tags), now, id);
+                updated++;
+              } catch (_) {
+                // ignore
+              }
+            });
+
+            stmt.finalize(() => {
+              res.json({ total: list.length, updated, unmatched, days: days || null });
+            });
           });
         });
       }
