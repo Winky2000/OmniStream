@@ -1505,6 +1505,9 @@ async function sendNewsletterBroadcast({ subject, body, startDate, endDate, publ
   if (!historyDb) {
     throw new Error('history DB not available');
   }
+  if (!historyDbReady) {
+    throw new Error('history DB not ready');
+  }
   if (!nodemailer) {
     throw new Error('Email sending not available (nodemailer not installed).');
   }
@@ -1519,6 +1522,16 @@ async function sendNewsletterBroadcast({ subject, body, startDate, endDate, publ
   }
 
   const scopeServerId = serverId != null ? String(serverId).trim() : '';
+
+  // If this is a server-scoped send, ensure subscriber serverTags are fresh.
+  // This avoids missing recipients when watch history and Overseerr imports drift.
+  try {
+    if (scopeServerId) {
+      await maybeAutoRecomputeSubscriberTagsBeforeSend();
+    }
+  } catch (e) {
+    console.warn('[OmniStream] Auto tag-by-server before send failed:', e && e.message ? e.message : String(e));
+  }
 
   const rendered = await renderNewsletterSubjectAndBody(subj, rawBody, fetchUnifiedRecentlyAdded, {
     startDate,
@@ -1572,6 +1585,190 @@ async function sendNewsletterBroadcast({ subject, body, startDate, endDate, publ
   await transport.sendMail(mailOptions);
   const savedFiles = saveSentNewsletterToDisk(rendered);
   return { sent: uniqueEmails.length, saved: savedFiles.length ? savedFiles.map(p => path.basename(p)) : [] };
+}
+
+// ---------------------------------------------------------------------------
+// Subscriber tagging (Tag by server)
+//
+// Watches rely on a stable user key where possible (history.userKey), with a
+// fallback to the friendly display name (history.user).
+//
+// To keep server-scoped newsletters accurate without requiring manual clicks,
+// we can recompute tags automatically right before sending.
+// ---------------------------------------------------------------------------
+
+function getSubscriberTaggingConfig() {
+  const raw = appConfig && typeof appConfig === 'object' ? appConfig.subscriberTagging : null;
+  const cfg = raw && typeof raw === 'object' ? raw : {};
+
+  const beforeSend = cfg.beforeSend !== false; // default true
+  let days = Number(cfg.days);
+  if (!Number.isFinite(days) || days < 0) days = 365;
+  if (days > 3650) days = 3650;
+
+  let cooldownMinutes = Number(cfg.cooldownMinutes);
+  if (!Number.isFinite(cooldownMinutes) || cooldownMinutes < 0) cooldownMinutes = 30;
+  if (cooldownMinutes > 24 * 60) cooldownMinutes = 24 * 60;
+
+  return { beforeSend, days, cooldownMinutes };
+}
+
+let subscriberTagRecomputeInFlight = false;
+let lastSubscriberTagRecomputeAtMs = 0;
+
+async function recomputeSubscriberServerTags({ days = 0 } = {}) {
+  if (!historyDb || !historyDbReady) {
+    throw new Error('history DB not available');
+  }
+  let d = Number(days);
+  if (!Number.isFinite(d) || d < 0) d = 0;
+  if (d > 3650) d = 3650;
+  const cutoffIso = d ? new Date(Date.now() - d * 24 * 60 * 60 * 1000).toISOString() : null;
+
+  const subs = await new Promise((resolve, reject) => {
+    historyDb.all('SELECT id, watchUser, name FROM newsletter_subscribers', [], (err, rows) => {
+      if (err) return reject(err);
+      resolve(rows || []);
+    });
+  });
+
+  const list = Array.isArray(subs) ? subs : [];
+  const userKeys = [];
+  const userKeySet = new Set();
+  const candidateKeysBySubId = new Map();
+
+  const addKeyForAll = (keyRaw) => {
+    const key = String(keyRaw || '').trim().toLowerCase();
+    if (!key) return;
+    if (userKeySet.has(key)) return;
+    userKeySet.add(key);
+    userKeys.push(key);
+  };
+
+  list.forEach(s => {
+    const id = s && typeof s.id === 'number' ? s.id : null;
+    if (!id) return;
+    const wu = s && typeof s.watchUser === 'string' ? s.watchUser.trim() : '';
+    const nm = s && typeof s.name === 'string' ? s.name.trim() : '';
+
+    const candidates = [];
+    if (wu) candidates.push(wu);
+    if (nm && nm.toLowerCase() !== wu.toLowerCase()) candidates.push(nm);
+
+    candidateKeysBySubId.set(id, candidates);
+    candidates.forEach(addKeyForAll);
+  });
+
+  if (!userKeys.length) {
+    return { total: list.length, updated: 0, unmatched: list.length, days: d || null };
+  }
+
+  // SQLite has a variable limit (commonly 999). Batch keys to stay safely under it.
+  const MAX_KEYS_PER_BATCH = 900;
+  const tagsByUserLower = new Map();
+  const baseParamsPrefix = cutoffIso ? [cutoffIso] : [];
+  const userExpr = `COALESCE(NULLIF(userKey,''), NULLIF(user,''))`;
+  const baseSql = (() => {
+    let sql = `SELECT LOWER(${userExpr}) AS u, GROUP_CONCAT(DISTINCT serverId) AS serverIds FROM history WHERE serverId IS NOT NULL AND ${userExpr} IS NOT NULL`;
+    if (cutoffIso) {
+      sql += ' AND time >= ?';
+    }
+    return sql;
+  })();
+
+  const mergeRows = (rows) => {
+    (rows || []).forEach(r => {
+      const key = r && typeof r.u === 'string' ? r.u : '';
+      const raw = r && typeof r.serverIds === 'string' ? r.serverIds : '';
+      const parts = raw ? raw.split(',').map(x => String(x).trim()).filter(Boolean) : [];
+      const uniq = Array.from(new Set(parts));
+      uniq.sort();
+      if (!key) return;
+      tagsByUserLower.set(key, uniq);
+    });
+  };
+
+  const batches = [];
+  for (let i = 0; i < userKeys.length; i += MAX_KEYS_PER_BATCH) {
+    batches.push(userKeys.slice(i, i + MAX_KEYS_PER_BATCH));
+  }
+  if (!batches.length) batches.push([]);
+
+  // Query batches sequentially to keep memory and DB load predictable.
+  for (const keys of batches) {
+    const placeholders = keys.map(() => '?').join(',');
+    let sql = baseSql;
+    const params = baseParamsPrefix.slice();
+    if (keys.length) {
+      sql += ` AND LOWER(${userExpr}) IN (${placeholders})`;
+      params.push(...keys);
+    }
+    sql += ` GROUP BY LOWER(${userExpr})`;
+
+    // eslint-disable-next-line no-await-in-loop
+    const rows = await new Promise((resolve, reject) => {
+      historyDb.all(sql, params, (err, rows) => {
+        if (err) return reject(err);
+        resolve(rows || []);
+      });
+    });
+    mergeRows(rows);
+  }
+
+  const now = new Date().toISOString();
+  const result = await new Promise((resolve, reject) => {
+    historyDb.serialize(() => {
+      const stmt = historyDb.prepare('UPDATE newsletter_subscribers SET serverTags = ?, updatedAt = ? WHERE id = ?');
+      let updated = 0;
+      let unmatched = 0;
+
+      list.forEach(s => {
+        const id = s && typeof s.id === 'number' ? s.id : null;
+        if (!id) return;
+        const candidates = candidateKeysBySubId.get(id) || [];
+        let tags = [];
+        for (const cand of candidates) {
+          const key = String(cand || '').trim().toLowerCase();
+          if (key && tagsByUserLower.has(key)) {
+            tags = tagsByUserLower.get(key) || [];
+            if (tags && tags.length) break;
+          }
+        }
+        if (!tags.length) unmatched++;
+        try {
+          stmt.run(JSON.stringify(tags), now, id);
+          updated++;
+        } catch (_) {
+          // ignore
+        }
+      });
+
+      stmt.finalize((err) => {
+        if (err) return reject(err);
+        resolve({ total: list.length, updated, unmatched, days: d || null });
+      });
+    });
+  });
+
+  return result;
+}
+
+async function maybeAutoRecomputeSubscriberTagsBeforeSend() {
+  const cfg = getSubscriberTaggingConfig();
+  if (!cfg.beforeSend) return;
+  if (subscriberTagRecomputeInFlight) return;
+  const cooldownMs = cfg.cooldownMinutes * 60 * 1000;
+  const now = Date.now();
+  if (lastSubscriberTagRecomputeAtMs && (now - lastSubscriberTagRecomputeAtMs) < cooldownMs) return;
+
+  subscriberTagRecomputeInFlight = true;
+  try {
+    const stats = await recomputeSubscriberServerTags({ days: cfg.days });
+    lastSubscriberTagRecomputeAtMs = Date.now();
+    console.log('[OmniStream] Auto tag-by-server before send complete:', stats);
+  } finally {
+    subscriberTagRecomputeInFlight = false;
+  }
 }
 
 async function runNewsletterScheduleIfDue() {
@@ -4777,144 +4974,21 @@ app.get('/api/subscribers/summary', (req, res) => {
     if (!historyDb) {
       return res.status(500).json({ error: 'history DB not available' });
     }
+    if (!historyDbReady) {
+      return res.status(503).json({ error: 'History database not ready' });
+    }
 
     const body = req.body && typeof req.body === 'object' ? req.body : {};
     let days = Number(body.days);
     if (!Number.isFinite(days) || days <= 0) days = 0;
     if (days > 3650) days = 3650;
-    const cutoffIso = days ? new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString() : null;
 
-    historyDb.all(
-      'SELECT id, watchUser, name FROM newsletter_subscribers',
-      [],
-      (err, subs) => {
-        if (err) {
-          console.error('[OmniStream] Failed to load subscribers for tagging:', err.message);
-          return res.status(500).json({ error: 'Failed to load subscribers' });
-        }
-
-        const list = Array.isArray(subs) ? subs : [];
-        const userKeys = [];
-        const userKeySet = new Set();
-        const candidateKeysBySubId = new Map();
-
-        function addKeyForAll(keyRaw) {
-          const key = String(keyRaw || '').trim().toLowerCase();
-          if (!key) return;
-          if (userKeySet.has(key)) return;
-          userKeySet.add(key);
-          userKeys.push(key);
-        }
-
-        list.forEach(s => {
-          const id = s && typeof s.id === 'number' ? s.id : null;
-          if (!id) return;
-          const wu = s && typeof s.watchUser === 'string' ? s.watchUser.trim() : '';
-          const nm = s && typeof s.name === 'string' ? s.name.trim() : '';
-
-          const candidates = [];
-          if (wu) candidates.push(wu);
-          if (nm && nm.toLowerCase() !== wu.toLowerCase()) candidates.push(nm);
-
-          candidateKeysBySubId.set(id, candidates);
-          candidates.forEach(addKeyForAll);
-        });
-
-        if (!userKeys.length) {
-          return res.json({ total: list.length, updated: 0, unmatched: list.length, days: days || null });
-        }
-
-        // SQLite has a variable limit (commonly 999). Batch keys to stay safely under it.
-        const MAX_KEYS_PER_BATCH = 900;
-        const tagsByUserLower = new Map();
-        const baseParamsPrefix = cutoffIso ? [cutoffIso] : [];
-        const baseSql = (() => {
-          const userExpr = `COALESCE(NULLIF(userKey,''), NULLIF(user,''))`;
-          let sql = `SELECT LOWER(${userExpr}) AS u, GROUP_CONCAT(DISTINCT serverId) AS serverIds FROM history WHERE serverId IS NOT NULL AND ${userExpr} IS NOT NULL`;
-          if (cutoffIso) {
-            sql += ' AND time >= ?';
-          }
-          return sql;
-        })();
-
-        function mergeRows(rows) {
-          (rows || []).forEach(r => {
-            const key = r && typeof r.u === 'string' ? r.u : '';
-            const raw = r && typeof r.serverIds === 'string' ? r.serverIds : '';
-            const parts = raw ? raw.split(',').map(x => String(x).trim()).filter(Boolean) : [];
-            const uniq = Array.from(new Set(parts));
-            uniq.sort();
-            if (!key) return;
-            tagsByUserLower.set(key, uniq);
-          });
-        }
-
-        const batches = [];
-        for (let i = 0; i < userKeys.length; i += MAX_KEYS_PER_BATCH) {
-          batches.push(userKeys.slice(i, i + MAX_KEYS_PER_BATCH));
-        }
-
-        let pending = batches.length;
-        let failed = false;
-        if (!pending) {
-          pending = 1;
-          batches.push([]);
-        }
-
-        batches.forEach(keys => {
-          const placeholders = keys.map(() => '?').join(',');
-          let sql = baseSql;
-          const params = baseParamsPrefix.slice();
-          if (keys.length) {
-            sql += ` AND LOWER(COALESCE(NULLIF(userKey,''), NULLIF(user,''))) IN (${placeholders})`;
-            params.push(...keys);
-          }
-          sql += ' GROUP BY LOWER(COALESCE(NULLIF(userKey,\'\'), NULLIF(user,\'\')))';
-
-          historyDb.all(sql, params, (err2, rows) => {
-            if (failed) return;
-            if (err2) {
-              failed = true;
-              console.error('[OmniStream] Failed to compute subscriber tags from history:', err2.message);
-              return res.status(500).json({ error: 'Failed to compute tags' });
-            }
-            mergeRows(rows);
-            pending--;
-            if (pending > 0) return;
-
-            const now = new Date().toISOString();
-            const stmt = historyDb.prepare('UPDATE newsletter_subscribers SET serverTags = ?, updatedAt = ? WHERE id = ?');
-            let updated = 0;
-            let unmatched = 0;
-
-            list.forEach(s => {
-              const id = s && typeof s.id === 'number' ? s.id : null;
-              if (!id) return;
-              const candidates = candidateKeysBySubId.get(id) || [];
-              let tags = [];
-              for (const cand of candidates) {
-                const key = String(cand || '').trim().toLowerCase();
-                if (key && tagsByUserLower.has(key)) {
-                  tags = tagsByUserLower.get(key) || [];
-                  if (tags && tags.length) break;
-                }
-              }
-              if (!tags.length) unmatched++;
-              try {
-                stmt.run(JSON.stringify(tags), now, id);
-                updated++;
-              } catch (_) {
-                // ignore
-              }
-            });
-
-            stmt.finalize(() => {
-              res.json({ total: list.length, updated, unmatched, days: days || null });
-            });
-          });
-        });
-      }
-    );
+    recomputeSubscriberServerTags({ days })
+      .then((stats) => res.json(stats))
+      .catch((e) => {
+        console.error('[OmniStream] Failed to recompute subscriber tags:', e && e.message ? e.message : String(e));
+        res.status(500).json({ error: 'Failed to compute tags' });
+      });
   });
 
   // Toggle subscriber active flag
