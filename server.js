@@ -1626,9 +1626,18 @@ async function recomputeSubscriberServerTags({ days = 0 } = {}) {
   const cutoffIso = d ? new Date(Date.now() - d * 24 * 60 * 60 * 1000).toISOString() : null;
 
   const subs = await new Promise((resolve, reject) => {
-    historyDb.all('SELECT id, watchUser, name FROM newsletter_subscribers', [], (err, rows) => {
-      if (err) return reject(err);
-      resolve(rows || []);
+    historyDb.all('SELECT id, watchUserKey, watchUser, name FROM newsletter_subscribers', [], (err, rows) => {
+      if (!err) return resolve(rows || []);
+      // Backward compatibility for older DBs that don't yet have watchUserKey.
+      const msg = err && err.message ? String(err.message) : '';
+      if (/no such column: watchUserKey/i.test(msg)) {
+        historyDb.all('SELECT id, watchUser, name FROM newsletter_subscribers', [], (err2, rows2) => {
+          if (err2) return reject(err2);
+          resolve(rows2 || []);
+        });
+        return;
+      }
+      reject(err);
     });
   });
 
@@ -1648,10 +1657,12 @@ async function recomputeSubscriberServerTags({ days = 0 } = {}) {
   list.forEach(s => {
     const id = s && typeof s.id === 'number' ? s.id : null;
     if (!id) return;
+    const wuk = s && typeof s.watchUserKey === 'string' ? s.watchUserKey.trim() : '';
     const wu = s && typeof s.watchUser === 'string' ? s.watchUser.trim() : '';
     const nm = s && typeof s.name === 'string' ? s.name.trim() : '';
 
     const candidates = [];
+    if (wuk) candidates.push(wuk);
     if (wu) candidates.push(wu);
     if (nm && nm.toLowerCase() !== wu.toLowerCase()) candidates.push(nm);
 
@@ -1667,14 +1678,14 @@ async function recomputeSubscriberServerTags({ days = 0 } = {}) {
   const MAX_KEYS_PER_BATCH = 900;
   const tagsByUserLower = new Map();
   const baseParamsPrefix = cutoffIso ? [cutoffIso] : [];
-  const userExpr = `COALESCE(NULLIF(userKey,''), NULLIF(user,''))`;
-  const baseSql = (() => {
-    let sql = `SELECT LOWER(${userExpr}) AS u, GROUP_CONCAT(DISTINCT serverId) AS serverIds FROM history WHERE serverId IS NOT NULL AND ${userExpr} IS NOT NULL`;
-    if (cutoffIso) {
-      sql += ' AND time >= ?';
-    }
-    return sql;
-  })();
+
+  // Match against BOTH history.userKey and history.user.
+  // This keeps compatibility for older subscribers (username/display-name matching)
+  // while allowing stable id keys like plex:<id> to work.
+  const keyColumns = [
+    `NULLIF(userKey,'')`,
+    `NULLIF(user,'')`
+  ];
 
   const mergeRows = (rows) => {
     (rows || []).forEach(r => {
@@ -1684,7 +1695,13 @@ async function recomputeSubscriberServerTags({ days = 0 } = {}) {
       const uniq = Array.from(new Set(parts));
       uniq.sort();
       if (!key) return;
-      tagsByUserLower.set(key, uniq);
+      if (!tagsByUserLower.has(key)) {
+        tagsByUserLower.set(key, uniq);
+      } else {
+        const merged = Array.from(new Set([...(tagsByUserLower.get(key) || []), ...uniq]));
+        merged.sort();
+        tagsByUserLower.set(key, merged);
+      }
     });
   };
 
@@ -1695,24 +1712,29 @@ async function recomputeSubscriberServerTags({ days = 0 } = {}) {
   if (!batches.length) batches.push([]);
 
   // Query batches sequentially to keep memory and DB load predictable.
-  for (const keys of batches) {
-    const placeholders = keys.map(() => '?').join(',');
-    let sql = baseSql;
-    const params = baseParamsPrefix.slice();
-    if (keys.length) {
-      sql += ` AND LOWER(${userExpr}) IN (${placeholders})`;
-      params.push(...keys);
-    }
-    sql += ` GROUP BY LOWER(${userExpr})`;
-
+  for (const colExpr of keyColumns) {
     // eslint-disable-next-line no-await-in-loop
-    const rows = await new Promise((resolve, reject) => {
-      historyDb.all(sql, params, (err, rows) => {
-        if (err) return reject(err);
-        resolve(rows || []);
+    for (const keys of batches) {
+      const placeholders = keys.map(() => '?').join(',');
+      let sql = `SELECT LOWER(${colExpr}) AS u, GROUP_CONCAT(DISTINCT serverId) AS serverIds FROM history WHERE serverId IS NOT NULL AND ${colExpr} IS NOT NULL`;
+      const params = baseParamsPrefix.slice();
+      if (cutoffIso) {
+        sql += ' AND time >= ?';
+      }
+      if (keys.length) {
+        sql += ` AND LOWER(${colExpr}) IN (${placeholders})`;
+        params.push(...keys);
+      }
+      sql += ` GROUP BY LOWER(${colExpr})`;
+
+      const rows = await new Promise((resolve, reject) => {
+        historyDb.all(sql, params, (err, rows) => {
+          if (err) return reject(err);
+          resolve(rows || []);
+        });
       });
-    });
-    mergeRows(rows);
+      mergeRows(rows);
+    }
   }
 
   const now = new Date().toISOString();
@@ -2814,6 +2836,7 @@ try {
       "  externalId TEXT,\n" +
       "  name TEXT,\n" +
       "  watchUser TEXT,\n" +
+      "  watchUserKey TEXT,\n" +
       "  email TEXT NOT NULL,\n" +
       "  createdAt TEXT NOT NULL,\n" +
       "  updatedAt TEXT NOT NULL,\n" +
@@ -2833,6 +2856,7 @@ try {
       const existing = new Set((rows || []).map(r => r && r.name).filter(Boolean));
       const toAdd = [
         { name: 'watchUser', ddl: 'ALTER TABLE newsletter_subscribers ADD COLUMN watchUser TEXT' },
+        { name: 'watchUserKey', ddl: 'ALTER TABLE newsletter_subscribers ADD COLUMN watchUserKey TEXT' },
         { name: 'serverTags', ddl: 'ALTER TABLE newsletter_subscribers ADD COLUMN serverTags TEXT' }
       ].filter(c => !existing.has(c.name));
       if (!toAdd.length) return;
@@ -2867,10 +2891,25 @@ async function importJellyfinHistory(server, { limitPerUser = 100 } = {}) {
   if (!server.token) {
     return { serverId: server.id, type: server.type, imported: 0, error: 'no token configured' };
   }
-  const headers = { 'X-MediaBrowser-Token': server.token };
+  const headers = {};
+  const authParams = {};
+  const tokenLoc = server.tokenLocation || 'header';
+  if (tokenLoc === 'query') {
+    if (server.type === 'jellyfin') {
+      authParams.api_key = server.token;
+    } else {
+      authParams['X-Emby-Token'] = server.token;
+    }
+  } else {
+    if (server.type === 'jellyfin') {
+      headers['X-MediaBrowser-Token'] = server.token;
+    } else {
+      headers['X-Emby-Token'] = server.token;
+    }
+  }
   try {
     // Get all visible users
-    const usersResp = await axios.get(base + '/Users', { headers, timeout: 15000 });
+    const usersResp = await axios.get(base + '/Users', { headers, params: authParams, timeout: 15000 });
     const users = Array.isArray(usersResp.data) ? usersResp.data : [];
     let imported = 0;
     // For each user, pull recently played movies/episodes
@@ -2880,6 +2919,7 @@ async function importJellyfinHistory(server, { limitPerUser = 100 } = {}) {
         headers,
         timeout: 20000,
         params: {
+          ...(authParams || {}),
           Filters: 'IsPlayed',
           IncludeItemTypes: 'Movie,Episode',
           Recursive: true,
@@ -2930,8 +2970,9 @@ async function importJellyfinHistory(server, { limitPerUser = 100 } = {}) {
 
             // Use a simple, stable stream label for reports
             const stream = type;
-            const userDisplay = u.Name || u.Username || 'Unknown';
-            const userKey = u.Username || u.Id || u.Name || '';
+            const userDisplay = u.Username || u.Name || 'Unknown';
+            const stableUserKey = u && u.Id ? `${String(server.type || '').toLowerCase()}:${String(u.Id)}` : '';
+            const userKey = stableUserKey || u.Username || u.Id || u.Name || '';
             stmt.run(
               time,
               server.id,
@@ -2978,49 +3019,62 @@ async function importPlexHistory(server, { limit = 2000 } = {}) {
   if (!server.token) {
     return { serverId: server.id, type: server.type, imported: 0, error: 'no token configured' };
   }
-  const url = base + '/status/sessions/history/all';
-  const headers = {};
+  const historyPaths = ['/status/sessions/history/all', '/status/sessions/history'];
+  const headers = {
+    // Plex frequently defaults to XML; we expect JSON throughout the app.
+    Accept: 'application/json'
+  };
 
   try {
     let imported = 0;
+    let lastError = '';
     const tokenLoc = server.tokenLocation || 'query';
     if (tokenLoc === 'header') {
       headers['X-Plex-Token'] = server.token;
     }
 
-    await new Promise((resolve) => {
-      historyDb.serialize(async () => {
-        const stmt = historyDb.prepare(
-          'INSERT INTO history (time, serverId, serverName, type, user, userKey, title, stream, transcoding, location, bandwidth) VALUES (?,?,?,?,?,?,?,?,?,?,?)'
-        );
+    const runImportForUrl = async (url) => {
+      let start = 0;
+      const pageSize = 200;
 
-        let start = 0;
-        const pageSize = 200;
+      await new Promise((resolve) => {
+        historyDb.serialize(async () => {
+          const stmt = historyDb.prepare(
+            'INSERT INTO history (time, serverId, serverName, type, user, userKey, title, stream, transcoding, location, bandwidth) VALUES (?,?,?,?,?,?,?,?,?,?,?)'
+          );
 
-        while (imported < limit) {
-          const remaining = limit - imported;
-          const size = remaining < pageSize ? remaining : pageSize;
-          const params = {
-            'X-Plex-Container-Start': start,
-            'X-Plex-Container-Size': size
-          };
-          if (tokenLoc !== 'header') {
-            params['X-Plex-Token'] = server.token;
-          }
+          while (imported < limit) {
+            const remaining = limit - imported;
+            const size = remaining < pageSize ? remaining : pageSize;
+            const params = {
+              'X-Plex-Container-Start': start,
+              'X-Plex-Container-Size': size
+            };
+            if (tokenLoc !== 'header') {
+              params['X-Plex-Token'] = server.token;
+            }
 
-          let resp;
-          try {
-            resp = await axios.get(url, { headers, params, timeout: 20000 });
-          } catch (err) {
-            console.error(`Plex history page fetch failed for ${server.name || server.baseUrl}:`, err.message);
-            break;
-          }
+            let resp;
+            try {
+              resp = await axios.get(url, { headers, params, timeout: 20000 });
+            } catch (err) {
+              const status = err && err.response && typeof err.response.status === 'number' ? err.response.status : null;
+              lastError = status ? `HTTP ${status} from Plex history endpoint` : (err && err.message ? err.message : 'Plex request failed');
+              console.error(`Plex history page fetch failed for ${server.name || server.baseUrl}:`, lastError);
+              break;
+            }
 
-          const mc = resp.data && resp.data.MediaContainer ? resp.data.MediaContainer : null;
-          const items = mc && Array.isArray(mc.Metadata) ? mc.Metadata : [];
-          if (!items.length) break;
+            const data = resp ? resp.data : null;
+            if (!data || typeof data !== 'object') {
+              lastError = 'Unexpected Plex response (not JSON). Check Plex baseUrl/token/tokenLocation.';
+              break;
+            }
 
-          items.forEach(m => {
+            const mc = data && data.MediaContainer ? data.MediaContainer : null;
+            const items = mc && Array.isArray(mc.Metadata) ? mc.Metadata : [];
+            if (!items.length) break;
+
+            items.forEach(m => {
           const rawType = (m.type || '').toLowerCase();
           if (rawType !== 'movie' && rawType !== 'episode') return;
 
@@ -3082,8 +3136,12 @@ async function importPlexHistory(server, { limit = 2000 } = {}) {
             user = m.User.title;
           }
 
-          // Best-effort stable user key (prefer Plex username)
-          if (m.User && typeof m.User.username === 'string') {
+          // Best-effort stable user key (prefer Plex numeric id when available)
+          const plexUserIdRaw = (m.User && (m.User.id ?? m.User.ID ?? m.User.userId ?? m.User.userID)) ?? null;
+          const plexUserId = plexUserIdRaw != null ? String(plexUserIdRaw) : '';
+          if (plexUserId) {
+            userKey = `plex:${plexUserId}`;
+          } else if (m.User && typeof m.User.username === 'string') {
             userKey = m.User.username;
           } else if (typeof m.username === 'string') {
             userKey = m.username;
@@ -3091,10 +3149,6 @@ async function importPlexHistory(server, { limit = 2000 } = {}) {
             userKey = m.user;
           } else if (m.user && typeof m.user.title === 'string') {
             userKey = m.user.title;
-          } else if (m.User && typeof m.User.id === 'string') {
-            userKey = m.User.id;
-          } else if (m.User && typeof m.User.id === 'number') {
-            userKey = String(m.User.id);
           }
           if (!userKey) userKey = user;
           if (user === 'Unknown') {
@@ -3124,13 +3178,25 @@ async function importPlexHistory(server, { limit = 2000 } = {}) {
           imported++;
         });
 
-          if (items.length < size) break;
-          start += items.length;
-        }
+            if (items.length < size) break;
+            start += items.length;
+          }
 
-        stmt.finalize(() => resolve());
+          stmt.finalize(() => resolve());
+        });
       });
-    });
+    };
+
+    for (const p of historyPaths) {
+      // eslint-disable-next-line no-await-in-loop
+      await runImportForUrl(base + p);
+      if (imported > 0) break;
+      // If Plex endpoint is missing, try the fallback path.
+      if (!lastError || /404/i.test(lastError)) {
+        continue;
+      }
+      break;
+    }
 
     // Trim DB after import if a retention limit is configured
     if (MAX_HISTORY > 0) {
@@ -3146,6 +3212,9 @@ async function importPlexHistory(server, { limit = 2000 } = {}) {
       });
     }
 
+    if (!imported && lastError) {
+      return { serverId: server.id, type: server.type, imported: 0, error: lastError };
+    }
     return { serverId: server.id, type: server.type, imported };
   } catch (e) {
     console.error(`Failed to import Plex history for ${server.name || server.baseUrl}:`, e.message);
@@ -3437,8 +3506,14 @@ function summaryFromResponse(resp) {
 
         const userDisplay = m.User?.title || m.user || 'Unknown';
         const userName = m.User?.username || m.username || (typeof m.user === 'string' ? m.user : '') || '';
+        const plexUserIdRaw = (m.User && (m.User.id ?? m.User.ID ?? m.User.userId ?? m.User.userID)) ?? null;
+        const plexUserId = plexUserIdRaw != null ? String(plexUserIdRaw) : '';
+        const stableUserKey = plexUserId ? `plex:${plexUserId}` : '';
+        const sessionIdRaw = m.sessionKey ?? (m.Session && (m.Session.id ?? m.Session.key ?? m.Session.uuid)) ?? null;
+        const sessionId = sessionIdRaw != null ? String(sessionIdRaw) : '';
 
         return {
+          sessionId,
           user: userDisplay,
           title: m.media_title || m.title || m.grandparentTitle || 'Unknown',
           // For TV episodes, Plex gives grandparentTitle as the series name
@@ -3474,6 +3549,8 @@ function summaryFromResponse(resp) {
           channel: m.channelTitle || '',
           episodeTitle: m.episodeTitle || '',
           userName: userName || userDisplay,
+          userId: plexUserId,
+          userKey: stableUserKey || userName || userDisplay,
           userAvatar,
           isLive: m.type === 'live',
           transcoding
@@ -3503,6 +3580,9 @@ function summaryFromResponse(resp) {
     }
     if (Array.isArray(d) && d.length > 0) {
       // Support both Jellyfin/Emby API and flat session format
+      const serverTypeRaw = resp && resp.config && resp.config.serverConfig ? resp.config.serverConfig.type : '';
+      const serverType = typeof serverTypeRaw === 'string' ? serverTypeRaw.toLowerCase() : '';
+      const keyPrefix = (serverType === 'jellyfin' || serverType === 'emby') ? serverType : '';
       const sessions = d.map(s => {
         // Flat format (custom API): must have state=playing
         if (s.state && s.state.toLowerCase() === 'playing' && s.media_title) {
@@ -3514,9 +3594,15 @@ function summaryFromResponse(resp) {
             const match = s.bandwidth.match(/([\d.]+)/);
             if (match) bandwidth = parseFloat(match[1]);
           }
+          const userIdRaw = s.UserId ?? s.userId ?? (s.User && (s.User.Id || s.User.id)) ?? null;
+          const userId = userIdRaw != null ? String(userIdRaw) : '';
+          const stableKey = (keyPrefix && userId) ? `${keyPrefix}:${userId}` : '';
           return {
+            sessionId: s.sessionId || s.sessionKey || s.Id || s.id || '',
             user: s.user || s.UserName || 'Unknown',
             userName: s.UserName || s.user || '',
+            userId,
+            userKey: stableKey || (s.UserName || s.user || ''),
             title: s.media_title || s.title || 'Idle',
             // Some flat Jellyfin/Emby formats include series/season/episode info separately
             seriesTitle: s.series || s.SeriesTitle || undefined,
@@ -3682,8 +3768,15 @@ function summaryFromResponse(resp) {
               transcodeProgress = 0;
             }
           }
+          const userIdRaw = s.UserId || (s.User && (s.User.Id || s.User.id)) || null;
+          const userId = userIdRaw != null ? String(userIdRaw) : '';
+          const stableKey = (keyPrefix && userId) ? `${keyPrefix}:${userId}` : '';
           return {
+            sessionId: s.Id || s.id || '',
             user: s.UserName || 'Unknown',
+            userName: s.UserName || '',
+            userId,
+            userKey: stableKey || (s.UserName || ''),
             title: s.NowPlayingItem?.Name || 'Idle',
             // Standard Jellyfin/Emby: SeriesName + EpisodeTitle
             seriesTitle: s.NowPlayingItem?.SeriesName || undefined,
@@ -3791,6 +3884,11 @@ async function pollServer(s) {
   let finalUrl = base + pathSuffix;
   const start = Date.now();
   const headers = {};
+
+  // Plex frequently defaults to XML unless JSON is requested.
+  if (s.type === 'plex') {
+    headers['Accept'] = 'application/json';
+  }
 
   if (s.token) {
     // Choose sensible defaults: Plex uses query by default, Jellyfin/Emby use headers by default
@@ -3954,7 +4052,9 @@ async function pollAll() {
       // Upsert active sessions
       currentSessions.forEach(({ st, sess, sessionKey }) => {
         const user = sess.user || sess.userName || 'Unknown';
-        const userKeyRaw = sess.userName || sess.userKey || sess.username || sess.userId || '';
+        const stType = st && st.type ? String(st.type).toLowerCase() : '';
+        const stableFromId = (stType && sess.userId) ? `${stType}:${String(sess.userId)}` : '';
+        const userKeyRaw = sess.userKey || stableFromId || sess.userName || sess.username || '';
         const userKey = userKeyRaw ? String(userKeyRaw) : '';
         const userAvatar = (sess.userAvatar || '').toString();
         const isLive = !!sess.isLive;
@@ -4554,7 +4654,7 @@ app.get('/api/poster/signed', async (req, res) => {
 // Simple history API - backed by SQLite
 app.get('/api/history', (req, res) => {
   if (!historyDb) return res.json({ history: [] });
-  let sql = 'SELECT time, endedAt, lastSeenAt, sessionKey, serverId, serverName, type, user, title, stream, transcoding, location, bandwidth, platform, product, player, quality, duration, progress, ip, completed FROM history ORDER BY id DESC';
+  let sql = 'SELECT time, endedAt, lastSeenAt, sessionKey, serverId, serverName, type, user, userKey, title, stream, transcoding, location, bandwidth, platform, product, player, quality, duration, progress, ip, completed FROM history ORDER BY id DESC';
   const params = [];
   if (MAX_HISTORY > 0) {
     sql += ' LIMIT ?';
@@ -4574,6 +4674,7 @@ app.get('/api/history', (req, res) => {
       serverName: r.serverName,
       type: r.type,
       user: r.user,
+      userKey: r.userKey || undefined,
       title: r.title,
       stream: r.stream,
       transcoding: typeof r.transcoding === 'number' ? !!r.transcoding : undefined,
@@ -4699,13 +4800,16 @@ async function fetchOverseerrUsers() {
     const email = u.email || u.emailAddress || u.userEmail || null;
     const username = u.username || u.userName || (plexUser && plexUser.username) || u.plexUsername || u.plexUserName || null;
     const displayName = u.displayName || u.name || u.fullName || (plexUser && plexUser.title) || null;
+    const plexIdRaw = u.plexId ?? u.plexUserId ?? (plexUser && (plexUser.id ?? plexUser.plexId)) ?? null;
+    const plexId = plexIdRaw != null ? String(plexIdRaw) : null;
     const name = displayName || username || email || null;
     return {
       id: u.id ?? u.userId ?? null,
       name,
       email,
       username,
-      displayName
+      displayName,
+      plexId
     };
   });
   return mapped;
@@ -4803,6 +4907,7 @@ async function importOverseerrSubscribers() {
         "  externalId TEXT,\n" +
         "  name TEXT,\n" +
         "  watchUser TEXT,\n" +
+        "  watchUserKey TEXT,\n" +
         "  email TEXT NOT NULL,\n" +
         "  createdAt TEXT NOT NULL,\n" +
         "  updatedAt TEXT NOT NULL,\n" +
@@ -4811,12 +4916,21 @@ async function importOverseerrSubscribers() {
         '  UNIQUE(source, externalId)\n' +
         ')'
       );
+
+      // Older DBs may not have the column even if the CREATE TABLE above is newer.
+      historyDb.run('ALTER TABLE newsletter_subscribers ADD COLUMN watchUserKey TEXT', (e) => {
+        if (e && !/duplicate column name/i.test(String(e.message || ''))) {
+          console.error('[OmniStream] Failed to migrate newsletter_subscribers schema (add watchUserKey):', e.message);
+        }
+      });
+
       const stmt = historyDb.prepare(
-        'INSERT INTO newsletter_subscribers (source, externalId, name, watchUser, email, createdAt, updatedAt, active) ' +
-        'VALUES (?, ?, ?, ?, ?, ?, ?, 1) ' +
+        'INSERT INTO newsletter_subscribers (source, externalId, name, watchUser, watchUserKey, email, createdAt, updatedAt, active) ' +
+        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1) ' +
         'ON CONFLICT(source, externalId) DO UPDATE SET ' +
         '  name = excluded.name, ' +
         '  watchUser = excluded.watchUser, ' +
+        '  watchUserKey = excluded.watchUserKey, ' +
         '  email = excluded.email, ' +
         '  updatedAt = excluded.updatedAt, ' +
         '  active = 1'
@@ -4831,7 +4945,9 @@ async function importOverseerrSubscribers() {
         // Overseerr's stable identifier is typically username (often matches Plex/Jellyfin username),
         // while displayName may be a friendly name and not match watch history.
         const watchUser = (u.username || '').trim() || name;
-        stmt.run('overseerr', externalId, name, watchUser, u.email, now, now, (err) => {
+        const plexId = u.plexId != null ? String(u.plexId).trim() : '';
+        const watchUserKey = plexId ? `plex:${plexId}` : '';
+        stmt.run('overseerr', externalId, name, watchUser, watchUserKey, u.email, now, now, (err) => {
           if (err) {
             console.error('[OmniStream] Failed to upsert subscriber from Overseerr:', err.message);
             return; // continue with others
@@ -5521,7 +5637,7 @@ app.get('/api/subscribers/summary', (req, res) => {
 
     const plexGet = async (server, plexPath, { params = {}, responseType } = {}) => {
       const base = (server.baseUrl || '').replace(/\/$/, '');
-      const headers = {};
+      const headers = { Accept: 'application/json' };
       const requestParams = { ...(params || {}) };
       const tokenLoc = server.tokenLocation || 'query';
       if (tokenLoc === 'header') {
@@ -5925,13 +6041,14 @@ app.get('/api/history/query', (req, res) => {
     params.push(serverId);
   }
   if (user) {
-    where.push('LOWER(user) LIKE ?');
-    params.push(`%${String(user).toLowerCase()}%`);
+    where.push('(LOWER(user) LIKE ? OR LOWER(userKey) LIKE ?)');
+    const needle = `%${String(user).toLowerCase()}%`;
+    params.push(needle, needle);
   }
   if (q) {
     const needle = `%${String(q).toLowerCase()}%`;
-    where.push('(LOWER(title) LIKE ? OR LOWER(stream) LIKE ? OR LOWER(user) LIKE ? OR LOWER(serverName) LIKE ?)');
-    params.push(needle, needle, needle, needle);
+    where.push('(LOWER(title) LIKE ? OR LOWER(stream) LIKE ? OR LOWER(user) LIKE ? OR LOWER(userKey) LIKE ? OR LOWER(serverName) LIKE ?)');
+    params.push(needle, needle, needle, needle, needle);
   }
   if (from) {
     where.push('time >= ?');
@@ -5952,13 +6069,14 @@ app.get('/api/history/query', (req, res) => {
     orderBy = `time ${dir}`;
   }
 
-  const selectCols = 'time, endedAt, lastSeenAt, sessionKey, serverId, serverName, type, user, userAvatar, title, stream, transcoding, location, bandwidth, platform, product, player, quality, duration, progress, ip, completed';
+  const selectCols = 'time, endedAt, lastSeenAt, sessionKey, serverId, serverName, type, user, userKey, userAvatar, title, stream, transcoding, location, bandwidth, platform, product, player, quality, duration, progress, ip, completed';
 
   const baseParams = [...params];
   let querySql;
   let queryParams;
   if (isUnique) {
-    const uniqueSub = `SELECT MAX(id) AS id FROM history ${whereSql} GROUP BY serverId, user, title, stream, location, COALESCE(ip,'')`;
+    const userGroupExpr = `COALESCE(NULLIF(userKey,''), NULLIF(user,''))`;
+    const uniqueSub = `SELECT MAX(id) AS id FROM history ${whereSql} GROUP BY serverId, ${userGroupExpr}, title, stream, location, COALESCE(ip,'')`;
     querySql = `SELECT ${selectCols} FROM history h INNER JOIN (${uniqueSub}) u ON h.id = u.id ORDER BY ${orderBy} LIMIT ? OFFSET ?`;
     queryParams = [...baseParams, size + 1, offset];
   } else {
@@ -5967,6 +6085,7 @@ app.get('/api/history/query', (req, res) => {
   }
 
   const statsSqlForMode = () => {
+    const userIdentityExpr = `LOWER(COALESCE(NULLIF(userKey,''), NULLIF(user,'')))`;
     const watchedExpr = `CASE
       WHEN duration IS NOT NULL AND duration > 0 AND progress IS NOT NULL AND progress > 0
       THEN CASE
@@ -5977,11 +6096,12 @@ app.get('/api/history/query', (req, res) => {
     END`;
 
     if (isUnique) {
-      const uniqueSub = `SELECT MAX(id) AS id FROM history ${whereSql} GROUP BY serverId, user, title, stream, location, COALESCE(ip,'')`;
+      const userGroupExpr = `COALESCE(NULLIF(userKey,''), NULLIF(user,''))`;
+      const uniqueSub = `SELECT MAX(id) AS id FROM history ${whereSql} GROUP BY serverId, ${userGroupExpr}, title, stream, location, COALESCE(ip,'')`;
       return {
         sql: `SELECT
                 COUNT(*) AS total,
-                COUNT(DISTINCT LOWER(h.user)) AS uniqueUsers,
+                COUNT(DISTINCT ${userIdentityExpr}) AS uniqueUsers,
                 COUNT(DISTINCT LOWER(h.title)) AS uniqueTitles,
                 SUM(${watchedExpr}) AS watchSeconds
               FROM history h INNER JOIN (${uniqueSub}) u ON h.id = u.id`,
@@ -5992,7 +6112,7 @@ app.get('/api/history/query', (req, res) => {
     return {
       sql: `SELECT
               COUNT(*) AS total,
-              COUNT(DISTINCT LOWER(user)) AS uniqueUsers,
+              COUNT(DISTINCT ${userIdentityExpr}) AS uniqueUsers,
               COUNT(DISTINCT LOWER(title)) AS uniqueTitles,
               SUM(${watchedExpr}) AS watchSeconds
             FROM history ${whereSql}`,
@@ -6028,6 +6148,7 @@ app.get('/api/history/query', (req, res) => {
       serverName: r.serverName,
       type: r.type,
       user: r.user,
+      userKey: r.userKey || undefined,
       userAvatar: r.userAvatar || undefined,
       title: r.title,
       stream: r.stream,

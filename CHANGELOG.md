@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 _No unreleased changes yet._
 
+## [0.3.8] - 2026-03-01
+- Fix Plex history import by explicitly requesting JSON and surfacing per-server errors when Plex returns unexpected responses.
+
+## [0.3.7] - 2026-03-02
+
+### Fixed
+- Subscribers: “Tag by server” now supports stable subscriber keys (`watchUserKey` like `plex:<id>`) and matches against both `history.userKey` and `history.user` to improve reliability.
+- History polling/import: store stable user keys for Plex/Jellyfin/Emby when user IDs are available.
+- History import: Jellyfin/Emby import now uses the correct auth header/query param for Emby vs Jellyfin (fixes “Import History from Servers” for Emby setups).
+
 ## [0.3.6] - 2026-03-01
 
 ### Added
@@ -154,4 +164,5 @@ _No unreleased changes yet._
 [0.3.4]: https://github.com/Winky2000/OmniStream/releases/tag/v0.3.4
 [0.3.5]: https://github.com/Winky2000/OmniStream/releases/tag/v0.3.5
 [0.3.6]: https://github.com/Winky2000/OmniStream/releases/tag/v0.3.6
+[0.3.8]: https://github.com/Winky2000/OmniStream/releases/tag/v0.3.8
 [Unreleased]: https://github.com/Winky2000/OmniStream/compare/v0.3.6...HEAD

@@ -382,6 +382,15 @@
           alert('Import failed: ' + (text || resp.status + ' ' + resp.statusText));
           return;
         }
+        const payload = await resp.json().catch(() => null);
+        const results = payload && Array.isArray(payload.results) ? payload.results : [];
+        const importedTotal = results.reduce((sum, r) => sum + (r && typeof r.imported === 'number' ? r.imported : 0), 0);
+        const errors = results.filter(r => r && r.error).map(r => `${r.serverId || ''} (${r.type || 'server'}): ${r.error}`).filter(Boolean);
+        if (results.length) {
+          alert(`Import complete. Imported ${importedTotal} item(s) across ${results.length} server(s).` + (errors.length ? `\n\nErrors:\n- ${errors.join('\n- ')}` : ''));
+        } else {
+          alert('Import complete, but no enabled servers were imported.');
+        }
         await renderHistory();
       } catch (e) {
         console.error(e);
