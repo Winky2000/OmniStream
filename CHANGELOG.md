@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 _No unreleased changes yet._
 
+## [0.3.5] - 2026-03-01
+
+### Fixed
+- Subscribers: “Tag by server” now prefers a stable `history.userKey` (when available) instead of relying only on friendly display names.
+- Plex sessions: exposes a better per-session username value so history can store a stable user key for matching.
+- Overseerr import: improved display-name mapping (uses Plex user title when available).
+
 ## [0.3.4] - 2026-03-01
 
 ### Fixed
@@ -140,4 +147,5 @@ _No unreleased changes yet._
 [0.3.2]: https://github.com/Winky2000/OmniStream/releases/tag/v0.3.2
 [0.3.3]: https://github.com/Winky2000/OmniStream/releases/tag/v0.3.3
 [0.3.4]: https://github.com/Winky2000/OmniStream/releases/tag/v0.3.4
-[Unreleased]: https://github.com/Winky2000/OmniStream/compare/v0.3.4...HEAD
+[0.3.5]: https://github.com/Winky2000/OmniStream/releases/tag/v0.3.5
+[Unreleased]: https://github.com/Winky2000/OmniStream/compare/v0.3.5...HEAD

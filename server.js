@@ -2518,6 +2518,7 @@ try {
       '  serverName TEXT,\n' +
       '  type TEXT,\n' +
       '  user TEXT,\n' +
+      '  userKey TEXT,\n' +
       '  userAvatar TEXT,\n' +
       '  title TEXT,\n' +
       '  mediaType TEXT,\n' +
@@ -2572,7 +2573,8 @@ try {
         { name: 'progress', ddl: 'ALTER TABLE history ADD COLUMN progress INTEGER' },
         { name: 'ip', ddl: 'ALTER TABLE history ADD COLUMN ip TEXT' },
         { name: 'completed', ddl: 'ALTER TABLE history ADD COLUMN completed INTEGER' },
-        { name: 'userAvatar', ddl: 'ALTER TABLE history ADD COLUMN userAvatar TEXT' }
+        { name: 'userAvatar', ddl: 'ALTER TABLE history ADD COLUMN userAvatar TEXT' },
+        { name: 'userKey', ddl: 'ALTER TABLE history ADD COLUMN userKey TEXT' }
       ].filter(c => !existing.has(c.name));
 
       const finalizeReady = () => {
@@ -2694,7 +2696,7 @@ async function importJellyfinHistory(server, { limitPerUser = 100 } = {}) {
       await new Promise((resolve) => {
         historyDb.serialize(() => {
           const stmt = historyDb.prepare(
-            'INSERT INTO history (time, serverId, serverName, type, user, title, stream, transcoding, location, bandwidth) VALUES (?,?,?,?,?,?,?,?,?,?)'
+            'INSERT INTO history (time, serverId, serverName, type, user, userKey, title, stream, transcoding, location, bandwidth) VALUES (?,?,?,?,?,?,?,?,?,?,?)'
           );
           items.forEach(it => {
             const rawType = it.Type || it.MediaType || '';
@@ -2731,12 +2733,15 @@ async function importJellyfinHistory(server, { limitPerUser = 100 } = {}) {
 
             // Use a simple, stable stream label for reports
             const stream = type;
+            const userDisplay = u.Name || u.Username || 'Unknown';
+            const userKey = u.Username || u.Id || u.Name || '';
             stmt.run(
               time,
               server.id,
               server.name || server.baseUrl,
               server.type,
-              u.Name || u.Username || 'Unknown',
+              userDisplay,
+              userKey,
               title,
               stream,
               null,
@@ -2789,7 +2794,7 @@ async function importPlexHistory(server, { limit = 2000 } = {}) {
     await new Promise((resolve) => {
       historyDb.serialize(async () => {
         const stmt = historyDb.prepare(
-          'INSERT INTO history (time, serverId, serverName, type, user, title, stream, transcoding, location, bandwidth) VALUES (?,?,?,?,?,?,?,?,?,?)'
+          'INSERT INTO history (time, serverId, serverName, type, user, userKey, title, stream, transcoding, location, bandwidth) VALUES (?,?,?,?,?,?,?,?,?,?,?)'
         );
 
         let start = 0;
@@ -2859,6 +2864,7 @@ async function importPlexHistory(server, { limit = 2000 } = {}) {
           // Try hard to extract the Plex account/user name in a few
           // different shapes this endpoint can return.
           let user = 'Unknown';
+          let userKey = '';
           if (m.user && typeof m.user === 'string') {
             user = m.user;
           } else if (m.user && typeof m.user.title === 'string') {
@@ -2878,6 +2884,22 @@ async function importPlexHistory(server, { limit = 2000 } = {}) {
           } else if (m.User && typeof m.User.title === 'string') {
             user = m.User.title;
           }
+
+          // Best-effort stable user key (prefer Plex username)
+          if (m.User && typeof m.User.username === 'string') {
+            userKey = m.User.username;
+          } else if (typeof m.username === 'string') {
+            userKey = m.username;
+          } else if (m.user && typeof m.user === 'string') {
+            userKey = m.user;
+          } else if (m.user && typeof m.user.title === 'string') {
+            userKey = m.user.title;
+          } else if (m.User && typeof m.User.id === 'string') {
+            userKey = m.User.id;
+          } else if (m.User && typeof m.User.id === 'number') {
+            userKey = String(m.User.id);
+          }
+          if (!userKey) userKey = user;
           if (user === 'Unknown') {
             console.log('[OmniStream] Plex history item has unknown user; available user fields:', {
               user: m.user,
@@ -2895,6 +2917,7 @@ async function importPlexHistory(server, { limit = 2000 } = {}) {
             server.name || server.baseUrl,
             server.type,
             user,
+            userKey,
             title,
             stream,
             null,
@@ -3215,8 +3238,11 @@ function summaryFromResponse(resp) {
           }
         }
 
+        const userDisplay = m.User?.title || m.user || 'Unknown';
+        const userName = m.User?.username || m.username || (typeof m.user === 'string' ? m.user : '') || '';
+
         return {
-          user: m.user || m.User?.title || 'Unknown',
+          user: userDisplay,
           title: m.media_title || m.title || m.grandparentTitle || 'Unknown',
           // For TV episodes, Plex gives grandparentTitle as the series name
           seriesTitle: m.grandparentTitle || undefined,
@@ -3250,7 +3276,7 @@ function summaryFromResponse(resp) {
           episodeNumber: typeof m.index === 'number' ? m.index : undefined,
           channel: m.channelTitle || '',
           episodeTitle: m.episodeTitle || '',
-          userName: m.user || m.User?.title || '',
+          userName: userName || userDisplay,
           userAvatar,
           isLive: m.type === 'live',
           transcoding
@@ -3293,6 +3319,7 @@ function summaryFromResponse(resp) {
           }
           return {
             user: s.user || s.UserName || 'Unknown',
+            userName: s.UserName || s.user || '',
             title: s.media_title || s.title || 'Idle',
             // Some flat Jellyfin/Emby formats include series/season/episode info separately
             seriesTitle: s.series || s.SeriesTitle || undefined,
@@ -3730,6 +3757,8 @@ async function pollAll() {
       // Upsert active sessions
       currentSessions.forEach(({ st, sess, sessionKey }) => {
         const user = sess.user || sess.userName || 'Unknown';
+        const userKeyRaw = sess.userName || sess.userKey || sess.username || sess.userId || '';
+        const userKey = userKeyRaw ? String(userKeyRaw) : '';
         const userAvatar = (sess.userAvatar || '').toString();
         const isLive = !!sess.isLive;
         const mediaType = (sess.mediaType || '').toString().toLowerCase();
@@ -3756,7 +3785,7 @@ async function pollAll() {
         const existing = activeHistorySessions.get(sessionKey);
         if (!existing) {
           historyDb.run(
-            'INSERT INTO history (time, sessionKey, lastSeenAt, serverId, serverName, type, user, userAvatar, title, mediaType, seriesTitle, episodeTitle, year, channel, isLive, poster, background, stream, transcoding, location, bandwidth, platform, product, player, quality, duration, progress, ip, completed) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+            'INSERT INTO history (time, sessionKey, lastSeenAt, serverId, serverName, type, user, userKey, userAvatar, title, mediaType, seriesTitle, episodeTitle, year, channel, isLive, poster, background, stream, transcoding, location, bandwidth, platform, product, player, quality, duration, progress, ip, completed) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
             [
               timestamp,
               sessionKey,
@@ -3765,6 +3794,7 @@ async function pollAll() {
               st.name,
               st.type,
               user,
+              userKey,
               userAvatar,
               title,
               mediaType,
@@ -3796,11 +3826,12 @@ async function pollAll() {
           );
         } else {
           historyDb.run(
-            'UPDATE history SET lastSeenAt = ?, serverName = ?, user = ?, userAvatar = ?, title = ?, mediaType = ?, seriesTitle = ?, episodeTitle = ?, year = ?, channel = ?, isLive = ?, poster = ?, background = ?, stream = ?, transcoding = ?, location = ?, bandwidth = ?, platform = ?, product = ?, player = ?, quality = ?, duration = ?, progress = ?, ip = ? WHERE id = ?',
+            'UPDATE history SET lastSeenAt = ?, serverName = ?, user = ?, userKey = ?, userAvatar = ?, title = ?, mediaType = ?, seriesTitle = ?, episodeTitle = ?, year = ?, channel = ?, isLive = ?, poster = ?, background = ?, stream = ?, transcoding = ?, location = ?, bandwidth = ?, platform = ?, product = ?, player = ?, quality = ?, duration = ?, progress = ?, ip = ? WHERE id = ?',
             [
               timestamp,
               st.name,
               user,
+              userKey,
               userAvatar,
               title,
               mediaType,
@@ -4467,9 +4498,10 @@ async function fetchOverseerrUsers() {
   }
   // Map down to a safe shape for the client
   const mapped = allUsers.map(u => {
+    const plexUser = u && u.plexUser && typeof u.plexUser === 'object' ? u.plexUser : null;
     const email = u.email || u.emailAddress || u.userEmail || null;
-    const username = u.username || u.userName || u.plexUsername || u.plexUserName || null;
-    const displayName = u.displayName || u.name || u.fullName || null;
+    const username = u.username || u.userName || (plexUser && plexUser.username) || u.plexUsername || u.plexUserName || null;
+    const displayName = u.displayName || u.name || u.fullName || (plexUser && plexUser.title) || null;
     const name = displayName || username || email || null;
     return {
       id: u.id ?? u.userId ?? null,
@@ -4597,7 +4629,8 @@ async function importOverseerrSubscribers() {
       withEmail.forEach(u => {
         const externalId = u.id != null ? String(u.id) : null;
         const name = (u.displayName || u.name || u.username || u.email || '').trim();
-        // Tag-by-server matches subscriber.watchUser to history.user.
+        // Tag-by-server matches subscriber.watchUser to history.userKey (preferred) and falls back
+        // to history.user (friendly display name) for older rows.
         // Overseerr's stable identifier is typically username (often matches Plex/Jellyfin username),
         // while displayName may be a friendly name and not match watch history.
         const watchUser = (u.username || '').trim() || name;
@@ -4738,7 +4771,8 @@ app.get('/api/subscribers/summary', (req, res) => {
   });
 
   // Recompute subscriber server tags based on watch history.
-  // Tags are derived by matching subscriber.watchUser (or subscriber.name) to history.user (case-insensitive).
+  // Tags are derived by matching subscriber.watchUser (or subscriber.name) to history.userKey (preferred)
+  // and falling back to history.user (case-insensitive).
   app.post('/api/subscribers/tag-by-server', (req, res) => {
     if (!historyDb) {
       return res.status(500).json({ error: 'history DB not available' });
@@ -4795,7 +4829,8 @@ app.get('/api/subscribers/summary', (req, res) => {
         const tagsByUserLower = new Map();
         const baseParamsPrefix = cutoffIso ? [cutoffIso] : [];
         const baseSql = (() => {
-          let sql = `SELECT LOWER(user) AS u, GROUP_CONCAT(DISTINCT serverId) AS serverIds FROM history WHERE user IS NOT NULL AND serverId IS NOT NULL`;
+          const userExpr = `COALESCE(NULLIF(userKey,''), NULLIF(user,''))`;
+          let sql = `SELECT LOWER(${userExpr}) AS u, GROUP_CONCAT(DISTINCT serverId) AS serverIds FROM history WHERE serverId IS NOT NULL AND ${userExpr} IS NOT NULL`;
           if (cutoffIso) {
             sql += ' AND time >= ?';
           }
@@ -4831,10 +4866,10 @@ app.get('/api/subscribers/summary', (req, res) => {
           let sql = baseSql;
           const params = baseParamsPrefix.slice();
           if (keys.length) {
-            sql += ` AND LOWER(user) IN (${placeholders})`;
+            sql += ` AND LOWER(COALESCE(NULLIF(userKey,''), NULLIF(user,''))) IN (${placeholders})`;
             params.push(...keys);
           }
-          sql += ' GROUP BY LOWER(user)';
+          sql += ' GROUP BY LOWER(COALESCE(NULLIF(userKey,\'\'), NULLIF(user,\'\')))';
 
           historyDb.all(sql, params, (err2, rows) => {
             if (failed) return;
