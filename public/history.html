@@ -10,6 +10,7 @@
   <style>
     body{font-family:Segoe UI,Arial;background:var(--bg);color:var(--text-main);margin:0;padding:0}
     h1{margin:0 0 8px 0;color:var(--text-main);letter-spacing:0.5px;font-size:1.8em;font-weight:600;}
+    .subtitle{margin:0 0 10px 0;font-size:12px;color:var(--text-muted);}
     .placeholder{margin-top:24px;font-size:14px;color:var(--text-muted);}
     .back-btn{margin-top:12px;padding:6px 14px;border-radius:8px;border:1px solid var(--btn-border);background:var(--btn-bg);color:var(--btn-text);cursor:pointer;}
     .back-btn:hover{background:var(--btn-bg-hover);color:var(--btn-text-hover);}
@@ -35,13 +36,67 @@
     :root[data-theme="light"] .custom-range input,
     :root[data-theme="light-borderless"] .custom-range input{border-color:#dddddd;background:#ffffff;color:#111111;}
 
-    .pager{margin-top:12px;display:flex;justify-content:flex-end;align-items:center;gap:10px;}
-    .pager-note{font-size:12px;color:var(--text-muted);}
+    .toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:6px;}
+    .control{display:inline-flex;align-items:center;gap:8px;padding:6px;border-radius:12px;background:rgba(0,0,0,0.18);border:1px solid rgba(148,163,184,0.22);}
+    :root[data-theme="light"] .control,
+    :root[data-theme="light-borderless"] .control{background:rgba(0,0,0,0.03);border-color:#dddddd;}
+    .field{padding:7px 10px;border-radius:10px;border:1px solid rgba(148,163,184,0.22);background:rgba(0,0,0,0.10);color:var(--text-main);font-size:12px;min-width:220px;outline:none;}
+    .field::placeholder{color:var(--text-faint);}
+    :root[data-theme="light"] .field,
+    :root[data-theme="light-borderless"] .field{background:#ffffff;border-color:#dddddd;color:#111111;}
+    .select{padding:7px 10px;border-radius:10px;border:1px solid rgba(148,163,184,0.22);background:rgba(0,0,0,0.10);color:var(--text-main);font-size:12px;outline:none;}
+    .select option{background:var(--card-bg);color:var(--text-main);}
+    :root[data-theme="light"] .select,
+    :root[data-theme="light-borderless"] .select{background:#ffffff;border-color:#dddddd;color:#111111;}
+    .btn{margin-top:0;padding:7px 12px;border-radius:10px;border:1px solid var(--btn-border);background:var(--btn-bg);color:var(--btn-text);cursor:pointer;font-size:12px;}
+    .btn:hover{background:var(--btn-bg-hover);color:var(--btn-text-hover);}
+
+    .menu{position:relative;display:inline-block;}
+    .menu-panel{display:none;position:absolute;right:0;top:42px;min-width:220px;z-index:30;background:var(--card-bg);border:1px solid rgba(148,163,184,0.22);border-radius:12px;padding:10px;box-shadow:0 8px 24px rgba(0,0,0,0.35);}
+    :root[data-theme="light"] .menu-panel,
+    :root[data-theme="light-borderless"] .menu-panel{box-shadow:0 8px 24px rgba(0,0,0,0.12);}
+    .menu-panel.open{display:block;}
+    .menu-title{font-size:12px;color:var(--text-main);font-weight:600;margin-bottom:6px;}
+    .menu-item{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-muted);padding:6px 4px;border-radius:10px;}
+    .menu-item:hover{background:rgba(148,163,184,0.14);color:var(--text-main);}
+    .menu-item input{accent-color:var(--btn-border);}
+
+    .table-wrap{margin-top:12px;border-radius:14px;border:1px solid rgba(148,163,184,0.18);overflow:auto;background:rgba(0,0,0,0.10);}
+    :root[data-theme="light"] .table-wrap,
+    :root[data-theme="light-borderless"] .table-wrap{background:rgba(0,0,0,0.02);border-color:#e5e7eb;}
+    table.history-table{width:100%;border-collapse:separate;border-spacing:0;font-size:12px;min-width:960px;}
+    .history-table thead th{position:sticky;top:0;background:rgba(0,0,0,0.25);backdrop-filter:blur(6px);text-align:left;font-weight:600;color:var(--text-muted);padding:10px 12px;border-bottom:1px solid rgba(148,163,184,0.18);white-space:nowrap;}
+    :root[data-theme="light"] .history-table thead th,
+    :root[data-theme="light-borderless"] .history-table thead th{background:rgba(255,255,255,0.9);}
+    .history-table tbody td{padding:10px 12px;border-bottom:1px solid rgba(148,163,184,0.10);vertical-align:middle;}
+    .history-table tbody tr:hover{background:rgba(148,163,184,0.10);}
+
+    .cell-main{color:var(--text-main);font-weight:600;line-height:1.2;}
+    .cell-sub{margin-top:2px;color:var(--text-faint);font-size:11px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:320px;}
+
+    .date-cell{display:flex;align-items:center;gap:10px;min-width:160px;}
+    .event-icon{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:999px;background:rgba(148,163,184,0.14);color:var(--text-muted);flex:0 0 auto;font-size:12px;}
+    .event-icon.active{background:rgba(59,130,246,0.18);color:var(--btn-border);}
+    .event-icon.complete{background:rgba(34,197,94,0.18);color:var(--session-direct);}
+    .event-icon.stopped{background:rgba(239,68,68,0.16);color:var(--session-transcode);}
+    .event-icon.abandoned{background:rgba(148,163,184,0.14);color:var(--text-faint);}
 
     .user-cell{display:inline-flex;align-items:center;gap:8px;min-width:0;}
-    .user-avatar{width:18px;height:18px;border-radius:999px;object-fit:cover;border:1px solid rgba(148,163,184,0.22);background:rgba(0,0,0,0.10);flex:0 0 auto;}
-    .user-link{color:var(--btn-border);text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .user-avatar{width:20px;height:20px;border-radius:999px;object-fit:cover;border:1px solid rgba(148,163,184,0.22);background:rgba(0,0,0,0.10);flex:0 0 auto;}
+    .user-link{color:var(--text-main);text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;}
     .user-link:hover{text-decoration:underline;}
+
+    .badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;border:1px solid rgba(148,163,184,0.22);background:rgba(148,163,184,0.10);color:var(--text-main);font-size:11px;font-weight:600;white-space:nowrap;}
+    .badge.direct{border-color:rgba(34,197,94,0.35);background:rgba(34,197,94,0.16);color:var(--session-direct);}
+    .badge.transcode{border-color:rgba(239,68,68,0.35);background:rgba(239,68,68,0.14);color:var(--session-transcode);}
+
+    .progress-wrap{width:110px;}
+    .bar{width:100%;height:7px;border-radius:999px;background:rgba(148,163,184,0.18);overflow:hidden;}
+    .bar > div{height:100%;background:var(--progress-fill);}
+    .pct{margin-top:4px;font-size:11px;color:var(--text-faint);}
+
+    .pager{margin-top:12px;display:flex;justify-content:flex-end;align-items:center;gap:10px;}
+    .pager-note{font-size:12px;color:var(--text-muted);}
   </style>
 </head>
 <body>
@@ -81,36 +136,81 @@
     <div class="main-content">
       <button id="sidebarToggle" class="sidebar-toggle" type="button">Hide menu</button>
       <h1>History</h1>
+      <p class="subtitle">Browse all streaming sessions with powerful filtering</p>
 
-      <div style="margin-top:10px;margin-bottom:8px;font-size:12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
-        <input id="searchText" type="text" placeholder="Search user/title/server" style="padding:4px 8px;border-radius:6px;border:1px solid #444;background:#181c24;color:#e0e3e8;min-width:200px;">
-        <select id="sortSelect" style="padding:4px 8px;border-radius:6px;border:1px solid #444;background:#181c24;color:#e0e3e8;">
+      <div class="stats-grid" aria-label="History stats">
+        <div class="stat-card">
+          <div class="stat-value" id="statTotalPlays">0</div>
+          <div class="stat-label">Total Plays</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statWatchTime">0m</div>
+          <div class="stat-label">Watch Time</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statUniqueUsers">0</div>
+          <div class="stat-label">Unique Users</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statUniqueTitles">0</div>
+          <div class="stat-label">Unique Titles</div>
+        </div>
+      </div>
+
+      <div class="pill-row">
+        <div class="pill-group" aria-label="Date range">
+          <button id="pill7d" class="pill" data-range="7d" type="button">7d</button>
+          <button id="pill30d" class="pill" data-range="30d" type="button">30d</button>
+          <button id="pill1y" class="pill" data-range="1y" type="button">1y</button>
+          <button id="pillAll" class="pill" data-range="all" type="button">All</button>
+          <button id="pillCustom" class="pill" data-range="custom" type="button">Custom</button>
+        </div>
+        <div id="customRange" class="custom-range">
+          <input id="fromDate" type="date" aria-label="From date">
+          <input id="toDate" type="date" aria-label="To date">
+        </div>
+      </div>
+
+      <div class="toolbar" aria-label="History controls">
+        <div class="control" style="flex:1;min-width:260px;">
+          <input id="searchText" class="field" type="text" placeholder="Search titles, users, locations, IPs..." aria-label="Search history">
+        </div>
+
+        <div class="control">
+          <select id="sortSelect" class="select" aria-label="Sort">
           <option value="time_desc">Newest first</option>
           <option value="time_asc">Oldest first</option>
           <option value="bandwidth_desc">Highest bandwidth</option>
           <option value="bandwidth_asc">Lowest bandwidth</option>
-        </select>
-        <button id="applyFilters" class="back-btn" style="margin-top:0;">Apply</button>
-        <button id="importBtn" class="back-btn" style="margin-top:0;">Import History from Servers</button>
+          </select>
+        </div>
+
+        <div class="control">
+          <select id="serverSelect" class="select" aria-label="Server">
+            <option value="">All servers</option>
+          </select>
+        </div>
+
+        <button id="applyFilters" class="btn" type="button">Apply</button>
+
+        <div class="menu">
+          <button id="columnsBtn" class="btn" type="button">Columns</button>
+          <div id="columnsMenu" class="menu-panel" role="menu" aria-label="Columns">
+            <div class="menu-title">Show columns</div>
+            <label class="menu-item"><input type="checkbox" data-col="server"> Server</label>
+            <label class="menu-item"><input type="checkbox" data-col="bandwidth"> Bandwidth</label>
+          </div>
+        </div>
+
+        <button id="importBtn" class="btn" type="button">Import History from Servers</button>
       </div>
-      <table id="historyTable" style="width:100%;margin-top:12px;border-collapse:collapse;font-size:12px;">
-        <thead>
-          <tr style="text-align:left;border-bottom:1px solid #444;">
-            <th style="padding:4px 6px;">Date</th>
-            <th style="padding:4px 6px;">Server</th>
-            <th style="padding:4px 6px;">User</th>
-            <th style="padding:4px 6px;">Title</th>
-            <th style="padding:4px 6px;">Stream</th>
-            <th style="padding:4px 6px;">Platform</th>
-            <th style="padding:4px 6px;">Location</th>
-            <th style="padding:4px 6px;">Quality</th>
-            <th style="padding:4px 6px;">Duration</th>
-            <th style="padding:4px 6px;">Progress</th>
-            <th style="padding:4px 6px;">Bandwidth</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
+
+      <div class="table-wrap">
+        <table id="historyTable" class="history-table" aria-label="History table">
+          <thead></thead>
+          <tbody></tbody>
+        </table>
+      </div>
 
       <div class="pager">
         <div class="pager-note" id="pageNote">Showing 0–0</div>
@@ -124,8 +224,17 @@
     let currentSearch = '';
     let linkedUser = '';
     let currentSort = 'time_desc';
+    let currentServerId = '';
     let currentPage = 0;
     const PAGE_SIZE = 100;
+
+    const SERVER_PREF_KEY = 'omnistream_history_serverId';
+
+    const DEFAULT_COLUMNS = {
+      server: false,
+      bandwidth: false
+    };
+    let columnPrefs = { ...DEFAULT_COLUMNS };
 
     let currentRange = '30d';
     let currentFrom = '';
@@ -200,6 +309,154 @@
       if (cr) cr.style.display = range === 'custom' ? 'inline-flex' : 'none';
     }
 
+    function loadColumnPrefs() {
+      try {
+        const raw = localStorage.getItem('omnistream_history_columns');
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+          columnPrefs = { ...DEFAULT_COLUMNS, ...parsed };
+        }
+      } catch (_) {
+        // ignore
+      }
+    }
+
+    function saveColumnPrefs() {
+      try {
+        localStorage.setItem('omnistream_history_columns', JSON.stringify(columnPrefs));
+      } catch (_) {
+        // ignore
+      }
+    }
+
+    function loadServerPref() {
+      try {
+        const v = localStorage.getItem(SERVER_PREF_KEY);
+        if (typeof v === 'string' && v.trim()) {
+          currentServerId = v.trim();
+        }
+      } catch (_) {
+        // ignore
+      }
+    }
+
+    function saveServerPref() {
+      try {
+        if (currentServerId) localStorage.setItem(SERVER_PREF_KEY, currentServerId);
+        else localStorage.removeItem(SERVER_PREF_KEY);
+      } catch (_) {
+        // ignore
+      }
+    }
+
+    function setupColumnsMenu() {
+      loadColumnPrefs();
+      const btn = document.getElementById('columnsBtn');
+      const menu = document.getElementById('columnsMenu');
+      if (!btn || !menu) return;
+
+      const syncChecks = () => {
+        menu.querySelectorAll('input[type="checkbox"][data-col]').forEach(cb => {
+          const k = cb.getAttribute('data-col');
+          cb.checked = !!columnPrefs[k];
+        });
+      };
+
+      syncChecks();
+
+      btn.onclick = (e) => {
+        e.preventDefault();
+        menu.classList.toggle('open');
+        syncChecks();
+      };
+
+      document.addEventListener('click', (e) => {
+        if (!menu.classList.contains('open')) return;
+        if (e.target === btn || menu.contains(e.target)) return;
+        menu.classList.remove('open');
+      });
+
+      menu.addEventListener('change', (e) => {
+        const target = e.target;
+        if (!target || target.tagName !== 'INPUT') return;
+        const k = target.getAttribute('data-col');
+        if (!k) return;
+        columnPrefs[k] = !!target.checked;
+        saveColumnPrefs();
+        renderHistory();
+      });
+    }
+
+    function buildTableHeader() {
+      const thead = document.querySelector('#historyTable thead');
+      if (!thead) return;
+      thead.innerHTML = '';
+      const tr = document.createElement('tr');
+      const cols = getVisibleColumns();
+      cols.forEach(c => {
+        const th = document.createElement('th');
+        th.textContent = c.label;
+        tr.appendChild(th);
+      });
+      thead.appendChild(tr);
+    }
+
+    function getVisibleColumns() {
+      const cols = [
+        { key: 'date', label: 'Date' },
+        ...(columnPrefs.server ? [{ key: 'server', label: 'Server' }] : []),
+        { key: 'user', label: 'User' },
+        { key: 'content', label: 'Content' },
+        { key: 'platform', label: 'Platform' },
+        { key: 'location', label: 'Location' },
+        { key: 'quality', label: 'Quality' },
+        { key: 'duration', label: 'Duration' },
+        { key: 'progress', label: 'Progress' },
+        ...(columnPrefs.bandwidth ? [{ key: 'bandwidth', label: 'Bandwidth' }] : [])
+      ];
+      return cols;
+    }
+
+    function formatDateParts(iso) {
+      if (!iso) return { date: '', time: '' };
+      const d = new Date(iso);
+      return {
+        date: d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }),
+        time: d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+      };
+    }
+
+    function computeSessionStatus(h) {
+      const ended = !!h.endedAt;
+      const p = Math.max(0, Math.min(100, Number(h.progress) || 0));
+      const completed = !!h.completed || p >= 95;
+
+      if (!ended) {
+        // Still active (polling keeps updating lastSeenAt)
+        return { kind: 'active', icon: '▶', label: 'Active' };
+      }
+      if (completed) {
+        return { kind: 'complete', icon: '✓', label: 'Completed' };
+      }
+      // If it ended without completing, infer abandoned vs stopped.
+      // Abandoned: very low progress (e.g., user bailed immediately)
+      if (p > 0 && p < 5) {
+        return { kind: 'abandoned', icon: '×', label: 'Abandoned' };
+      }
+      // Stopped: some progress was made but did not complete
+      if (p >= 5) {
+        return { kind: 'stopped', icon: '!', label: `Stopped at ${p}%` };
+      }
+      // Progress unknown or 0
+      return { kind: 'abandoned', icon: '×', label: 'Abandoned' };
+    }
+
+    function formatBandwidth(mbps) {
+      if (typeof mbps !== 'number' || !(mbps > 0)) return '';
+      return `${mbps.toFixed(1)} Mbps`;
+    }
+
     function computeRange(range) {
       const now = new Date();
       if (range === 'all') {
@@ -231,6 +488,7 @@
       const params = new URLSearchParams();
       if (linkedUser) params.set('user', linkedUser);
       else if (currentSearch) params.set('q', currentSearch);
+      if (currentServerId) params.set('serverId', currentServerId);
       if (currentFrom) params.set('from', currentFrom);
       if (currentTo) params.set('to', currentTo);
       if (currentSort.startsWith('bandwidth')) {
@@ -251,77 +509,173 @@
       try {
         const { history = [], hasMore = false, stats = null } = await fetchHistory();
         updateStatsFromServer(stats, history);
+        buildTableHeader();
         const tbody = document.querySelector('#historyTable tbody');
         tbody.innerHTML = '';
+
+        const cols = getVisibleColumns();
         history.forEach(h => {
           const tr = document.createElement('tr');
-          tr.style.borderBottom = '1px solid #222';
-          function cell(text) {
-            const td = document.createElement('td');
-            td.style.padding = '4px 6px';
-            td.textContent = text;
-            return td;
-          }
-          const timeStr = h.time ? new Date(h.time).toLocaleString() : '';
-          tr.appendChild(cell(timeStr));
-          tr.appendChild(cell(h.serverName || h.serverId || ''));
-          // User cell with link to per-user detail view
-          const userTd = document.createElement('td');
-          userTd.style.padding = '4px 6px';
-          const u = h.user || '';
-          if (u) {
-            const wrap = document.createElement('div');
-            wrap.className = 'user-cell';
 
-            if (h.userAvatar) {
-              const img = document.createElement('img');
-              img.className = 'user-avatar';
-              img.src = h.userAvatar;
-              img.alt = '';
-              img.onerror = () => { img.style.display = 'none'; };
-              wrap.appendChild(img);
+          const mkTd = () => document.createElement('td');
+          const mkMainSub = (main, sub) => {
+            const wrap = document.createElement('div');
+            const a = document.createElement('div');
+            a.className = 'cell-main';
+            a.textContent = main || '';
+            wrap.appendChild(a);
+            if (sub) {
+              const b = document.createElement('div');
+              b.className = 'cell-sub';
+              b.textContent = sub;
+              wrap.appendChild(b);
+            }
+            return wrap;
+          };
+
+          cols.forEach(c => {
+            if (c.key === 'date') {
+              const td = mkTd();
+              const parts = formatDateParts(h.time);
+              const wrap = document.createElement('div');
+              wrap.className = 'date-cell';
+
+              const icon = document.createElement('span');
+              const st = computeSessionStatus(h);
+              icon.className = 'event-icon ' + st.kind;
+              icon.textContent = st.icon;
+              wrap.appendChild(icon);
+
+              // Second line shows time + inferred status.
+              const sub = [parts.time, st.label].filter(Boolean).join(' · ');
+              wrap.appendChild(mkMainSub(parts.date, sub));
+              td.appendChild(wrap);
+              tr.appendChild(td);
+              return;
             }
 
-            const a = document.createElement('a');
-            a.href = 'user.html?user=' + encodeURIComponent(u);
-            a.textContent = u;
-            a.className = 'user-link';
-            wrap.appendChild(a);
+            if (c.key === 'server') {
+              const td = mkTd();
+              td.appendChild(mkMainSub(h.serverName || h.serverId || '', (h.type || '').toString().toUpperCase()));
+              tr.appendChild(td);
+              return;
+            }
 
-            userTd.appendChild(wrap);
-          }
-          tr.appendChild(userTd);
-          tr.appendChild(cell(h.title || ''));
-          tr.appendChild(cell(h.stream || (h.transcoding ? 'Transcode' : 'Direct Play') || ''));
-          tr.appendChild(cell(h.platform || h.product || h.player || ''));
-          tr.appendChild(cell(h.location || ''));
-          tr.appendChild(cell(h.quality || ''));
-          tr.appendChild(cell(fmtDuration(h.duration)));
+            if (c.key === 'user') {
+              const td = mkTd();
+              const u = h.user || '';
+              if (u) {
+                const wrap = document.createElement('div');
+                wrap.className = 'user-cell';
 
-          const progTd = document.createElement('td');
-          progTd.style.padding = '4px 6px';
-          const p = Math.max(0, Math.min(100, Number(h.progress) || 0));
-          const barWrap = document.createElement('div');
-          barWrap.style.width = '86px';
-          barWrap.style.height = '6px';
-          barWrap.style.borderRadius = '999px';
-          barWrap.style.background = 'rgba(148,163,184,0.18)';
-          barWrap.style.overflow = 'hidden';
-          const fill = document.createElement('div');
-          fill.style.height = '100%';
-          fill.style.width = `${p}%`;
-          fill.style.background = 'var(--progress-fill)';
-          barWrap.appendChild(fill);
-          const label = document.createElement('div');
-          label.style.fontSize = '11px';
-          label.style.color = 'var(--text-faint)';
-          label.style.marginTop = '2px';
-          label.textContent = p ? `${p}%` : '';
-          progTd.appendChild(barWrap);
-          progTd.appendChild(label);
-          tr.appendChild(progTd);
+                if (h.userAvatar) {
+                  const img = document.createElement('img');
+                  img.className = 'user-avatar';
+                  img.src = h.userAvatar;
+                  img.alt = '';
+                  img.onerror = () => { img.style.display = 'none'; };
+                  wrap.appendChild(img);
+                }
 
-          tr.appendChild(cell(typeof h.bandwidth === 'number' && h.bandwidth > 0 ? h.bandwidth.toFixed(1) + ' Mbps' : ''));
+                const a = document.createElement('a');
+                a.href = 'user.html?user=' + encodeURIComponent(u);
+                a.textContent = u;
+                a.className = 'user-link';
+                wrap.appendChild(a);
+                td.appendChild(wrap);
+              }
+              tr.appendChild(td);
+              return;
+            }
+
+            if (c.key === 'content') {
+              const td = mkTd();
+              const title = h.title || '';
+              // Best-effort subtitle: show server name when server column hidden.
+              const sub = columnPrefs.server ? '' : (h.serverName || '');
+              td.appendChild(mkMainSub(title, sub));
+              tr.appendChild(td);
+              return;
+            }
+
+            if (c.key === 'platform') {
+              const td = mkTd();
+              const main = h.platform || h.product || h.player || '';
+              const sub = (h.product && main !== h.product) ? h.product : (h.player && main !== h.player ? h.player : '');
+              td.appendChild(mkMainSub(main, sub));
+              tr.appendChild(td);
+              return;
+            }
+
+            if (c.key === 'location') {
+              const td = mkTd();
+              const main = h.location || '';
+              const sub = h.ip ? String(h.ip) : '';
+              td.appendChild(mkMainSub(main, sub));
+              tr.appendChild(td);
+              return;
+            }
+
+            if (c.key === 'quality') {
+              const td = mkTd();
+              const badge = document.createElement('span');
+              const isTranscoding = !!h.transcoding || (typeof h.stream === 'string' && h.stream.toLowerCase().includes('transcode'));
+              const label = isTranscoding ? 'Transcode' : 'Direct Play';
+              badge.className = 'badge ' + (isTranscoding ? 'transcode' : 'direct');
+              badge.textContent = label;
+
+              const wrap = document.createElement('div');
+              wrap.appendChild(badge);
+              if (h.quality) {
+                const sub = document.createElement('div');
+                sub.className = 'cell-sub';
+                sub.textContent = h.quality;
+                wrap.appendChild(sub);
+              }
+              td.appendChild(wrap);
+              tr.appendChild(td);
+              return;
+            }
+
+            if (c.key === 'duration') {
+              const td = mkTd();
+              td.appendChild(mkMainSub(fmtDuration(h.duration), ''));
+              tr.appendChild(td);
+              return;
+            }
+
+            if (c.key === 'progress') {
+              const td = mkTd();
+              const p = Math.max(0, Math.min(100, Number(h.progress) || 0));
+              const wrap = document.createElement('div');
+              wrap.className = 'progress-wrap';
+              const bar = document.createElement('div');
+              bar.className = 'bar';
+              const fill = document.createElement('div');
+              fill.style.width = `${p}%`;
+              bar.appendChild(fill);
+              wrap.appendChild(bar);
+              const pct = document.createElement('div');
+              pct.className = 'pct';
+              pct.textContent = p ? `${p}%` : '';
+              wrap.appendChild(pct);
+              td.appendChild(wrap);
+              tr.appendChild(td);
+              return;
+            }
+
+            if (c.key === 'bandwidth') {
+              const td = mkTd();
+              td.appendChild(mkMainSub(formatBandwidth(h.bandwidth), ''));
+              tr.appendChild(td);
+              return;
+            }
+
+            const td = mkTd();
+            td.textContent = '';
+            tr.appendChild(td);
+          });
+
           tbody.appendChild(tr);
         });
 
@@ -341,9 +695,24 @@
       currentSearch = document.getElementById('searchText').value.trim();
       linkedUser = '';
       currentSort = document.getElementById('sortSelect').value;
+      currentServerId = (document.getElementById('serverSelect')?.value || '').trim();
+      saveServerPref();
       currentPage = 0;
       await renderHistory();
     };
+
+    // Allow pressing Enter in the search box to apply.
+    (function () {
+      const input = document.getElementById('searchText');
+      if (!input) return;
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const btn = document.getElementById('applyFilters');
+          if (btn) btn.click();
+        }
+      });
+    })();
 
     document.getElementById('nextPage').onclick = async () => {
       const btn = document.getElementById('nextPage');
@@ -373,6 +742,60 @@
     if (toEl) toEl.onchange = () => { if (currentRange === 'custom') applyRange('custom'); };
     // Default range
     applyRange('30d');
+
+    setupColumnsMenu();
+
+    // Load saved server filter before populating options.
+    loadServerPref();
+
+    async function populateServerFilter() {
+      const sel = document.getElementById('serverSelect');
+      if (!sel) return;
+      try {
+        const r = await fetch('/api/status');
+        const payload = await r.json().catch(() => null);
+        const servers = payload && Array.isArray(payload.servers) ? payload.servers : [];
+        const enabled = servers
+          .filter(s => s && (s.id != null) && !s.disabled)
+          .map(s => ({
+            id: String(s.id),
+            name: (s.name || s.baseUrl || `Server ${s.id}`).toString(),
+            type: (s.type || '').toString()
+          }))
+          .sort((a, b) => a.name.localeCompare(b.name));
+
+        sel.innerHTML = '';
+        const optAll = document.createElement('option');
+        optAll.value = '';
+        optAll.textContent = 'All servers';
+        sel.appendChild(optAll);
+
+        enabled.forEach(s => {
+          const opt = document.createElement('option');
+          opt.value = s.id;
+          opt.textContent = s.type ? `${s.name} (${s.type})` : s.name;
+          sel.appendChild(opt);
+        });
+
+        // Preserve current selection if possible
+        if (currentServerId) sel.value = currentServerId;
+      } catch (e) {
+        // ignore; leave dropdown empty-ish
+      }
+    }
+
+    (function setupServerFilterBehavior() {
+      const sel = document.getElementById('serverSelect');
+      if (!sel) return;
+      sel.addEventListener('change', () => {
+        currentServerId = (sel.value || '').trim();
+        saveServerPref();
+        currentPage = 0;
+        renderHistory();
+      });
+    })();
+
+    populateServerFilter();
 
     document.getElementById('importBtn').onclick = async () => {
       try {

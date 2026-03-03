@@ -43,8 +43,9 @@ OmniStream is a dashboard to monitor multiple Plex, Jellyfin, and Emby servers o
 - Direct Play vs Transcoding highlighting
 - Global and per-server bandwidth summaries
 - History and reports with per-server scope and imported server history
+- History DB backups (scheduled + manual) with download/restore from the System page
 - Admin UI to add/edit/enable/disable servers
-- Simple notifications (offline servers, WAN transcodes, high bandwidth)
+- Simple notifications (offline servers, WAN transcodes, high bandwidth, and History DB backup success/failure)
 - Newsletter: subscriber list, templates, preview/send, and weekly scheduled sends
 - Lightweight health endpoint for external monitors (Home Assistant, Uptime Kuma)
 
@@ -157,6 +158,8 @@ services:
 			- ${CONFIG_PATH:-./config.json}:/usr/src/app/config.json
 			- ${SERVERS_PATH:-./servers.json}:/usr/src/app/servers.json
 			- ${HISTORY_DB_PATH:-./history.db}:/usr/src/app/history.db
+			# Optional: persist History DB backups (created by System → History DB backups)
+			- ${BACKUPS_PATH:-./backups}:/usr/src/app/backups
 			- ${SENT_NEWSLETTERS_PATH:-./sent_newsletters}:/usr/src/app/sent_newsletters
 			# Optional: override bundled UI with local files
 			# - ./public:/usr/src/app/public:ro
@@ -169,6 +172,7 @@ From the project root:
 export SERVERS_PATH=/home/youruser/omnistream/servers.json
 export CONFIG_PATH=/home/youruser/omnistream/config.json
 	export HISTORY_DB_PATH=/home/youruser/omnistream/history.db
+	export BACKUPS_PATH=/home/youruser/omnistream/backups
 	export SENT_NEWSLETTERS_PATH=/home/youruser/omnistream/sent_newsletters
 
 docker compose up -d
@@ -191,9 +195,19 @@ docker run -d \
 	-p 3000:3000 \
 	-v /home/youruser/omnistream/servers.json:/usr/src/app/servers.json \
 		-v /home/youruser/omnistream/history.db:/usr/src/app/history.db \
+		-v /home/youruser/omnistream/backups:/usr/src/app/backups \
 		-v /home/youruser/omnistream/sent_newsletters:/usr/src/app/sent_newsletters \
 	-e NODE_ENV=production \
 	ghcr.io/winky2000/omnistream:latest
+
+---
+
+## History DB backups
+
+OmniStream can create backups of `history.db` and keep them under `./backups` (container path: `/usr/src/app/backups`).
+
+- Manage backups in **Settings → System → History DB backups**.
+- If you run via Docker and want backups to persist across container rebuilds, bind-mount the backups folder (see examples above).
 ```
 
 ---

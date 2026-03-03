@@ -73,6 +73,9 @@
       <input type="checkbox" id="ruleWanTranscodes"> Notify on WAN transcodes
     </label>
     <label class="inline">
+      <input type="checkbox" id="ruleHistoryDbBackups"> Notify on History DB backups (success/failure)
+    </label>
+    <label class="inline">
       <input type="checkbox" id="ruleAnyWan"> Notify when any WAN stream is active
     </label>
     <label class="inline">
@@ -118,6 +121,7 @@
     <label class="inline"><input type="checkbox" id="discordTrigOffline"> Offline servers</label>
     <label class="inline"><input type="checkbox" id="discordTrigWan"> WAN transcodes</label>
     <label class="inline"><input type="checkbox" id="discordTrigHigh"> High total bandwidth</label>
+    <label class="inline"><input type="checkbox" id="discordTrigHistoryDbBackups"> History DB backups</label>
   </div>
 
   <div class="section notifier-panel" data-panel="webhook">
@@ -131,6 +135,7 @@
     <label class="inline"><input type="checkbox" id="webhookTrigOffline"> Offline servers</label>
     <label class="inline"><input type="checkbox" id="webhookTrigWan"> WAN transcodes</label>
     <label class="inline"><input type="checkbox" id="webhookTrigHigh"> High total bandwidth</label>
+    <label class="inline"><input type="checkbox" id="webhookTrigHistoryDbBackups"> History DB backups</label>
   </div>
 
   <div class="section notifier-panel" data-panel="slack">
@@ -144,6 +149,7 @@
     <label class="inline"><input type="checkbox" id="slackTrigOffline"> Offline servers</label>
     <label class="inline"><input type="checkbox" id="slackTrigWan"> WAN transcodes</label>
     <label class="inline"><input type="checkbox" id="slackTrigHigh"> High total bandwidth</label>
+    <label class="inline"><input type="checkbox" id="slackTrigHistoryDbBackups"> History DB backups</label>
   </div>
 
   <div class="section notifier-panel" data-panel="telegram">
@@ -161,6 +167,7 @@
     <label class="inline"><input type="checkbox" id="telegramTrigOffline"> Offline servers</label>
     <label class="inline"><input type="checkbox" id="telegramTrigWan"> WAN transcodes</label>
     <label class="inline"><input type="checkbox" id="telegramTrigHigh"> High total bandwidth</label>
+    <label class="inline"><input type="checkbox" id="telegramTrigHistoryDbBackups"> History DB backups</label>
   </div>
 
   <div class="section notifier-panel" data-panel="twilio">
@@ -186,6 +193,7 @@
     <label class="inline"><input type="checkbox" id="twilioTrigOffline"> Offline servers</label>
     <label class="inline"><input type="checkbox" id="twilioTrigWan"> WAN transcodes</label>
     <label class="inline"><input type="checkbox" id="twilioTrigHigh"> High total bandwidth</label>
+    <label class="inline"><input type="checkbox" id="twilioTrigHistoryDbBackups"> History DB backups</label>
   </div>
 
   <div class="section notifier-panel" data-panel="pushover">
@@ -206,6 +214,7 @@
     <label class="inline"><input type="checkbox" id="pushoverTrigOffline"> Offline servers</label>
     <label class="inline"><input type="checkbox" id="pushoverTrigWan"> WAN transcodes</label>
     <label class="inline"><input type="checkbox" id="pushoverTrigHigh"> High total bandwidth</label>
+    <label class="inline"><input type="checkbox" id="pushoverTrigHistoryDbBackups"> History DB backups</label>
   </div>
 
   <div class="section notifier-panel" data-panel="gotify">
@@ -226,6 +235,7 @@
     <label class="inline"><input type="checkbox" id="gotifyTrigOffline"> Offline servers</label>
     <label class="inline"><input type="checkbox" id="gotifyTrigWan"> WAN transcodes</label>
     <label class="inline"><input type="checkbox" id="gotifyTrigHigh"> High total bandwidth</label>
+    <label class="inline"><input type="checkbox" id="gotifyTrigHistoryDbBackups"> History DB backups</label>
   </div>
 
   <div class="section notifier-panel" data-panel="email">
@@ -267,6 +277,7 @@
     <label class="inline"><input type="checkbox" id="emailTrigOffline"> Offline servers</label>
     <label class="inline"><input type="checkbox" id="emailTrigWan"> WAN transcodes</label>
     <label class="inline"><input type="checkbox" id="emailTrigHigh"> High total bandwidth</label>
+    <label class="inline"><input type="checkbox" id="emailTrigHistoryDbBackups"> History DB backups</label>
   </div>
 
   <button id="saveBtn" class="btn">Save Settings</button>
@@ -307,6 +318,7 @@
         const email = n.email || {};
         document.getElementById('ruleOffline').checked = rules.offline ? rules.offline.enabled !== false : true;
         document.getElementById('ruleWanTranscodes').checked = rules.wanTranscodes ? rules.wanTranscodes.enabled !== false : true;
+        document.getElementById('ruleHistoryDbBackups').checked = rules.historyDbBackups ? rules.historyDbBackups.enabled !== false : true;
         const highRule = rules.highBandwidth || {};
         document.getElementById('ruleHighBandwidth').checked = highRule.enabled !== false;
         document.getElementById('ruleHighBandwidthThreshold').value = highRule.thresholdMbps != null ? highRule.thresholdMbps : 50;
@@ -351,41 +363,49 @@
         document.getElementById('emailTrigOffline').checked = emailTrig.offline !== false;
         document.getElementById('emailTrigWan').checked = emailTrig.wanTranscodes !== false;
         document.getElementById('emailTrigHigh').checked = emailTrig.highBandwidth !== false;
+        document.getElementById('emailTrigHistoryDbBackups').checked = emailTrig.historyDbBackups !== false;
 
         const discordTrig = discord.triggers || {};
         document.getElementById('discordTrigOffline').checked = discordTrig.offline !== false;
         document.getElementById('discordTrigWan').checked = discordTrig.wanTranscodes !== false;
         document.getElementById('discordTrigHigh').checked = discordTrig.highBandwidth !== false;
+        document.getElementById('discordTrigHistoryDbBackups').checked = discordTrig.historyDbBackups !== false;
 
         const webhookTrig = webhook.triggers || {};
         document.getElementById('webhookTrigOffline').checked = webhookTrig.offline !== false;
         document.getElementById('webhookTrigWan').checked = webhookTrig.wanTranscodes !== false;
         document.getElementById('webhookTrigHigh').checked = webhookTrig.highBandwidth !== false;
+        document.getElementById('webhookTrigHistoryDbBackups').checked = webhookTrig.historyDbBackups !== false;
 
         const slackTrig = slack.triggers || {};
         document.getElementById('slackTrigOffline').checked = slackTrig.offline !== false;
         document.getElementById('slackTrigWan').checked = slackTrig.wanTranscodes !== false;
         document.getElementById('slackTrigHigh').checked = slackTrig.highBandwidth !== false;
+        document.getElementById('slackTrigHistoryDbBackups').checked = slackTrig.historyDbBackups !== false;
 
         const telegramTrig = telegram.triggers || {};
         document.getElementById('telegramTrigOffline').checked = telegramTrig.offline !== false;
         document.getElementById('telegramTrigWan').checked = telegramTrig.wanTranscodes !== false;
         document.getElementById('telegramTrigHigh').checked = telegramTrig.highBandwidth !== false;
+        document.getElementById('telegramTrigHistoryDbBackups').checked = telegramTrig.historyDbBackups !== false;
 
         const twilioTrig = twilio.triggers || {};
         document.getElementById('twilioTrigOffline').checked = twilioTrig.offline !== false;
         document.getElementById('twilioTrigWan').checked = twilioTrig.wanTranscodes !== false;
         document.getElementById('twilioTrigHigh').checked = twilioTrig.highBandwidth !== false;
+        document.getElementById('twilioTrigHistoryDbBackups').checked = twilioTrig.historyDbBackups !== false;
 
         const pushoverTrig = pushover.triggers || {};
         document.getElementById('pushoverTrigOffline').checked = pushoverTrig.offline !== false;
         document.getElementById('pushoverTrigWan').checked = pushoverTrig.wanTranscodes !== false;
         document.getElementById('pushoverTrigHigh').checked = pushoverTrig.highBandwidth !== false;
+        document.getElementById('pushoverTrigHistoryDbBackups').checked = pushoverTrig.historyDbBackups !== false;
 
         const gotifyTrigObj = gotify.triggers || {};
         document.getElementById('gotifyTrigOffline').checked = gotifyTrigObj.offline !== false;
         document.getElementById('gotifyTrigWan').checked = gotifyTrigObj.wanTranscodes !== false;
         document.getElementById('gotifyTrigHigh').checked = gotifyTrigObj.highBandwidth !== false;
+        document.getElementById('gotifyTrigHistoryDbBackups').checked = gotifyTrigObj.historyDbBackups !== false;
       } catch (e) {
         console.error(e);
       }
@@ -399,6 +419,7 @@
           rules: {
             offline: { enabled: document.getElementById('ruleOffline').checked },
             wanTranscodes: { enabled: document.getElementById('ruleWanTranscodes').checked },
+            historyDbBackups: { enabled: document.getElementById('ruleHistoryDbBackups').checked },
             highBandwidth: {
               enabled: document.getElementById('ruleHighBandwidth').checked,
               thresholdMbps: Number(document.getElementById('ruleHighBandwidthThreshold').value) || 50
@@ -416,7 +437,8 @@
             triggers: {
               offline: document.getElementById('discordTrigOffline').checked,
               wanTranscodes: document.getElementById('discordTrigWan').checked,
-              highBandwidth: document.getElementById('discordTrigHigh').checked
+              highBandwidth: document.getElementById('discordTrigHigh').checked,
+              historyDbBackups: document.getElementById('discordTrigHistoryDbBackups').checked
             }
           },
           email: {
@@ -435,7 +457,8 @@
             triggers: {
               offline: document.getElementById('emailTrigOffline').checked,
               wanTranscodes: document.getElementById('emailTrigWan').checked,
-              highBandwidth: document.getElementById('emailTrigHigh').checked
+              highBandwidth: document.getElementById('emailTrigHigh').checked,
+              historyDbBackups: document.getElementById('emailTrigHistoryDbBackups').checked
             }
           },
           webhook: {
@@ -443,7 +466,8 @@
             triggers: {
               offline: document.getElementById('webhookTrigOffline').checked,
               wanTranscodes: document.getElementById('webhookTrigWan').checked,
-              highBandwidth: document.getElementById('webhookTrigHigh').checked
+              highBandwidth: document.getElementById('webhookTrigHigh').checked,
+              historyDbBackups: document.getElementById('webhookTrigHistoryDbBackups').checked
             }
           },
           slack: {
@@ -451,7 +475,8 @@
             triggers: {
               offline: document.getElementById('slackTrigOffline').checked,
               wanTranscodes: document.getElementById('slackTrigWan').checked,
-              highBandwidth: document.getElementById('slackTrigHigh').checked
+              highBandwidth: document.getElementById('slackTrigHigh').checked,
+              historyDbBackups: document.getElementById('slackTrigHistoryDbBackups').checked
             }
           },
           telegram: {
@@ -460,7 +485,8 @@
             triggers: {
               offline: document.getElementById('telegramTrigOffline').checked,
               wanTranscodes: document.getElementById('telegramTrigWan').checked,
-              highBandwidth: document.getElementById('telegramTrigHigh').checked
+              highBandwidth: document.getElementById('telegramTrigHigh').checked,
+              historyDbBackups: document.getElementById('telegramTrigHistoryDbBackups').checked
             }
           },
           twilio: {
@@ -471,7 +497,8 @@
             triggers: {
               offline: document.getElementById('twilioTrigOffline').checked,
               wanTranscodes: document.getElementById('twilioTrigWan').checked,
-              highBandwidth: document.getElementById('twilioTrigHigh').checked
+              highBandwidth: document.getElementById('twilioTrigHigh').checked,
+              historyDbBackups: document.getElementById('twilioTrigHistoryDbBackups').checked
             }
           },
           pushover: {
@@ -481,7 +508,8 @@
             triggers: {
               offline: document.getElementById('pushoverTrigOffline').checked,
               wanTranscodes: document.getElementById('pushoverTrigWan').checked,
-              highBandwidth: document.getElementById('pushoverTrigHigh').checked
+              highBandwidth: document.getElementById('pushoverTrigHigh').checked,
+              historyDbBackups: document.getElementById('pushoverTrigHistoryDbBackups').checked
             }
           },
           gotify: {
@@ -491,7 +519,8 @@
             triggers: {
               offline: document.getElementById('gotifyTrigOffline').checked,
               wanTranscodes: document.getElementById('gotifyTrigWan').checked,
-              highBandwidth: document.getElementById('gotifyTrigHigh').checked
+              highBandwidth: document.getElementById('gotifyTrigHigh').checked,
+              historyDbBackups: document.getElementById('gotifyTrigHistoryDbBackups').checked
             }
           }
         };

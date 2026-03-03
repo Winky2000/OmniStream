@@ -8,6 +8,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 _No unreleased changes yet._
 
+## [0.4.0] - 2026-03-03
+
+### Added
+- History DB backups: scheduled and manual backups with download + restore from the System page.
+- Notifiers: optional notifications for History DB backup success/failure.
+- Reports: KPI summary strip plus a compact toolbar (presets + custom range, search, filters, columns).
+
+### Changed
+- Reports: Most Concurrent Streams breakdown now distinguishes Direct Streams vs Direct Plays.
+- Reports: peak concurrency now keeps the all-time highest value (never decreases).
+
+### Fixed
+- Reports: `from/to` date ranges are interpreted as local-day boundaries to avoid empty windows and 0 totals.
+
 ## [0.3.8] - 2026-03-01
 - Fix Plex history import by explicitly requesting JSON and surfacing per-server errors when Plex returns unexpected responses.
 
@@ -164,5 +178,7 @@ _No unreleased changes yet._
 [0.3.4]: https://github.com/Winky2000/OmniStream/releases/tag/v0.3.4
 [0.3.5]: https://github.com/Winky2000/OmniStream/releases/tag/v0.3.5
 [0.3.6]: https://github.com/Winky2000/OmniStream/releases/tag/v0.3.6
+[0.3.7]: https://github.com/Winky2000/OmniStream/releases/tag/v0.3.7
 [0.3.8]: https://github.com/Winky2000/OmniStream/releases/tag/v0.3.8
-[Unreleased]: https://github.com/Winky2000/OmniStream/compare/v0.3.6...HEAD
+[0.4.0]: https://github.com/Winky2000/OmniStream/releases/tag/v0.4.0
+[Unreleased]: https://github.com/Winky2000/OmniStream/compare/v0.4.0...HEAD

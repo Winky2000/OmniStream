@@ -175,6 +175,7 @@ try {
 }
 
 let appConfig = {};
+let peakConcurrentStreamsAllTime = null;
 try {
   if (fs.existsSync(CONFIG_FILE)) {
     const rawCfg = fs.readFileSync(CONFIG_FILE, 'utf8');
@@ -223,6 +224,105 @@ const AUTH_PBKDF2_KEYLEN = 32;
 const AUTH_PBKDF2_DIGEST = 'sha256';
 
 const authSessions = new Map(); // sid -> { username, createdAtMs, lastSeenAtMs }
+
+function base64UrlEncode(buf) {
+  return Buffer.from(buf)
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+}
+
+function base64UrlDecode(str) {
+  const s = String(str || '').replace(/-/g, '+').replace(/_/g, '/');
+  const pad = s.length % 4 === 0 ? '' : '='.repeat(4 - (s.length % 4));
+  return Buffer.from(s + pad, 'base64');
+}
+
+function getAuthSessionSecret() {
+  const authCfg = getAuthConfig();
+  const secret = authCfg && typeof authCfg.sessionSecret === 'string' ? authCfg.sessionSecret.trim() : '';
+  return secret;
+}
+
+function getAuthPasswordFingerprint() {
+  const authCfg = getAuthConfig();
+  const storedHash = String(authCfg.passwordHash || '');
+  if (!storedHash) return '';
+  return crypto.createHash('sha256').update(storedHash, 'utf8').digest('hex').slice(0, 16);
+}
+
+function signSessionPayload(payloadB64) {
+  const secret = getAuthSessionSecret();
+  if (!secret) return '';
+  const sig = crypto.createHmac('sha256', Buffer.from(secret, 'utf8')).update(String(payloadB64)).digest();
+  return base64UrlEncode(sig);
+}
+
+function timingSafeEqualStr(a, b) {
+  try {
+    const aa = Buffer.from(String(a || ''), 'utf8');
+    const bb = Buffer.from(String(b || ''), 'utf8');
+    if (aa.length !== bb.length) return false;
+    return crypto.timingSafeEqual(aa, bb);
+  } catch {
+    return false;
+  }
+}
+
+function createSignedSessionToken(username) {
+  const now = Date.now();
+  const payload = {
+    v: 1,
+    u: String(username || ''),
+    iat: now,
+    exp: now + AUTH_SESSION_TTL_MS,
+    ph: getAuthPasswordFingerprint()
+  };
+  const payloadB64 = base64UrlEncode(Buffer.from(JSON.stringify(payload), 'utf8'));
+  const sigB64 = signSessionPayload(payloadB64);
+  if (!sigB64) return '';
+  return `${payloadB64}.${sigB64}`;
+}
+
+function verifySignedSessionToken(token) {
+  try {
+    const raw = String(token || '').trim();
+    const idx = raw.indexOf('.');
+    if (idx === -1) return null;
+    const payloadB64 = raw.slice(0, idx);
+    const sigB64 = raw.slice(idx + 1);
+    if (!payloadB64 || !sigB64) return null;
+
+    const expectedSig = signSessionPayload(payloadB64);
+    if (!expectedSig || !timingSafeEqualStr(expectedSig, sigB64)) return null;
+
+    const payloadRaw = base64UrlDecode(payloadB64).toString('utf8');
+    const payload = JSON.parse(payloadRaw);
+    if (!payload || typeof payload !== 'object') return null;
+    if (payload.v !== 1) return null;
+
+    const u = typeof payload.u === 'string' ? payload.u : '';
+    const iat = typeof payload.iat === 'number' ? payload.iat : 0;
+    const exp = typeof payload.exp === 'number' ? payload.exp : 0;
+    const ph = typeof payload.ph === 'string' ? payload.ph : '';
+
+    if (!u || !iat || !exp) return null;
+    const now = Date.now();
+    if (exp <= now) return null;
+    // Defensive: reject tokens with extreme timestamps.
+    if (iat > now + 5 * 60 * 1000) return null;
+
+    const authCfg = getAuthConfig();
+    const expectedUser = String(authCfg.username || 'admin');
+    if (u !== expectedUser) return null;
+    if (ph && ph !== getAuthPasswordFingerprint()) return null;
+
+    return { username: u, createdAtMs: iat, expiresAtMs: exp };
+  } catch {
+    return null;
+  }
+}
 
 function normalizeAuthMode(input) {
   const raw = String(input || '').trim().toLowerCase();
@@ -353,6 +453,18 @@ function ensureDefaultInternalAuthConfig() {
       }
     }
 
+    // Seed a stable session signing secret so login can persist across restarts.
+    // (Without this, session cookies become invalid after each restart.)
+    if (!appConfig.auth.sessionSecret) {
+      appConfig.auth.sessionSecret = crypto.randomBytes(32).toString('hex');
+      try {
+        fs.writeFileSync(CONFIG_FILE, JSON.stringify(appConfig, null, 2));
+        console.log('[OmniStream] Seeded internal auth session secret into config.json');
+      } catch (e) {
+        console.error('[OmniStream] Failed to persist auth session secret:', e.message);
+      }
+    }
+
     if (typeof appConfig.auth.passwordChangeRequired !== 'boolean') {
       appConfig.auth.passwordChangeRequired = false;
     }
@@ -388,6 +500,13 @@ function getSessionIdFromReq(req) {
 function getSessionForReq(req) {
   const sid = getSessionIdFromReq(req);
   if (!sid) return null;
+  // New format: signed token in cookie (survives restarts).
+  if (sid.includes('.')) {
+    const verified = verifySignedSessionToken(sid);
+    if (!verified) return null;
+    return { sid, username: verified.username, createdAtMs: verified.createdAtMs, lastSeenAtMs: Date.now() };
+  }
+  // Legacy format: in-memory session id.
   const sess = authSessions.get(sid);
   if (!sess) return null;
   const now = Date.now();
@@ -586,10 +705,11 @@ app.post('/api/auth/login', (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    const sid = crypto.randomBytes(32).toString('hex');
-    const now = Date.now();
-    authSessions.set(sid, { username: expectedUser, createdAtMs: now, lastSeenAtMs: now });
-    setSessionCookie(res, sid, { secure: shouldUseSecureCookie(req) });
+    const token = createSignedSessionToken(expectedUser);
+    if (!token) {
+      return res.status(500).json({ error: 'Login failed (session secret missing)' });
+    }
+    setSessionCookie(res, token, { secure: shouldUseSecureCookie(req) });
     return res.json({ ok: true, mustChangePassword: authCfg.passwordChangeRequired === true });
   } catch (e) {
     console.error('[OmniStream] login failed:', e.message);
@@ -600,7 +720,7 @@ app.post('/api/auth/login', (req, res) => {
 app.post('/api/auth/logout', (req, res) => {
   try {
     const sid = getSessionIdFromReq(req);
-    if (sid) authSessions.delete(sid);
+    if (sid && !sid.includes('.')) authSessions.delete(sid);
     clearSessionCookie(res, { secure: shouldUseSecureCookie(req) });
     res.json({ ok: true });
   } catch (e) {
@@ -651,6 +771,13 @@ app.post('/api/auth/change-password', (req, res) => {
       return res.status(500).json({ error: 'Failed to persist new password' });
     }
 
+    // Issue a fresh session token so the user stays logged in after password change.
+    const expectedUser = String(appConfig.auth.username || 'admin');
+    const token = createSignedSessionToken(expectedUser);
+    if (token) {
+      setSessionCookie(res, token, { secure: shouldUseSecureCookie(req) });
+    }
+
     res.json({ ok: true });
   } catch (e) {
     console.error('[OmniStream] change-password failed:', e.message);
@@ -662,7 +789,7 @@ app.post('/api/auth/change-password', (req, res) => {
 app.get('/logout', (req, res) => {
   try {
     const sid = getSessionIdFromReq(req);
-    if (sid) authSessions.delete(sid);
+    if (sid && !sid.includes('.')) authSessions.delete(sid);
     clearSessionCookie(res, { secure: shouldUseSecureCookie(req) });
     const mode = appConfig && appConfig.auth ? normalizeAuthMode(appConfig.auth.mode) : 'internal';
     res.redirect(302, mode === 'nginx' ? '/' : '/login.html');
@@ -696,6 +823,45 @@ let MAX_HISTORY = DEFAULT_MAX_HISTORY;
 if (appConfig && typeof appConfig.maxHistory === 'number') {
   // maxHistory <= 0 means "no automatic trimming" (keep full history)
   MAX_HISTORY = appConfig.maxHistory;
+}
+// Ensure backup config exists (default OFF to avoid unexpected disk usage)
+if (!appConfig.backups || typeof appConfig.backups !== 'object') {
+  appConfig.backups = {};
+}
+if (!appConfig.backups.historyDb || typeof appConfig.backups.historyDb !== 'object') {
+  appConfig.backups.historyDb = { interval: 'off', keep: 30 };
+}
+if (typeof appConfig.backups.historyDb.interval !== 'string') {
+  appConfig.backups.historyDb.interval = 'off';
+}
+if (typeof appConfig.backups.historyDb.keep !== 'number' || !Number.isFinite(appConfig.backups.historyDb.keep) || appConfig.backups.historyDb.keep < 1) {
+  appConfig.backups.historyDb.keep = 30;
+}
+
+// Ensure reports config exists
+if (!appConfig.reports || typeof appConfig.reports !== 'object') {
+  appConfig.reports = {};
+}
+if (!appConfig.reports.peakConcurrentStreams || typeof appConfig.reports.peakConcurrentStreams !== 'object') {
+  appConfig.reports.peakConcurrentStreams = {
+    streams: 0,
+    transcodes: 0,
+    directStreams: 0,
+    directPlays: 0,
+    updatedAt: ''
+  };
+}
+for (const k of ['streams', 'transcodes', 'directStreams', 'directPlays']) {
+  const v = Number(appConfig.reports.peakConcurrentStreams[k]);
+  appConfig.reports.peakConcurrentStreams[k] = Number.isFinite(v) && v > 0 ? Math.floor(v) : 0;
+}
+if (typeof appConfig.reports.peakConcurrentStreams.updatedAt !== 'string') {
+  appConfig.reports.peakConcurrentStreams.updatedAt = '';
+}
+
+// Cache the all-time peak in memory so peaks don't drop even if config.json is read-only.
+if (!peakConcurrentStreamsAllTime || typeof peakConcurrentStreamsAllTime !== 'object') {
+  peakConcurrentStreamsAllTime = { ...appConfig.reports.peakConcurrentStreams };
 }
 // Ensure newsletter/email-related blocks exist
 if (!appConfig.newsletterEmail) {
@@ -2392,6 +2558,7 @@ function shouldSendNotificationToChannel(notification, channelCfg) {
   if (kind === 'offline') return triggers.offline !== false;
   if (kind === 'wanTranscode') return triggers.wanTranscodes !== false;
   if (kind === 'highBandwidth') return triggers.highBandwidth !== false;
+  if (kind === 'historyDbBackup') return triggers.historyDbBackups !== false;
   return true;
 }
 
@@ -2721,160 +2888,220 @@ function sendGotifyNotification(notification) {
 
 // SQLite-backed history
 const HISTORY_DB_FILE = path.join(__dirname, 'history.db');
+const HISTORY_BACKUPS_DIR = path.join(__dirname, 'backups');
 let historyDb;
 let historyDbReady = false;
-try {
-  historyDb = new sqlite3.Database(HISTORY_DB_FILE);
-  historyDb.serialize(() => {
-    historyDb.run(
-      'CREATE TABLE IF NOT EXISTS history (\n' +
-      '  id INTEGER PRIMARY KEY AUTOINCREMENT,\n' +
-      '  time TEXT NOT NULL,\n' +
-      '  sessionKey TEXT,\n' +
-      '  endedAt TEXT,\n' +
-      '  lastSeenAt TEXT,\n' +
-      '  serverId TEXT,\n' +
-      '  serverName TEXT,\n' +
-      '  type TEXT,\n' +
-      '  user TEXT,\n' +
-      '  userKey TEXT,\n' +
-      '  userAvatar TEXT,\n' +
-      '  title TEXT,\n' +
-      '  mediaType TEXT,\n' +
-      '  seriesTitle TEXT,\n' +
-      '  episodeTitle TEXT,\n' +
-      '  year INTEGER,\n' +
-      '  channel TEXT,\n' +
-      '  isLive INTEGER,\n' +
-      '  poster TEXT,\n' +
-      '  background TEXT,\n' +
-      '  stream TEXT,\n' +
-      '  transcoding INTEGER,\n' +
-      '  location TEXT,\n' +
-      '  bandwidth REAL,\n' +
-      '  platform TEXT,\n' +
-      '  product TEXT,\n' +
-      '  player TEXT,\n' +
-      '  quality TEXT,\n' +
-      '  duration INTEGER,\n' +
-      '  progress INTEGER,\n' +
-      '  ip TEXT,\n' +
-      '  completed INTEGER\n' +
-      ')'
-    );
-    historyDb.run('CREATE INDEX IF NOT EXISTS idx_history_time ON history(time)');
-
-    // Lightweight schema migrations for existing DBs
-    historyDb.all('PRAGMA table_info(history)', (err, rows) => {
-      if (err) {
-        console.error('[OmniStream] Failed to inspect history schema:', err.message);
-        historyDbReady = true;
-        return;
-      }
-      const existing = new Set((rows || []).map(r => r && r.name).filter(Boolean));
-      const toAdd = [
-        { name: 'sessionKey', ddl: 'ALTER TABLE history ADD COLUMN sessionKey TEXT' },
-        { name: 'endedAt', ddl: 'ALTER TABLE history ADD COLUMN endedAt TEXT' },
-        { name: 'lastSeenAt', ddl: 'ALTER TABLE history ADD COLUMN lastSeenAt TEXT' },
-        { name: 'mediaType', ddl: 'ALTER TABLE history ADD COLUMN mediaType TEXT' },
-        { name: 'seriesTitle', ddl: 'ALTER TABLE history ADD COLUMN seriesTitle TEXT' },
-        { name: 'episodeTitle', ddl: 'ALTER TABLE history ADD COLUMN episodeTitle TEXT' },
-        { name: 'year', ddl: 'ALTER TABLE history ADD COLUMN year INTEGER' },
-        { name: 'channel', ddl: 'ALTER TABLE history ADD COLUMN channel TEXT' },
-        { name: 'isLive', ddl: 'ALTER TABLE history ADD COLUMN isLive INTEGER' },
-        { name: 'poster', ddl: 'ALTER TABLE history ADD COLUMN poster TEXT' },
-        { name: 'background', ddl: 'ALTER TABLE history ADD COLUMN background TEXT' },
-        { name: 'platform', ddl: 'ALTER TABLE history ADD COLUMN platform TEXT' },
-        { name: 'product', ddl: 'ALTER TABLE history ADD COLUMN product TEXT' },
-        { name: 'player', ddl: 'ALTER TABLE history ADD COLUMN player TEXT' },
-        { name: 'quality', ddl: 'ALTER TABLE history ADD COLUMN quality TEXT' },
-        { name: 'duration', ddl: 'ALTER TABLE history ADD COLUMN duration INTEGER' },
-        { name: 'progress', ddl: 'ALTER TABLE history ADD COLUMN progress INTEGER' },
-        { name: 'ip', ddl: 'ALTER TABLE history ADD COLUMN ip TEXT' },
-        { name: 'completed', ddl: 'ALTER TABLE history ADD COLUMN completed INTEGER' },
-        { name: 'userAvatar', ddl: 'ALTER TABLE history ADD COLUMN userAvatar TEXT' },
-        { name: 'userKey', ddl: 'ALTER TABLE history ADD COLUMN userKey TEXT' }
-      ].filter(c => !existing.has(c.name));
-
-      const finalizeReady = () => {
-        // sessionKey index is only valid after the column exists
-        if (existing.has('sessionKey') || !toAdd.find(c => c.name === 'sessionKey')) {
-          historyDb.run('CREATE INDEX IF NOT EXISTS idx_history_sessionKey ON history(sessionKey)', () => {
-            historyDbReady = true;
-          });
-        } else {
-          // sessionKey was attempted but might not exist; still mark ready.
-          historyDbReady = true;
-        }
-      };
-
-      if (!toAdd.length) {
-        finalizeReady();
-        return;
-      }
-
-      let remaining = toAdd.length;
-      toAdd.forEach(c => {
-        historyDb.run(c.ddl, (e) => {
-          if (e) {
-            // Don't fail startup on migration errors; just log.
-            console.error(`[OmniStream] Failed to migrate history schema (add ${c.name}):`, e.message);
-          } else {
-            existing.add(c.name);
-          }
-          remaining--;
-          if (remaining <= 0) finalizeReady();
-        });
-      });
-    });
-
-    // Table for newsletter / subscriber emails imported from external sources (e.g. Overseerr)
-    historyDb.run(
-      'CREATE TABLE IF NOT EXISTS newsletter_subscribers (\n' +
-      '  id INTEGER PRIMARY KEY AUTOINCREMENT,\n' +
-      "  source TEXT NOT NULL,\n" +
-      "  externalId TEXT,\n" +
-      "  name TEXT,\n" +
-      "  watchUser TEXT,\n" +
-      "  watchUserKey TEXT,\n" +
-      "  email TEXT NOT NULL,\n" +
-      "  createdAt TEXT NOT NULL,\n" +
-      "  updatedAt TEXT NOT NULL,\n" +
-      "  active INTEGER NOT NULL DEFAULT 1,\n" +
-      "  serverTags TEXT,\n" +
-      '  UNIQUE(source, externalId)\n' +
-      ')'
-    );
-    historyDb.run('CREATE INDEX IF NOT EXISTS idx_subscribers_email ON newsletter_subscribers(email)');
-
-    // Lightweight schema migrations for newsletter_subscribers
-    historyDb.all('PRAGMA table_info(newsletter_subscribers)', (err, rows) => {
-      if (err) {
-        console.error('[OmniStream] Failed to inspect newsletter_subscribers schema:', err.message);
-        return;
-      }
-      const existing = new Set((rows || []).map(r => r && r.name).filter(Boolean));
-      const toAdd = [
-        { name: 'watchUser', ddl: 'ALTER TABLE newsletter_subscribers ADD COLUMN watchUser TEXT' },
-        { name: 'watchUserKey', ddl: 'ALTER TABLE newsletter_subscribers ADD COLUMN watchUserKey TEXT' },
-        { name: 'serverTags', ddl: 'ALTER TABLE newsletter_subscribers ADD COLUMN serverTags TEXT' }
-      ].filter(c => !existing.has(c.name));
-      if (!toAdd.length) return;
-      toAdd.forEach(c => {
-        historyDb.run(c.ddl, (e) => {
-          if (e) {
-            console.error(`[OmniStream] Failed to migrate newsletter_subscribers schema (add ${c.name}):`, e.message);
-          }
-        });
-      });
-    });
-  });
-  console.log('[OmniStream] Using history database at', HISTORY_DB_FILE);
-} catch (e) {
-  console.error('Failed to initialize history database:', e.message);
-  historyDb = null;
+const openHistoryDb = () => {
   historyDbReady = false;
-}
+  try {
+    historyDb = new sqlite3.Database(HISTORY_DB_FILE);
+    historyDb.serialize(() => {
+      historyDb.run(
+        'CREATE TABLE IF NOT EXISTS history (\n' +
+        '  id INTEGER PRIMARY KEY AUTOINCREMENT,\n' +
+        '  time TEXT NOT NULL,\n' +
+        '  sessionKey TEXT,\n' +
+        '  endedAt TEXT,\n' +
+        '  lastSeenAt TEXT,\n' +
+        '  serverId TEXT,\n' +
+        '  serverName TEXT,\n' +
+        '  type TEXT,\n' +
+        '  user TEXT,\n' +
+        '  userKey TEXT,\n' +
+        '  userAvatar TEXT,\n' +
+        '  title TEXT,\n' +
+        '  mediaType TEXT,\n' +
+        '  seriesTitle TEXT,\n' +
+        '  episodeTitle TEXT,\n' +
+        '  year INTEGER,\n' +
+        '  channel TEXT,\n' +
+        '  isLive INTEGER,\n' +
+        '  poster TEXT,\n' +
+        '  background TEXT,\n' +
+        '  stream TEXT,\n' +
+        '  transcoding INTEGER,\n' +
+        '  location TEXT,\n' +
+        '  bandwidth REAL,\n' +
+        '  platform TEXT,\n' +
+        '  product TEXT,\n' +
+        '  player TEXT,\n' +
+        '  quality TEXT,\n' +
+        '  duration INTEGER,\n' +
+        '  progress INTEGER,\n' +
+        '  ip TEXT,\n' +
+        '  completed INTEGER\n' +
+        ')'
+      );
+      historyDb.run('CREATE INDEX IF NOT EXISTS idx_history_time ON history(time)');
+
+      // Lightweight schema migrations for existing DBs
+      historyDb.all('PRAGMA table_info(history)', (err, rows) => {
+        if (err) {
+          console.error('[OmniStream] Failed to inspect history schema:', err.message);
+          historyDbReady = true;
+          return;
+        }
+        const existing = new Set((rows || []).map(r => r && r.name).filter(Boolean));
+        const toAdd = [
+          { name: 'sessionKey', ddl: 'ALTER TABLE history ADD COLUMN sessionKey TEXT' },
+          { name: 'endedAt', ddl: 'ALTER TABLE history ADD COLUMN endedAt TEXT' },
+          { name: 'lastSeenAt', ddl: 'ALTER TABLE history ADD COLUMN lastSeenAt TEXT' },
+          { name: 'mediaType', ddl: 'ALTER TABLE history ADD COLUMN mediaType TEXT' },
+          { name: 'seriesTitle', ddl: 'ALTER TABLE history ADD COLUMN seriesTitle TEXT' },
+          { name: 'episodeTitle', ddl: 'ALTER TABLE history ADD COLUMN episodeTitle TEXT' },
+          { name: 'year', ddl: 'ALTER TABLE history ADD COLUMN year INTEGER' },
+          { name: 'channel', ddl: 'ALTER TABLE history ADD COLUMN channel TEXT' },
+          { name: 'isLive', ddl: 'ALTER TABLE history ADD COLUMN isLive INTEGER' },
+          { name: 'poster', ddl: 'ALTER TABLE history ADD COLUMN poster TEXT' },
+          { name: 'background', ddl: 'ALTER TABLE history ADD COLUMN background TEXT' },
+          { name: 'platform', ddl: 'ALTER TABLE history ADD COLUMN platform TEXT' },
+          { name: 'product', ddl: 'ALTER TABLE history ADD COLUMN product TEXT' },
+          { name: 'player', ddl: 'ALTER TABLE history ADD COLUMN player TEXT' },
+          { name: 'quality', ddl: 'ALTER TABLE history ADD COLUMN quality TEXT' },
+          { name: 'duration', ddl: 'ALTER TABLE history ADD COLUMN duration INTEGER' },
+          { name: 'progress', ddl: 'ALTER TABLE history ADD COLUMN progress INTEGER' },
+          { name: 'ip', ddl: 'ALTER TABLE history ADD COLUMN ip TEXT' },
+          { name: 'completed', ddl: 'ALTER TABLE history ADD COLUMN completed INTEGER' },
+          { name: 'userAvatar', ddl: 'ALTER TABLE history ADD COLUMN userAvatar TEXT' },
+          { name: 'userKey', ddl: 'ALTER TABLE history ADD COLUMN userKey TEXT' }
+        ].filter(c => !existing.has(c.name));
+
+        const finalizeReady = () => {
+          const finalizeDone = () => {
+            historyDbReady = true;
+          };
+
+          const backfillLegacyImportedRows = (cb) => {
+            try {
+              historyDb.run(
+                `UPDATE history
+                    SET mediaType = CASE
+                          WHEN LOWER(COALESCE(stream,'')) = 'movie' THEN 'movie'
+                          WHEN LOWER(COALESCE(stream,'')) = 'episode' THEN 'episode'
+                          WHEN COALESCE(NULLIF(seriesTitle,''), NULLIF(episodeTitle,'')) IS NOT NULL THEN 'episode'
+                          ELSE 'movie'
+                        END,
+                        seriesTitle = CASE
+                          WHEN (seriesTitle IS NULL OR seriesTitle = '')
+                               AND LOWER(COALESCE(stream,'')) = 'episode'
+                               AND INSTR(title, ' - ') > 0
+                          THEN SUBSTR(title, 1, INSTR(title, ' - ') - 1)
+                          ELSE seriesTitle
+                        END,
+                        episodeTitle = CASE
+                          WHEN (episodeTitle IS NULL OR episodeTitle = '')
+                               AND LOWER(COALESCE(stream,'')) = 'episode'
+                               AND INSTR(title, ' - ') > 0
+                          THEN SUBSTR(title, INSTR(title, ' - ') + 3)
+                          ELSE episodeTitle
+                        END
+                  WHERE (mediaType IS NULL OR mediaType = '')`,
+                () => cb && cb()
+              );
+            } catch (e) {
+              console.error('[OmniStream] Legacy history backfill failed:', e.message);
+              cb && cb();
+            }
+          };
+
+          // sessionKey index is only valid after the column exists
+          if (existing.has('sessionKey') || !toAdd.find(c => c.name === 'sessionKey')) {
+            historyDb.run('CREATE INDEX IF NOT EXISTS idx_history_sessionKey ON history(sessionKey)', () => {
+              backfillLegacyImportedRows(finalizeDone);
+            });
+          } else {
+            // sessionKey was attempted but might not exist; still mark ready.
+            backfillLegacyImportedRows(finalizeDone);
+          }
+        };
+
+        if (!toAdd.length) {
+          finalizeReady();
+          return;
+        }
+
+        let remaining = toAdd.length;
+        toAdd.forEach(c => {
+          historyDb.run(c.ddl, (e) => {
+            if (e) {
+              // Don't fail startup on migration errors; just log.
+              console.error(`[OmniStream] Failed to migrate history schema (add ${c.name}):`, e.message);
+            } else {
+              existing.add(c.name);
+            }
+            remaining--;
+            if (remaining <= 0) finalizeReady();
+          });
+        });
+      });
+
+      // Table for newsletter / subscriber emails imported from external sources (e.g. Overseerr)
+      historyDb.run(
+        'CREATE TABLE IF NOT EXISTS newsletter_subscribers (\n' +
+        '  id INTEGER PRIMARY KEY AUTOINCREMENT,\n' +
+        "  source TEXT NOT NULL,\n" +
+        "  externalId TEXT,\n" +
+        "  name TEXT,\n" +
+        "  watchUser TEXT,\n" +
+        "  watchUserKey TEXT,\n" +
+        "  email TEXT NOT NULL,\n" +
+        "  createdAt TEXT NOT NULL,\n" +
+        "  updatedAt TEXT NOT NULL,\n" +
+        "  active INTEGER NOT NULL DEFAULT 1,\n" +
+        "  serverTags TEXT,\n" +
+        '  UNIQUE(source, externalId)\n' +
+        ')'
+      );
+      historyDb.run('CREATE INDEX IF NOT EXISTS idx_subscribers_email ON newsletter_subscribers(email)');
+
+      // Lightweight schema migrations for newsletter_subscribers
+      historyDb.all('PRAGMA table_info(newsletter_subscribers)', (err, rows) => {
+        if (err) {
+          console.error('[OmniStream] Failed to inspect newsletter_subscribers schema:', err.message);
+          return;
+        }
+        const existing = new Set((rows || []).map(r => r && r.name).filter(Boolean));
+        const toAdd = [
+          { name: 'watchUser', ddl: 'ALTER TABLE newsletter_subscribers ADD COLUMN watchUser TEXT' },
+          { name: 'watchUserKey', ddl: 'ALTER TABLE newsletter_subscribers ADD COLUMN watchUserKey TEXT' },
+          { name: 'serverTags', ddl: 'ALTER TABLE newsletter_subscribers ADD COLUMN serverTags TEXT' }
+        ].filter(c => !existing.has(c.name));
+        if (!toAdd.length) return;
+        toAdd.forEach(c => {
+          historyDb.run(c.ddl, (e) => {
+            if (e) {
+              console.error(`[OmniStream] Failed to migrate newsletter_subscribers schema (add ${c.name}):`, e.message);
+            }
+          });
+        });
+      });
+    });
+    console.log('[OmniStream] Using history database at', HISTORY_DB_FILE);
+    return true;
+  } catch (e) {
+    console.error('Failed to initialize history database:', e.message);
+    historyDb = null;
+    historyDbReady = false;
+    return false;
+  }
+};
+
+const closeHistoryDb = () => new Promise((resolve) => {
+  try {
+    historyDbReady = false;
+    if (!historyDb) return resolve();
+    historyDb.close(() => {
+      historyDb = null;
+      resolve();
+    });
+  } catch (_) {
+    historyDb = null;
+    historyDbReady = false;
+    resolve();
+  }
+});
+
+openHistoryDb();
 
 const defaultPathForType = (t) => {
   if (t === 'plex') return '/status/sessions';
@@ -2882,6 +3109,243 @@ const defaultPathForType = (t) => {
   if (t === 'emby') return '/Sessions';
   return '/';
 };
+
+// History DB backups (automated + manual)
+let historyDbBackupTimer = null;
+let lastHistoryDbBackupAt = null;
+let lastHistoryDbBackupError = null;
+let lastHistoryDbBackupErrorAt = null;
+let lastHistoryDbBackupName = null;
+let lastHistoryDbBackupSizeBytes = null;
+let nextHistoryDbBackupAt = null;
+
+function normalizeHistoryDbBackupInterval(v) {
+  const s = String(v || '').trim().toLowerCase();
+  if (s === 'hourly' || s === 'daily' || s === 'weekly') return s;
+  return 'off';
+}
+
+function getHistoryDbBackupConfig() {
+  const cfg = appConfig && appConfig.backups && appConfig.backups.historyDb ? appConfig.backups.historyDb : {};
+  const interval = normalizeHistoryDbBackupInterval(cfg.interval);
+  let keep = Number(cfg.keep);
+  if (!Number.isFinite(keep) || keep < 1) keep = 30;
+  if (keep > 365) keep = 365;
+  return { interval, keep };
+}
+
+function historyDbBackupIntervalMs(interval) {
+  if (interval === 'hourly') return 60 * 60 * 1000;
+  if (interval === 'daily') return 24 * 60 * 60 * 1000;
+  if (interval === 'weekly') return 7 * 24 * 60 * 60 * 1000;
+  return 0;
+}
+
+function ensureHistoryBackupsDir() {
+  try {
+    fs.mkdirSync(HISTORY_BACKUPS_DIR, { recursive: true });
+    return true;
+  } catch (e) {
+    console.error('[OmniStream] Failed to create backups directory:', e.message);
+    return false;
+  }
+}
+
+function safeBackupFilenameBase(str) {
+  return String(str || '')
+    .replace(/[^a-z0-9._-]+/gi, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
+}
+
+function listHistoryDbBackups({ limit = 50 } = {}) {
+  try {
+    if (!fs.existsSync(HISTORY_BACKUPS_DIR)) return [];
+    const files = fs.readdirSync(HISTORY_BACKUPS_DIR);
+    const items = [];
+    for (const f of files) {
+      if (!f || typeof f !== 'string') continue;
+      if (!f.toLowerCase().endsWith('.db')) continue;
+      if (!f.toLowerCase().startsWith('history-')) continue;
+      const p = path.join(HISTORY_BACKUPS_DIR, f);
+      let st;
+      try { st = fs.statSync(p); } catch (_) { continue; }
+      if (!st || !st.isFile()) continue;
+      items.push({ name: f, sizeBytes: st.size, mtimeMs: st.mtimeMs });
+    }
+    items.sort((a, b) => (b.mtimeMs - a.mtimeMs));
+    return items.slice(0, Math.max(1, Math.min(200, limit)));
+  } catch (e) {
+    console.error('[OmniStream] Failed to list history DB backups:', e.message);
+    return [];
+  }
+}
+
+async function verifySqliteDbFile(filePath) {
+  return await new Promise((resolve) => {
+    try {
+      const db = new sqlite3.Database(filePath, sqlite3.OPEN_READONLY, (err) => {
+        if (err) return resolve(false);
+        db.get('PRAGMA integrity_check', [], (e2, row) => {
+          try { db.close(() => {}); } catch (_) {}
+          if (e2) return resolve(false);
+          const v = row && (row.integrity_check || row[Object.keys(row)[0]]);
+          resolve(String(v || '').toLowerCase() === 'ok');
+        });
+      });
+    } catch (_) {
+      resolve(false);
+    }
+  });
+}
+
+async function createHistoryDbBackup({ reason = 'manual' } = {}) {
+  if (!historyDb || !historyDbReady || !fs.existsSync(HISTORY_DB_FILE)) {
+    throw new Error('History database not ready');
+  }
+  if (!ensureHistoryBackupsDir()) {
+    throw new Error('Failed to create backups directory');
+  }
+
+  const ts = new Date().toISOString().replace(/[:.]/g, '-');
+  const suffix = safeBackupFilenameBase(reason || 'manual') || 'manual';
+  const name = `history-${ts}-${suffix}.db`;
+  const outPath = path.join(HISTORY_BACKUPS_DIR, name);
+
+  // Prefer an online-consistent backup method.
+  const tryVacuumInto = () => new Promise((resolve, reject) => {
+    try {
+      // SQLite VACUUM INTO requires a literal string in many builds.
+      const sqlitePath = outPath.replace(/'/g, "''");
+      historyDb.run(`VACUUM INTO '${sqlitePath}'`, (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    } catch (e) {
+      reject(e);
+    }
+  });
+
+  const tryNativeBackup = () => new Promise((resolve, reject) => {
+    try {
+      if (!historyDb || typeof historyDb.backup !== 'function') {
+        return reject(new Error('sqlite3 backup() not available'));
+      }
+      historyDb.backup(outPath, (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    } catch (e) {
+      reject(e);
+    }
+  });
+
+  const tryCopyFile = () => new Promise((resolve, reject) => {
+    try {
+      fs.copyFile(HISTORY_DB_FILE, outPath, (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    } catch (e) {
+      reject(e);
+    }
+  });
+
+  let lastErr = null;
+  for (const attempt of [tryVacuumInto, tryNativeBackup, tryCopyFile]) {
+    try {
+      await attempt();
+      lastErr = null;
+      break;
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  if (lastErr) throw lastErr;
+
+  const ok = await verifySqliteDbFile(outPath);
+  if (!ok) {
+    try { fs.unlinkSync(outPath); } catch (_) {}
+    throw new Error('Backup created but failed integrity_check');
+  }
+
+  // Prune old backups
+  const { keep } = getHistoryDbBackupConfig();
+  try {
+    const all = listHistoryDbBackups({ limit: 500 });
+    const toDelete = all.slice(keep);
+    toDelete.forEach(it => {
+      try { fs.unlinkSync(path.join(HISTORY_BACKUPS_DIR, it.name)); } catch (_) {}
+    });
+  } catch (_) {}
+
+  const st = fs.statSync(outPath);
+  lastHistoryDbBackupAt = new Date().toISOString();
+  lastHistoryDbBackupError = null;
+  lastHistoryDbBackupErrorAt = null;
+  lastHistoryDbBackupName = name;
+  lastHistoryDbBackupSizeBytes = st.size;
+  return { name, sizeBytes: st.size, createdAt: lastHistoryDbBackupAt };
+}
+
+function scheduleHistoryDbBackups() {
+  try {
+    if (historyDbBackupTimer) {
+      clearInterval(historyDbBackupTimer);
+      historyDbBackupTimer = null;
+    }
+    nextHistoryDbBackupAt = null;
+    const { interval } = getHistoryDbBackupConfig();
+    const ms = historyDbBackupIntervalMs(interval);
+    if (!ms) return;
+
+    nextHistoryDbBackupAt = new Date(Date.now() + ms).toISOString();
+    historyDbBackupTimer = setInterval(async () => {
+      try {
+        if (!historyDb || !historyDbReady) return;
+        await createHistoryDbBackup({ reason: 'auto' });
+      } catch (e) {
+        lastHistoryDbBackupError = e && e.message ? String(e.message) : 'Auto backup failed';
+        lastHistoryDbBackupErrorAt = new Date().toISOString();
+        console.error('[OmniStream] Auto history DB backup failed:', lastHistoryDbBackupError);
+      } finally {
+        nextHistoryDbBackupAt = new Date(Date.now() + ms).toISOString();
+      }
+    }, ms);
+  } catch (e) {
+    console.error('[OmniStream] Failed to schedule history DB backups:', e.message);
+  }
+}
+
+async function restoreHistoryDbFromBackupName(name) {
+  const base = path.basename(String(name || ''));
+  if (!base || base !== name) {
+    throw new Error('Invalid backup name');
+  }
+  if (!base.toLowerCase().endsWith('.db') || !base.toLowerCase().startsWith('history-')) {
+    throw new Error('Invalid backup file');
+  }
+  const srcPath = path.join(HISTORY_BACKUPS_DIR, base);
+  if (!fs.existsSync(srcPath)) {
+    throw new Error('Backup not found');
+  }
+
+  // Safety snapshot of current DB (best-effort)
+  try {
+    await createHistoryDbBackup({ reason: 'pre-restore' });
+  } catch (_) {}
+
+  const ok = await verifySqliteDbFile(srcPath);
+  if (!ok) throw new Error('Backup failed integrity_check');
+
+  await closeHistoryDb();
+  fs.copyFileSync(srcPath, HISTORY_DB_FILE);
+  openHistoryDb();
+  return true;
+}
+
+scheduleHistoryDbBackups();
 
 // Import watch history helpers
 // Jellyfin/Emby: pull per-user played movies/episodes
@@ -2933,7 +3397,7 @@ async function importJellyfinHistory(server, { limitPerUser = 100 } = {}) {
       await new Promise((resolve) => {
         historyDb.serialize(() => {
           const stmt = historyDb.prepare(
-            'INSERT INTO history (time, serverId, serverName, type, user, userKey, title, stream, transcoding, location, bandwidth) VALUES (?,?,?,?,?,?,?,?,?,?,?)'
+            'INSERT INTO history (time, endedAt, lastSeenAt, sessionKey, serverId, serverName, type, user, userKey, userAvatar, title, mediaType, seriesTitle, episodeTitle, year, channel, isLive, poster, background, stream, transcoding, location, bandwidth, platform, product, player, quality, duration, progress, ip, completed) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
           );
           items.forEach(it => {
             const rawType = it.Type || it.MediaType || '';
@@ -2943,48 +3407,83 @@ async function importJellyfinHistory(server, { limitPerUser = 100 } = {}) {
             }
 
             const time = (it.UserData && it.UserData.LastPlayedDate) || it.DatePlayed || new Date().toISOString();
-            // Build a more human-friendly title for movies and episodes
-            let title;
-            const type = rawType;
-            if (type === 'Episode' || it.SeriesName) {
-              const series = it.SeriesName || '';
-              const epName = it.Name || '';
-              const seasonNum = typeof it.ParentIndexNumber === 'number' ? it.ParentIndexNumber : null;
-              const epNum = typeof it.IndexNumber === 'number' ? it.IndexNumber : null;
-              let epLabel = '';
-              if (seasonNum !== null && epNum !== null) {
-                epLabel = `S${String(seasonNum).padStart(2, '0')}E${String(epNum).padStart(2, '0')}`;
-              } else if (epNum !== null) {
-                epLabel = `E${String(epNum).padStart(2, '0')}`;
+
+            const mediaType = rawType.toLowerCase() === 'episode' ? 'episode' : 'movie';
+            const seriesTitle = (mediaType === 'episode' ? (it.SeriesName || '') : '');
+            const episodeTitle = (mediaType === 'episode' ? (it.Name || '') : '');
+
+            // Display title similar to live sessions.
+            const title = seriesTitle
+              ? `${seriesTitle} - ${episodeTitle || ''}`.replace(/\s+-\s*$/, '')
+              : (it.Name || it.OriginalTitle || 'Unknown');
+
+            // Use a stable session key so repeated imports don't explode row count.
+            const itemId = it.Id || it.ItemId || it.ProviderIds?.Imdb || it.ProviderIds?.Tmdb || '';
+            const sessionKey = `import|${String(server.id)}|${String(u.Id)}|${String(itemId)}|${String(time)}`;
+
+            // Artwork (prefer series art for episodes)
+            let poster = '/live_tv_placeholder.svg';
+            let background = '/live_tv_placeholder.svg';
+            if (server && server.id && it) {
+              const seriesId = it.SeriesId;
+              const posterItemId = (mediaType === 'episode' && seriesId) ? seriesId : it.Id;
+              if (posterItemId) {
+                const p = `/Items/${posterItemId}/Images/Primary`;
+                poster = `/api/poster?serverId=${encodeURIComponent(server.id)}&path=${encodeURIComponent(p)}`;
+                const b = `/Items/${posterItemId}/Images/Backdrop`;
+                background = `/api/poster?serverId=${encodeURIComponent(server.id)}&path=${encodeURIComponent(b)}`;
               }
-              if (series && epLabel && epName) {
-                title = `${series} - ${epLabel} - ${epName}`;
-              } else if (series && epName) {
-                title = `${series} - ${epName}`;
-              } else {
-                title = epName || series || it.Name || 'Unknown';
-              }
-            } else {
-              title = it.Name || it.OriginalTitle || 'Unknown';
+            }
+            if (!background) background = poster;
+
+            // Best-effort user avatar
+            let userAvatar = '';
+            if (server && server.id && u && u.Id) {
+              const avatarPath = `/Users/${u.Id}/Images/Primary`;
+              userAvatar = `/api/poster?serverId=${encodeURIComponent(server.id)}&path=${encodeURIComponent(avatarPath)}`;
             }
 
-            // Use a simple, stable stream label for reports
-            const stream = type;
+            const stream = mediaType === 'movie' ? 'Movie' : 'Episode';
             const userDisplay = u.Username || u.Name || 'Unknown';
             const stableUserKey = u && u.Id ? `${String(server.type || '').toLowerCase()}:${String(u.Id)}` : '';
             const userKey = stableUserKey || u.Username || u.Id || u.Name || '';
+
+            const runTimeTicks = typeof it.RunTimeTicks === 'number' ? it.RunTimeTicks : null;
+            const duration = runTimeTicks && Number.isFinite(runTimeTicks) ? Math.round(runTimeTicks / 10000 / 1000) : null;
+
             stmt.run(
               time,
+              time,
+              time,
+              sessionKey,
               server.id,
               server.name || server.baseUrl,
               server.type,
               userDisplay,
               userKey,
+              userAvatar,
               title,
+              mediaType,
+              seriesTitle,
+              episodeTitle,
+              typeof it.ProductionYear === 'number' ? it.ProductionYear : null,
+              '',
+              0,
+              poster,
+              background,
               stream,
               null,
               '',
               0
+              ,
+              '',
+              '',
+              '',
+              '',
+              duration,
+              100,
+              '',
+              1
             );
             imported++;
           });
@@ -3040,7 +3539,7 @@ async function importPlexHistory(server, { limit = 2000 } = {}) {
       await new Promise((resolve) => {
         historyDb.serialize(async () => {
           const stmt = historyDb.prepare(
-            'INSERT INTO history (time, serverId, serverName, type, user, userKey, title, stream, transcoding, location, bandwidth) VALUES (?,?,?,?,?,?,?,?,?,?,?)'
+            'INSERT INTO history (time, endedAt, lastSeenAt, sessionKey, serverId, serverName, type, user, userKey, userAvatar, title, mediaType, seriesTitle, episodeTitle, year, channel, isLive, poster, background, stream, transcoding, location, bandwidth, platform, product, player, quality, duration, progress, ip, completed) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
           );
 
           while (imported < limit) {
@@ -3088,11 +3587,17 @@ async function importPlexHistory(server, { limit = 2000 } = {}) {
             timeIso = new Date().toISOString();
           }
 
-          // Title formatting similar to live sessions
+          const mediaType = rawType;
+
+          const seriesTitle = (mediaType === 'episode' ? (m.grandparentTitle || '') : '');
+          const episodeTitle = (mediaType === 'episode' ? (m.title || '') : '');
+          const year = typeof m.year === 'number' ? m.year : null;
+
+          // Display title similar to live sessions.
           let title;
-          if (rawType === 'episode' || m.grandparentTitle) {
-            const series = m.grandparentTitle || '';
-            const epName = m.title || '';
+          if (mediaType === 'episode' || m.grandparentTitle) {
+            const series = seriesTitle;
+            const epName = episodeTitle;
             const seasonNum = typeof m.parentIndex === 'number' ? m.parentIndex : null;
             const epNum = typeof m.index === 'number' ? m.index : null;
             let epLabel = '';
@@ -3160,20 +3665,78 @@ async function importPlexHistory(server, { limit = 2000 } = {}) {
               User: m.User
             });
           }
-          const stream = rawType === 'movie' ? 'Movie' : (rawType === 'episode' ? 'Episode' : '');
+          const duration = typeof m.duration === 'number' ? Math.round(m.duration / 1000) : null;
+
+          // Best-effort artwork (proxy through our poster route when possible)
+          let poster = '/live_tv_placeholder.svg';
+          let background = '/live_tv_placeholder.svg';
+          const rawThumb = (mediaType === 'episode' && (m.grandparentThumb || m.parentThumb)) ? (m.grandparentThumb || m.parentThumb) : (m.thumb || m.grandparentThumb || m.parentThumb || '');
+          if (rawThumb && typeof rawThumb === 'string') {
+            if (/^https?:\/\//i.test(rawThumb)) {
+              poster = rawThumb;
+            } else {
+              poster = `/api/poster?serverId=${encodeURIComponent(server.id)}&path=${encodeURIComponent(rawThumb)}`;
+            }
+          }
+          const rawArt = m.art || '';
+          if (rawArt && typeof rawArt === 'string') {
+            if (/^https?:\/\//i.test(rawArt)) {
+              background = rawArt;
+            } else {
+              background = `/api/poster?serverId=${encodeURIComponent(server.id)}&path=${encodeURIComponent(rawArt)}`;
+            }
+          }
+          if (!background) background = poster;
+
+          // Best-effort user avatar
+          let userAvatar = '';
+          const rawUserThumb =
+            (m.User && (m.User.thumb || m.User.avatar)) ||
+            (Array.isArray(m.Account) && m.Account[0] && (m.Account[0].thumb || m.Account[0].avatar)) ||
+            (m.Account && (m.Account.thumb || m.Account.avatar)) ||
+            (Array.isArray(m.account) && m.account[0] && (m.account[0].thumb || m.account[0].avatar)) ||
+            (m.account && (m.account.thumb || m.account.avatar)) ||
+            null;
+          if (rawUserThumb && typeof rawUserThumb === 'string') {
+            if (/^https?:\/\//i.test(rawUserThumb)) userAvatar = rawUserThumb;
+            else userAvatar = `/api/poster?serverId=${encodeURIComponent(server.id)}&path=${encodeURIComponent(rawUserThumb)}`;
+          }
+
+          const stream = mediaType === 'movie' ? 'Movie' : (mediaType === 'episode' ? 'Episode' : '');
+          const sessionKey = `import|${String(server.id)}|${String(userKey)}|${String(m.ratingKey || m.key || m.guid || title)}|${String(timeIso)}`;
 
           stmt.run(
             timeIso,
+            timeIso,
+            timeIso,
+            sessionKey,
             server.id,
             server.name || server.baseUrl,
             server.type,
             user,
             userKey,
+            userAvatar,
             title,
+            mediaType,
+            seriesTitle,
+            episodeTitle,
+            year,
+            '',
+            0,
+            poster,
+            background,
             stream,
             null,
             '',
-            0
+            0,
+            '',
+            '',
+            '',
+            '',
+            duration,
+            100,
+            '',
+            1
           );
           imported++;
         });
@@ -4230,20 +4793,93 @@ app.get('/api/reports/watch-statistics', async (req, res) => {
       return res.status(503).json({ error: 'History database not ready' });
     }
 
+    const knownServerIds = new Set((Array.isArray(servers) ? servers : [])
+      .filter(s => s && typeof s.id !== 'undefined' && s.id !== null)
+      .map(s => String(s.id)));
+
+    const sanitizeArtworkValue = (v) => {
+      if (!v) return null;
+      const s = String(v);
+      if (!s || s === '/live_tv_placeholder.svg') return null;
+      if (!s.startsWith('/api/poster?')) return s;
+      try {
+        const u = new URL(s, 'http://localhost');
+        const serverId = u.searchParams.get('serverId');
+        if (!serverId) return null;
+        return knownServerIds.has(String(serverId)) ? s : null;
+      } catch (_) {
+        return null;
+      }
+    };
+
+    const sanitizeArtworkRows = (rows) => {
+      if (!Array.isArray(rows)) return rows;
+      return rows.map(r => {
+        if (r && typeof r === 'object') {
+          r.poster = sanitizeArtworkValue(r.poster);
+          r.background = sanitizeArtworkValue(r.background);
+        }
+        return r;
+      });
+    };
+
     const metricRaw = (req.query.metric || 'count').toString().toLowerCase();
     const metric = metricRaw === 'duration' ? 'duration' : 'count';
     const daysRaw = Number(req.query.days ?? 1000);
     const days = Number.isFinite(daysRaw) ? Math.max(1, Math.min(5000, Math.floor(daysRaw))) : 1000;
 
-    const now = Date.now();
-    const startIso = new Date(now - days * 24 * 60 * 60 * 1000).toISOString();
+    const parseDateYmd = (s) => {
+      const raw = String(s || '').trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+      const [y, m, d] = raw.split('-').map(n => parseInt(n, 10));
+      if (!y || !m || !d) return null;
+      return { y, m, d };
+    };
+    const fromRaw = req.query.from;
+    const toRaw = req.query.to;
+    const fromYmd = parseDateYmd(fromRaw);
+    const toYmd = parseDateYmd(toRaw);
+
+    const nowMs = Date.now();
+    const defaultEndIso = new Date(nowMs).toISOString();
+
+    const isValidLocalYmd = ({ y, m, d }) => {
+      const dt = new Date(y, m - 1, d);
+      return dt.getFullYear() === y && dt.getMonth() === (m - 1) && dt.getDate() === d;
+    };
+
+    let startIso;
+    let endIso;
+    if (fromYmd && toYmd && isValidLocalYmd(fromYmd) && isValidLocalYmd(toYmd)) {
+      // Interpret YYYY-MM-DD as a *local* date range, then convert to ISO (UTC) for storage/compare.
+      // This avoids off-by-one-day issues when the UI is using local dates but stored timestamps are UTC ISO strings.
+      startIso = new Date(fromYmd.y, fromYmd.m - 1, fromYmd.d, 0, 0, 0, 0).toISOString();
+      endIso = new Date(toYmd.y, toYmd.m - 1, toYmd.d, 23, 59, 59, 999).toISOString();
+    } else {
+      startIso = new Date(nowMs - days * 24 * 60 * 60 * 1000).toISOString();
+      endIso = defaultEndIso;
+    }
     const eventTimeExpr = 'COALESCE(endedAt, lastSeenAt, time)';
+    const userIdentityExpr = "COALESCE(NULLIF(userKey,''), NULLIF(user,''))";
+    // SQLite MAX(text) chooses the lexicographically-greatest string.
+    // Our placeholder '/live_tv_placeholder.svg' sorts *after* '/api/poster?...',
+    // so MAX(poster) can incorrectly prefer the placeholder even when real artwork exists.
+    const posterAggExpr = "MAX(NULLIF(NULLIF(poster,''), '/live_tv_placeholder.svg'))";
+    const backgroundAggExpr = "MAX(NULLIF(NULLIF(background,''), '/live_tv_placeholder.svg'))";
     const watchSecondsExpr = `CASE
       WHEN duration IS NULL THEN 0
       WHEN progress IS NULL THEN duration
       WHEN progress < 0 THEN 0
       WHEN progress > 100 THEN duration
       ELSE CAST(duration * (progress / 100.0) AS INTEGER)
+    END`;
+
+    const uniqueTitleKeyExpr = `CASE
+      WHEN isLive = 1 THEN 'lv|' || COALESCE(NULLIF(channel,''), NULLIF(title,''), 'Unknown')
+      WHEN mediaType = 'episode' THEN 'ep|' || COALESCE(NULLIF(seriesTitle,''), NULLIF(title,''), 'Unknown') || '|' || COALESCE(NULLIF(episodeTitle,''), '')
+      WHEN mediaType = 'movie' THEN 'mv|' || COALESCE(NULLIF(title,''), 'Unknown') || '|' || COALESCE(CAST(year AS TEXT), '')
+      WHEN mediaType = 'track' THEN 'tr|' || COALESCE(NULLIF(seriesTitle,''), 'Unknown') || '|' || COALESCE(NULLIF(title,''), 'Unknown')
+      ELSE 'ot|' || COALESCE(NULLIF(title,''), 'Unknown')
     END`;
 
     const valueExpr = metric === 'duration' ? `SUM(${watchSecondsExpr})` : 'COUNT(*)';
@@ -4258,6 +4894,7 @@ app.get('/api/reports/watch-statistics', async (req, res) => {
     const topLimit = 5;
 
     const [
+      summaryRows,
       mostWatchedMovies,
       mostPopularMovies,
       mostWatchedTvShows,
@@ -4270,66 +4907,77 @@ app.get('/api/reports/watch-statistics', async (req, res) => {
       mostActivePlatforms
     ] = await Promise.all([
       dbAll(
-        `SELECT title AS name, year, MAX(poster) AS poster, MAX(background) AS background, ${valueExpr} AS value
+        `SELECT
+           COUNT(*) AS totalPlays,
+           SUM(${watchSecondsExpr}) AS watchTimeSeconds,
+           COUNT(DISTINCT ${userIdentityExpr}) AS uniqueUsers,
+           COUNT(DISTINCT ${uniqueTitleKeyExpr}) AS uniqueTitles
          FROM history
-         WHERE mediaType = 'movie' AND ${eventTimeExpr} >= ?
+         WHERE ${eventTimeExpr} >= ?
+           AND ${eventTimeExpr} <= ?`,
+        [startIso, endIso]
+      ),
+      dbAll(
+        `SELECT title AS name, year, ${posterAggExpr} AS poster, ${backgroundAggExpr} AS background, ${valueExpr} AS value
+         FROM history
+         WHERE mediaType = 'movie' AND ${eventTimeExpr} >= ? AND ${eventTimeExpr} <= ?
          GROUP BY title, year
          ORDER BY value DESC
          LIMIT ?`,
-        [startIso, topLimit]
+        [startIso, endIso, topLimit]
       ),
       dbAll(
-        `SELECT title AS name, year, MAX(poster) AS poster, MAX(background) AS background, COUNT(DISTINCT user) AS value
+        `SELECT title AS name, year, ${posterAggExpr} AS poster, ${backgroundAggExpr} AS background, COUNT(DISTINCT ${userIdentityExpr}) AS value
          FROM history
-         WHERE mediaType = 'movie' AND ${eventTimeExpr} >= ?
+         WHERE mediaType = 'movie' AND ${eventTimeExpr} >= ? AND ${eventTimeExpr} <= ?
          GROUP BY title, year
          ORDER BY value DESC
          LIMIT ?`,
-        [startIso, topLimit]
+        [startIso, endIso, topLimit]
       ),
       dbAll(
-        `SELECT COALESCE(NULLIF(seriesTitle,''), title) AS name, MAX(poster) AS poster, MAX(background) AS background, ${valueExpr} AS value
+        `SELECT COALESCE(NULLIF(seriesTitle,''), title) AS name, ${posterAggExpr} AS poster, ${backgroundAggExpr} AS background, ${valueExpr} AS value
          FROM history
-         WHERE mediaType = 'episode' AND ${eventTimeExpr} >= ?
+         WHERE mediaType = 'episode' AND ${eventTimeExpr} >= ? AND ${eventTimeExpr} <= ?
          GROUP BY name
          ORDER BY value DESC
          LIMIT ?`,
-        [startIso, topLimit]
+        [startIso, endIso, topLimit]
       ),
       dbAll(
-        `SELECT COALESCE(NULLIF(seriesTitle,''), title) AS name, MAX(poster) AS poster, MAX(background) AS background, COUNT(DISTINCT user) AS value
+        `SELECT COALESCE(NULLIF(seriesTitle,''), title) AS name, ${posterAggExpr} AS poster, ${backgroundAggExpr} AS background, COUNT(DISTINCT ${userIdentityExpr}) AS value
          FROM history
-         WHERE mediaType = 'episode' AND ${eventTimeExpr} >= ?
+         WHERE mediaType = 'episode' AND ${eventTimeExpr} >= ? AND ${eventTimeExpr} <= ?
          GROUP BY name
          ORDER BY value DESC
          LIMIT ?`,
-        [startIso, topLimit]
+        [startIso, endIso, topLimit]
       ),
       dbAll(
-        `SELECT COALESCE(NULLIF(seriesTitle,''), 'Unknown') AS name, MAX(poster) AS poster, MAX(background) AS background, ${valueExpr} AS value
+        `SELECT COALESCE(NULLIF(seriesTitle,''), 'Unknown') AS name, ${posterAggExpr} AS poster, ${backgroundAggExpr} AS background, ${valueExpr} AS value
          FROM history
-         WHERE mediaType = 'track' AND ${eventTimeExpr} >= ?
+         WHERE mediaType = 'track' AND ${eventTimeExpr} >= ? AND ${eventTimeExpr} <= ?
          GROUP BY name
          ORDER BY value DESC
          LIMIT ?`,
-        [startIso, topLimit]
+        [startIso, endIso, topLimit]
       ),
       dbAll(
-        `SELECT COALESCE(NULLIF(seriesTitle,''), 'Unknown') AS name, MAX(poster) AS poster, MAX(background) AS background, COUNT(DISTINCT user) AS value
+        `SELECT COALESCE(NULLIF(seriesTitle,''), 'Unknown') AS name, ${posterAggExpr} AS poster, ${backgroundAggExpr} AS background, COUNT(DISTINCT ${userIdentityExpr}) AS value
          FROM history
-         WHERE mediaType = 'track' AND ${eventTimeExpr} >= ?
+         WHERE mediaType = 'track' AND ${eventTimeExpr} >= ? AND ${eventTimeExpr} <= ?
          GROUP BY name
          ORDER BY value DESC
          LIMIT ?`,
-        [startIso, topLimit]
+        [startIso, endIso, topLimit]
       ),
       dbAll(
         `SELECT ${eventTimeExpr} AS eventTime, user, userAvatar, title, mediaType, seriesTitle, episodeTitle, year, poster, background
          FROM history
-         WHERE ${eventTimeExpr} >= ?
+         WHERE ${eventTimeExpr} >= ? AND ${eventTimeExpr} <= ?
          ORDER BY ${eventTimeExpr} DESC
          LIMIT ?`,
-        [startIso, topLimit]
+        [startIso, endIso, topLimit]
       ),
       dbAll(
         `SELECT
@@ -4342,29 +4990,33 @@ app.get('/api/reports/watch-statistics', async (req, res) => {
            END AS name,
            ${valueExpr} AS value
          FROM history
-         WHERE ${eventTimeExpr} >= ?
+         WHERE ${eventTimeExpr} >= ? AND ${eventTimeExpr} <= ?
          GROUP BY name
          ORDER BY value DESC
          LIMIT ?`,
-        [startIso, topLimit]
+        [startIso, endIso, topLimit]
       ),
       dbAll(
-        `SELECT COALESCE(NULLIF(user,''), 'Unknown') AS name, MAX(userAvatar) AS avatar, ${valueExpr} AS value
+        `SELECT
+           ${userIdentityExpr} AS userKey,
+           COALESCE(NULLIF(MAX(user),''), ${userIdentityExpr}, 'Unknown') AS name,
+           MAX(userAvatar) AS avatar,
+           ${valueExpr} AS value
          FROM history
-         WHERE ${eventTimeExpr} >= ?
-         GROUP BY name
+         WHERE ${eventTimeExpr} >= ? AND ${eventTimeExpr} <= ?
+         GROUP BY ${userIdentityExpr}
          ORDER BY value DESC
          LIMIT ?`,
-        [startIso, topLimit]
+        [startIso, endIso, topLimit]
       ),
       dbAll(
         `SELECT COALESCE(NULLIF(platform,''), 'Unknown') AS name, ${valueExpr} AS value
          FROM history
-         WHERE ${eventTimeExpr} >= ?
+         WHERE ${eventTimeExpr} >= ? AND ${eventTimeExpr} <= ?
          GROUP BY name
          ORDER BY value DESC
          LIMIT ?`,
-        [startIso, topLimit]
+        [startIso, endIso, topLimit]
       )
     ]);
 
@@ -4376,14 +5028,14 @@ app.get('/api/reports/watch-statistics', async (req, res) => {
 
     const computePeakConcurrencyFromHistory = async () => {
       const rangeStartMs = Date.parse(startIso);
-      const rangeEndIso = new Date(now).toISOString();
-      const rangeEndMs = now;
+      const rangeEndIso = endIso;
+      const rangeEndMs = Date.parse(endIso);
       if (!Number.isFinite(rangeStartMs) || !Number.isFinite(rangeEndMs) || rangeEndMs <= rangeStartMs) {
-        return { streams: 0, transcodes: 0, directPlays: 0 };
+        return { streams: 0, transcodes: 0, directStreams: 0, directPlays: 0 };
       }
 
       const enabledIdList = Array.from(enabledIds);
-      if (!enabledIdList.length) return { streams: 0, transcodes: 0, directPlays: 0 };
+      if (!enabledIdList.length) return { streams: 0, transcodes: 0, directStreams: 0, directPlays: 0 };
       const inSql = enabledIdList.map(() => '?').join(',');
 
       const rows = await dbAll(
@@ -4412,52 +5064,142 @@ app.get('/api/reports/watch-statistics', async (req, res) => {
         const streamTxt = String(r.stream || '').toLowerCase();
         const isTranscoding = (r.transcoding === 1 || r.transcoding === true) || streamTxt.includes('transcode');
         const isDirect = !isTranscoding;
+        const isDirectStream = isDirect && (
+          streamTxt.includes('direct stream') ||
+          streamTxt.includes('directstream') ||
+          streamTxt.includes('copy')
+        );
+        const isDirectPlay = isDirect && !isDirectStream;
 
         // Use [start, end) intervals. Apply end before start at the same timestamp.
-        events.push({ t: startMs, order: 1, all: +1, trans: isTranscoding ? +1 : 0, direct: isDirect ? +1 : 0 });
-        events.push({ t: endMs, order: 0, all: -1, trans: isTranscoding ? -1 : 0, direct: isDirect ? -1 : 0 });
+        events.push({
+          t: startMs,
+          order: 1,
+          all: +1,
+          trans: isTranscoding ? +1 : 0,
+          ds: isDirectStream ? +1 : 0,
+          dp: isDirectPlay ? +1 : 0
+        });
+        events.push({
+          t: endMs,
+          order: 0,
+          all: -1,
+          trans: isTranscoding ? -1 : 0,
+          ds: isDirectStream ? -1 : 0,
+          dp: isDirectPlay ? -1 : 0
+        });
       }
 
       events.sort((a, b) => (a.t - b.t) || (a.order - b.order));
-      let curAll = 0, curTrans = 0, curDirect = 0;
-      let peakAll = 0, peakTrans = 0, peakDirect = 0;
+      let curAll = 0, curTrans = 0, curDs = 0, curDp = 0;
+      let peakAll = 0, peakTrans = 0, peakDs = 0, peakDp = 0;
       for (const ev of events) {
         curAll += ev.all;
         curTrans += ev.trans;
-        curDirect += ev.direct;
+        curDs += ev.ds;
+        curDp += ev.dp;
         if (curAll > peakAll) peakAll = curAll;
         if (curTrans > peakTrans) peakTrans = curTrans;
-        if (curDirect > peakDirect) peakDirect = curDirect;
+        if (curDs > peakDs) peakDs = curDs;
+        if (curDp > peakDp) peakDp = curDp;
       }
 
       return {
         streams: peakAll,
         transcodes: peakTrans,
-        directPlays: peakDirect
+        directStreams: peakDs,
+        directPlays: peakDp
       };
     };
 
-    const peakConcurrent = await computePeakConcurrencyFromHistory();
+    const peakConcurrentWindow = await computePeakConcurrencyFromHistory();
+
+    // Persist an all-time max so the displayed peak never decreases.
+    // (e.g. if it ever hit 12 streams, it stays 12 until it hits 13.)
+    const toInt = (v) => {
+      const n = Number(v);
+      return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+    };
+    const storedFromConfig = (appConfig && appConfig.reports && appConfig.reports.peakConcurrentStreams && typeof appConfig.reports.peakConcurrentStreams === 'object')
+      ? appConfig.reports.peakConcurrentStreams
+      : { streams: 0, transcodes: 0, directStreams: 0, directPlays: 0 };
+
+    const storedFromMem = (peakConcurrentStreamsAllTime && typeof peakConcurrentStreamsAllTime === 'object')
+      ? peakConcurrentStreamsAllTime
+      : { streams: 0, transcodes: 0, directStreams: 0, directPlays: 0 };
+
+    const storedNorm = {
+      streams: Math.max(toInt(storedFromConfig.streams), toInt(storedFromMem.streams)),
+      transcodes: Math.max(toInt(storedFromConfig.transcodes), toInt(storedFromMem.transcodes)),
+      directStreams: Math.max(toInt(storedFromConfig.directStreams), toInt(storedFromMem.directStreams)),
+      directPlays: Math.max(toInt(storedFromConfig.directPlays), toInt(storedFromMem.directPlays))
+    };
+
+    const peakConcurrent = {
+      streams: Math.max(toInt(peakConcurrentWindow.streams), storedNorm.streams),
+      transcodes: Math.max(toInt(peakConcurrentWindow.transcodes), storedNorm.transcodes),
+      directStreams: Math.max(toInt(peakConcurrentWindow.directStreams), storedNorm.directStreams),
+      directPlays: Math.max(toInt(peakConcurrentWindow.directPlays), storedNorm.directPlays)
+    };
+
+    const changed =
+      peakConcurrent.streams !== storedNorm.streams ||
+      peakConcurrent.transcodes !== storedNorm.transcodes ||
+      peakConcurrent.directStreams !== storedNorm.directStreams ||
+      peakConcurrent.directPlays !== storedNorm.directPlays;
+
+    if (changed) {
+      peakConcurrentStreamsAllTime = {
+        ...peakConcurrent,
+        updatedAt: new Date().toISOString()
+      };
+      try {
+        if (!appConfig || typeof appConfig !== 'object') appConfig = {};
+        if (!appConfig.reports || typeof appConfig.reports !== 'object') appConfig.reports = {};
+        appConfig.reports.peakConcurrentStreams = {
+          ...peakConcurrent,
+          updatedAt: new Date().toISOString()
+        };
+        saveAppConfigToDisk();
+      } catch (e) {
+        console.error('[OmniStream] Failed to persist peakConcurrentStreams:', e.message);
+      }
+    }
 
     res.json({
       metric,
       days,
       startIso,
+      endIso,
       generatedAt: new Date().toISOString(),
+      summary: (() => {
+        const row = Array.isArray(summaryRows) && summaryRows[0] ? summaryRows[0] : {};
+        const toNum = (v) => {
+          const n = Number(v);
+          return Number.isFinite(n) ? n : 0;
+        };
+        return {
+          totalPlays: Math.max(0, Math.floor(toNum(row.totalPlays))),
+          watchTimeSeconds: Math.max(0, Math.floor(toNum(row.watchTimeSeconds))),
+          uniqueUsers: Math.max(0, Math.floor(toNum(row.uniqueUsers))),
+          uniqueTitles: Math.max(0, Math.floor(toNum(row.uniqueTitles)))
+        };
+      })(),
       sections: {
-        mostWatchedMovies,
-        mostPopularMovies,
-        mostWatchedTvShows,
-        mostPopularTvShows,
-        mostPlayedArtists,
-        mostPopularArtists,
-        recentlyWatched,
+        mostWatchedMovies: sanitizeArtworkRows(mostWatchedMovies),
+        mostPopularMovies: sanitizeArtworkRows(mostPopularMovies),
+        mostWatchedTvShows: sanitizeArtworkRows(mostWatchedTvShows),
+        mostPopularTvShows: sanitizeArtworkRows(mostPopularTvShows),
+        mostPlayedArtists: sanitizeArtworkRows(mostPlayedArtists),
+        mostPopularArtists: sanitizeArtworkRows(mostPopularArtists),
+        recentlyWatched: sanitizeArtworkRows(recentlyWatched),
         mostActiveLibraries,
         mostActiveUsers,
         mostActivePlatforms,
         mostConcurrentStreams: {
           streams: peakConcurrent.streams,
           transcodes: peakConcurrent.transcodes,
+          directStreams: peakConcurrent.directStreams,
           directPlays: peakConcurrent.directPlays
         }
       }
@@ -4760,6 +5502,91 @@ app.get('/api/system/backup', (req, res) => {
   } catch (e) {
     console.error('[OmniStream] Failed to create backup zip:', e.message);
     res.status(500).json({ error: 'Failed to create backup zip' });
+  }
+});
+
+// History DB backups (files stored under ./backups)
+app.get('/api/system/history-db-backups/config', (req, res) => {
+  const cfg = getHistoryDbBackupConfig();
+  res.json({
+    ...cfg,
+    backupsDir: HISTORY_BACKUPS_DIR,
+    lastBackupAt: lastHistoryDbBackupAt,
+    lastError: lastHistoryDbBackupError,
+    nextBackupAt: nextHistoryDbBackupAt
+  });
+});
+
+app.put('/api/system/history-db-backups/config', (req, res) => {
+  try {
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const interval = normalizeHistoryDbBackupInterval(body.interval);
+    if (!appConfig.backups || typeof appConfig.backups !== 'object') appConfig.backups = {};
+    if (!appConfig.backups.historyDb || typeof appConfig.backups.historyDb !== 'object') appConfig.backups.historyDb = { interval: 'off', keep: 30 };
+    appConfig.backups.historyDb.interval = interval;
+    saveAppConfigToDisk();
+    scheduleHistoryDbBackups();
+    const cfg = getHistoryDbBackupConfig();
+    res.json({
+      ...cfg,
+      backupsDir: HISTORY_BACKUPS_DIR,
+      lastBackupAt: lastHistoryDbBackupAt,
+      lastError: lastHistoryDbBackupError,
+      nextBackupAt: nextHistoryDbBackupAt
+    });
+  } catch (e) {
+    console.error('[OmniStream] Failed to update history DB backup config:', e.message);
+    res.status(500).json({ error: 'Failed to update backup config' });
+  }
+});
+
+app.get('/api/system/history-db-backups/list', (req, res) => {
+  const items = listHistoryDbBackups({ limit: 100 });
+  res.json({
+    items,
+    lastBackupAt: lastHistoryDbBackupAt,
+    lastError: lastHistoryDbBackupError,
+    nextBackupAt: nextHistoryDbBackupAt
+  });
+});
+
+app.post('/api/system/history-db-backups/run', async (req, res) => {
+  try {
+    const backup = await createHistoryDbBackup({ reason: 'manual' });
+    res.json({ ok: true, backup });
+  } catch (e) {
+    const msg = e && e.message ? String(e.message) : 'Backup failed';
+    lastHistoryDbBackupError = msg;
+    lastHistoryDbBackupErrorAt = new Date().toISOString();
+    console.error('[OmniStream] Manual history DB backup failed:', msg);
+    res.status(500).json({ error: 'Backup failed', detail: msg });
+  }
+});
+
+app.get('/api/system/history-db-backups/download', (req, res) => {
+  try {
+    const name = String(req.query.name || '');
+    const base = path.basename(name);
+    if (!base || base !== name) return res.status(400).json({ error: 'Invalid name' });
+    const filePath = path.join(HISTORY_BACKUPS_DIR, base);
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Not found' });
+    res.download(filePath, base);
+  } catch (e) {
+    console.error('[OmniStream] Failed to download history DB backup:', e.message);
+    res.status(500).json({ error: 'Failed to download backup' });
+  }
+});
+
+app.post('/api/system/history-db-backups/restore', async (req, res) => {
+  try {
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const name = String(body.name || '');
+    await restoreHistoryDbFromBackupName(name);
+    res.json({ ok: true });
+  } catch (e) {
+    const msg = e && e.message ? String(e.message) : 'Restore failed';
+    console.error('[OmniStream] Restore history DB failed:', msg);
+    res.status(500).json({ error: 'Restore failed', detail: msg });
   }
 });
 
@@ -6210,16 +7037,21 @@ app.post('/api/import-history', async (req, res) => {
 function buildNotificationsSnapshot() {
   const notifications = [];
   const now = new Date().toISOString();
+  const enabledServerIds = new Set((Array.isArray(servers) ? servers : [])
+    .filter(s => s && !s.disabled && s.id != null)
+    .map(s => String(s.id)));
   const rules = (appConfig.notifiers && appConfig.notifiers.rules) || {};
   const offlineRule = rules.offline || {};
   const wanRule = rules.wanTranscodes || {};
   const highRule = rules.highBandwidth || {};
    const anyWanRule = rules.anyWan || {};
    const highWanRule = rules.highWanBandwidth || {};
+  const backupsRule = rules.historyDbBackups || {};
   const offlineEnabled = offlineRule.enabled !== false;
   const wanEnabled = wanRule.enabled !== false;
   const highEnabled = highRule.enabled !== false;
    const anyWanEnabled = anyWanRule.enabled === true; // opt-in to avoid noise
+  const backupsEnabled = backupsRule.enabled !== false;
   const highThreshold = typeof highRule.thresholdMbps === 'number' && !Number.isNaN(highRule.thresholdMbps)
     ? highRule.thresholdMbps
     : 50;
@@ -6227,6 +7059,10 @@ function buildNotificationsSnapshot() {
     ? highWanRule.thresholdMbps
     : 30;
   Object.values(statuses).forEach(st => {
+    // Never generate server-scoped notifications for disabled servers.
+    // (Disabled servers may still have stale entries in the statuses map.)
+    const stId = st && st.id != null ? String(st.id) : null;
+    if (!stId || !enabledServerIds.has(stId)) return;
     // Server offline
     if (!st.online && offlineEnabled) {
       notifications.push({
@@ -6308,6 +7144,46 @@ function buildNotificationsSnapshot() {
       });
     }
   });
+
+  // History DB backup notifications (success + failure)
+  // System-level (not tied to any specific server).
+  if (backupsEnabled) {
+    const windowMs = 5 * 60 * 1000; // keep success visible briefly so notifier loop can pick it up
+    const parseIsoMs = (iso) => {
+      const ms = Date.parse(String(iso || ''));
+      return Number.isFinite(ms) ? ms : null;
+    };
+
+    const okMs = parseIsoMs(lastHistoryDbBackupAt);
+    if (okMs && (Date.now() - okMs) <= windowMs) {
+      const name = lastHistoryDbBackupName ? String(lastHistoryDbBackupName) : 'history.db';
+      const size = typeof lastHistoryDbBackupSizeBytes === 'number' ? lastHistoryDbBackupSizeBytes : null;
+      const sizeMb = size != null ? (size / (1024 * 1024)) : null;
+      notifications.push({
+        id: `historydb-backup-ok-${lastHistoryDbBackupAt}`,
+        level: 'info',
+        serverId: 'omnistream',
+        serverName: 'OmniStream',
+        time: lastHistoryDbBackupAt,
+        kind: 'historyDbBackup',
+        message: `History DB backup succeeded: ${name}${sizeMb != null ? ` (${sizeMb.toFixed(1)} MB)` : ''}`
+      });
+    }
+
+    if (lastHistoryDbBackupError) {
+      const when = lastHistoryDbBackupErrorAt || now;
+      notifications.push({
+        id: `historydb-backup-error-${when}`,
+        level: 'error',
+        serverId: 'omnistream',
+        serverName: 'OmniStream',
+        time: when,
+        kind: 'historyDbBackup',
+        message: `History DB backup failed: ${String(lastHistoryDbBackupError)}`
+      });
+    }
+  }
+
   return notifications;
 }
 

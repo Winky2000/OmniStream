@@ -3,6 +3,7 @@ servers.json
 config.json
 history.db
 history.db-*
+backups/
 sent_newsletters/
 public/uploads/
 omnistream-mock.pid

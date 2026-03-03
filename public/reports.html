@@ -12,16 +12,33 @@
 
     h1{margin:0 0 10px 0;color:var(--text-main);letter-spacing:0.14em;font-size:14px;text-transform:uppercase;}
 
-    .controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:10px 0 18px 0;}
-    .seg{display:inline-flex;gap:0;border:1px solid rgba(148,163,184,0.22);border-radius:999px;overflow:hidden;background:rgba(0,0,0,0.18);}
-    :root[data-theme="light-borderless"] .seg{background:rgba(0,0,0,0.03);border-color:#dddddd;}
-    .seg button{appearance:none;border:0;background:transparent;color:var(--text-muted);font-size:12px;padding:7px 12px;cursor:pointer;}
-    .seg button:hover{background:rgba(148,163,184,0.14);color:var(--text-main);}
-    .seg button.active{background:rgba(59,130,246,0.18);color:var(--text-main);}
+    .pill-row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:10px 0 10px 0;}
+    .pill-group{display:inline-flex;gap:0;border:1px solid rgba(148,163,184,0.22);border-radius:999px;overflow:hidden;background:rgba(0,0,0,0.18);}
+    :root[data-theme="light-borderless"] .pill-group{background:rgba(0,0,0,0.03);border-color:#dddddd;}
+    .pill{appearance:none;border:0;background:transparent;color:var(--text-muted);font-size:12px;padding:7px 12px;cursor:pointer;}
+    .pill:hover{background:rgba(148,163,184,0.14);color:var(--text-main);}
+    .pill-active{background:rgba(59,130,246,0.18);color:var(--text-main);}
 
-    .range{display:inline-flex;align-items:center;gap:8px;color:var(--text-muted);font-size:12px;}
-    .range input{width:86px;padding:6px 10px;border-radius:10px;border:1px solid rgba(148,163,184,0.22);background:rgba(0,0,0,0.18);color:var(--text-main);}
-    :root[data-theme="light-borderless"] .range input{background:rgba(0,0,0,0.03);border-color:#dddddd;color:#111111;}
+    .custom-range{display:none;align-items:center;gap:8px;color:var(--text-muted);font-size:12px;}
+    .custom-range input{width:140px;padding:6px 10px;border-radius:10px;border:1px solid rgba(148,163,184,0.22);background:rgba(0,0,0,0.18);color:var(--text-main);}
+    :root[data-theme="light-borderless"] .custom-range input{background:rgba(0,0,0,0.03);border-color:#dddddd;color:#111111;}
+
+    .toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:8px 0 12px 0;}
+    .control{display:inline-flex;align-items:center;gap:8px;padding:6px;border-radius:12px;background:rgba(0,0,0,0.18);border:1px solid rgba(148,163,184,0.22);}
+    :root[data-theme="light-borderless"] .control{background:rgba(0,0,0,0.03);border-color:#dddddd;}
+    .field{padding:7px 10px;border-radius:10px;border:1px solid rgba(148,163,184,0.22);background:rgba(0,0,0,0.10);color:var(--text-main);font-size:12px;min-width:220px;outline:none;}
+    .field::placeholder{color:var(--text-faint);}
+    :root[data-theme="light-borderless"] .field{background:#ffffff;border-color:#dddddd;color:#111111;}
+    .btn{margin-top:0;padding:7px 12px;border-radius:10px;border:1px solid var(--btn-border);background:var(--btn-bg);color:var(--btn-text);cursor:pointer;font-size:12px;}
+    .btn:hover{background:var(--btn-bg-hover);color:var(--btn-text-hover);}
+    .menu{position:relative;display:inline-block;}
+    .menu-panel{display:none;position:absolute;right:0;top:42px;min-width:240px;z-index:30;background:var(--card-bg);border:1px solid rgba(148,163,184,0.22);border-radius:12px;padding:10px;box-shadow:0 8px 24px rgba(0,0,0,0.35);}
+    :root[data-theme="light-borderless"] .menu-panel{box-shadow:0 8px 24px rgba(0,0,0,0.12);}
+    .menu-panel.open{display:block;}
+    .menu-title{font-size:12px;color:var(--text-main);font-weight:600;margin-bottom:6px;}
+    .menu-item{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-muted);padding:6px 4px;border-radius:10px;}
+    .menu-item:hover{background:rgba(148,163,184,0.14);color:var(--text-main);}
+    .menu-item input{accent-color:var(--btn-border);}
 
     .placeholder{margin-top:16px;font-size:14px;color:var(--text-muted);}
 
@@ -60,6 +77,27 @@
     .user-link:hover{text-decoration:underline;}
     .value{color:var(--btn-border);font-variant-numeric:tabular-nums;}
     .muted{color:var(--text-muted);}
+
+    .panel-concurrent .panel-inner{gap:14px;}
+    .concurrent-icon{width:44px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;opacity:0.95;}
+    .concurrent-icon svg{display:block;width:42px;height:42px;}
+    .concurrent-icon .arrow-a{fill:var(--text-muted);}
+    .concurrent-icon .arrow-b{fill:var(--btn-border);}
+    .panel-concurrent .list{margin-top:4px;gap:4px;}
+    .panel-concurrent .row{font-size:13px;}
+    .panel-concurrent .value{font-weight:700;}
+
+    .kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:4px 0 14px 0;}
+    @media (max-width: 960px){.kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
+    @media (max-width: 520px){.kpi-grid{grid-template-columns:1fr;}}
+    .kpi-card{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:12px;border:1px solid rgba(148,163,184,0.22);background:rgba(0,0,0,0.18);min-height:56px;}
+    :root[data-theme="light-borderless"] .kpi-card{background:rgba(0,0,0,0.03);border-color:#dddddd;}
+    .kpi-icon{width:30px;height:30px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;border-radius:10px;border:1px solid rgba(148,163,184,0.22);background:rgba(0,0,0,0.10);color:var(--btn-border);}
+    :root[data-theme="light-borderless"] .kpi-icon{background:rgba(0,0,0,0.02);}
+    .kpi-icon svg{width:18px;height:18px;display:block;fill:currentColor;}
+    .kpi-meta{min-width:0;}
+    .kpi-value{font-size:18px;font-weight:800;letter-spacing:0.01em;font-variant-numeric:tabular-nums;color:var(--text-main);line-height:1.15;}
+    .kpi-label{font-size:12px;color:var(--text-muted);letter-spacing:0.08em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;}
   </style>
 </head>
 <body>
@@ -100,15 +138,41 @@
       <button class="sidebar-toggle" id="sidebarToggle">Hide menu</button>
       <h1>WATCH STATISTICS</h1>
 
-      <div class="controls">
-        <div class="seg" role="group" aria-label="Metric">
-          <button id="metricCount" class="active" type="button">Play Count</button>
-          <button id="metricDuration" type="button">Play Duration</button>
+      <div id="kpi"></div>
+
+      <div class="pill-row" aria-label="Date range">
+        <div class="pill-group" role="group" aria-label="Date range">
+          <button id="pill7d" class="pill" data-range="7d" type="button">7d</button>
+          <button id="pill30d" class="pill" data-range="30d" type="button">30d</button>
+          <button id="pill1y" class="pill" data-range="1y" type="button">1y</button>
+          <button id="pillAll" class="pill" data-range="all" type="button">All</button>
+          <button id="pillCustom" class="pill" data-range="custom" type="button">Custom</button>
         </div>
-        <div class="range">
-          <span>Last</span>
-          <input id="daysInput" type="number" min="1" max="5000" step="1" value="1000" />
-          <span>days</span>
+        <div id="customRange" class="custom-range">
+          <input id="fromDate" type="date" aria-label="From date">
+          <input id="toDate" type="date" aria-label="To date">
+        </div>
+      </div>
+
+      <div class="toolbar" aria-label="Reports controls">
+        <div class="control" style="flex:1;min-width:260px;">
+          <input id="searchText" class="field" type="text" placeholder="Search titles, users, locations, IPs..." aria-label="Search reports">
+        </div>
+
+        <div class="menu">
+          <button id="filtersBtn" class="btn" type="button">Filters</button>
+          <div id="filtersMenu" class="menu-panel" role="menu" aria-label="Filters">
+            <div class="menu-title">Metric</div>
+            <label class="menu-item"><input type="radio" name="metric" value="count" checked> Plays</label>
+            <label class="menu-item"><input type="radio" name="metric" value="duration"> Watch time</label>
+          </div>
+        </div>
+
+        <div class="menu">
+          <button id="columnsBtn" class="btn" type="button">Columns</button>
+          <div id="columnsMenu" class="menu-panel" role="menu" aria-label="Columns">
+            <div class="menu-title">Show panels</div>
+          </div>
         </div>
       </div>
 
@@ -148,27 +212,85 @@
       return d + 'd';
     }
 
+    function fmtInt(n) {
+      const v = Number(n);
+      const i = Number.isFinite(v) ? Math.floor(v) : 0;
+      return new Intl.NumberFormat(undefined).format(Math.max(0, i));
+    }
+
+    function formatWatchTime(sec) {
+      const s = Math.max(0, Math.floor(Number(sec) || 0));
+      const days = Math.floor(s / 86400);
+      const hours = Math.floor((s % 86400) / 3600);
+      const mins = Math.floor((s % 3600) / 60);
+      if (days > 0) return `${days}d ${hours}h`;
+      if (hours > 0) return `${hours}h ${mins}m`;
+      return `${Math.max(0, mins)}m`;
+    }
+
+    function renderSummaryCards(summary) {
+      const s = summary || {};
+      const totalPlays = fmtInt(s.totalPlays);
+      const watchTime = formatWatchTime(s.watchTimeSeconds);
+      const uniqueUsers = fmtInt(s.uniqueUsers);
+      const uniqueTitles = fmtInt(s.uniqueTitles);
+
+      const card = ({ icon, value, label }) => {
+        return `
+          <div class="kpi-card">
+            <div class="kpi-icon" aria-hidden="true">${icon}</div>
+            <div class="kpi-meta">
+              <div class="kpi-value">${escapeHtml(value)}</div>
+              <div class="kpi-label">${escapeHtml(label)}</div>
+            </div>
+          </div>`;
+      };
+
+      const iconPlay = '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M9 7.5v9l8-4.5-8-4.5z"/></svg>';
+      const iconClock = '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 11h4v-2h-3V6h-2v7z"/></svg>';
+      const iconUsers = '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M16 11c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3zM8 11c1.66 0 3-1.34 3-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.67 0-8 1.34-8 4v2h10v-2c0-1.54.78-2.88 2.03-3.83C10.88 13.07 9.43 13 8 13zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 2.08 1.97 3.95v2h7v-2c0-2.66-5.33-4-8-4z"/></svg>';
+      const iconGrid = '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M3 3h8v8H3V3zm10 0h8v8h-8V3zM3 13h8v8H3v-8zm10 0h8v8h-8v-8z"/></svg>';
+
+      return `
+        <div class="kpi-grid">
+          ${card({ icon: iconPlay, value: totalPlays, label: 'Total Plays' })}
+          ${card({ icon: iconClock, value: watchTime, label: 'Watch Time' })}
+          ${card({ icon: iconUsers, value: uniqueUsers, label: 'Unique Users' })}
+          ${card({ icon: iconGrid, value: uniqueTitles, label: 'Unique Titles' })}
+        </div>`;
+    }
+
     function hrefToUserHistory(user) {
       const u = String(user || '').trim();
       if (!u) return 'history.html';
       return 'history.html?user=' + encodeURIComponent(u);
     }
 
-    function topThumb(items) {
+    function firstArtworkItem(items) {
       if (!Array.isArray(items) || !items.length) return null;
-      const it = items[0] || {};
+      for (const it of items) {
+        if (!it) continue;
+        const p = it.poster && it.poster !== '/live_tv_placeholder.svg' ? it.poster : '';
+        const b = it.background && it.background !== '/live_tv_placeholder.svg' ? it.background : '';
+        if (p || b) return it;
+      }
+      return null;
+    }
+
+    function topThumb(items) {
+      const it = firstArtworkItem(items) || (Array.isArray(items) && items[0] ? items[0] : null);
+      if (!it) return null;
       return it.poster || it.background || null;
     }
 
     function panelBgUrl(items) {
-      if (!Array.isArray(items) || !items.length) return '/live_tv_placeholder.svg';
-      return (items[0].background || items[0].poster || '/live_tv_placeholder.svg');
+      const it = firstArtworkItem(items) || (Array.isArray(items) && items[0] ? items[0] : null);
+      if (!it) return '/live_tv_placeholder.svg';
+      return (it.background || it.poster || '/live_tv_placeholder.svg');
     }
 
     function hasArtwork(items) {
-      if (!Array.isArray(items) || !items.length) return false;
-      const it = items[0] || {};
-      return !!(it.background || it.poster);
+      return !!firstArtworkItem(items);
     }
 
     function renderPanel(opts) {
@@ -183,7 +305,8 @@
       const thumbUrl = showThumb ? topThumb(items) : null;
       const bgUrl = panelBgUrl(items);
       const useFallbackBg = !hasArtwork(items) || bgUrl === '/live_tv_placeholder.svg';
-      const hue = useFallbackBg ? hashHue(title + '|' + (items[0]?.name || items[0]?.title || '')) : 0;
+      const hueItem = firstArtworkItem(items) || (items[0] || {});
+      const hue = useFallbackBg ? hashHue(title + '|' + (hueItem?.name || hueItem?.title || '')) : 0;
 
       let html = '<div class="panel">';
       if (useFallbackBg) {
@@ -211,6 +334,7 @@
           const year = it.year ? ` (${it.year})` : '';
           const avatar = (it.avatar || it.userAvatar || '').toString();
           const val = (valueLabel === 'duration') ? formatSeconds(it.value) : String(it.value ?? '');
+          const userKey = it && typeof it.userKey === 'string' ? it.userKey : '';
           html += '<div class="row">';
           html += '<div class="row-left">';
           html += `<div class="rank">${idx + 1}</div>`;
@@ -218,7 +342,7 @@
             html += `<img class="avatar" src="${escapeHtml(avatar)}" alt="" onerror="this.style.display='none'"/>`;
           }
           if (linkUsers) {
-            html += `<a class="name name-link" href="${escapeHtml(hrefToUserHistory(name))}">${escapeHtml(name + year)}</a>`;
+            html += `<a class="name name-link" href="${escapeHtml(hrefToUserHistory(userKey || name))}">${escapeHtml(name + year)}</a>`;
           } else {
             html += `<div class="name">${escapeHtml(name + year)}</div>`;
           }
@@ -292,56 +416,270 @@
     }
 
     function renderConcurrent(concurrent) {
-      const c = concurrent || { streams: 0, transcodes: 0, directPlays: 0 };
+      const c = concurrent || { streams: 0, transcodes: 0, directStreams: 0, directPlays: 0 };
       const items = [
-        { name: 'Concurrent Streams', value: c.streams ?? 0 },
-        { name: 'Concurrent Transcodes', value: c.transcodes ?? 0 },
-        { name: 'Concurrent Direct Plays', value: c.directPlays ?? 0 }
+        { name: 'STREAMS', value: c.streams ?? 0 },
+        { name: 'TRANSCODES', value: c.transcodes ?? 0 },
+        { name: 'DIRECT STREAMS', value: c.directStreams ?? 0 },
+        { name: 'DIRECT PLAYS', value: c.directPlays ?? 0 }
       ];
-      return renderPanel({ title: 'Peak Concurrent Streams', right: 'STREAMS', items, valueLabel: 'count', showThumb: false });
+
+      // Custom layout for this panel (matches the compact style in the screenshot)
+      const hue = hashHue('Peak Concurrent Streams');
+      let html = '<div class="panel panel-concurrent">';
+      html += `<div class="panel-bg fallback" style="--hue:${hue}deg;"></div>`;
+      html += '<div class="panel-overlay"></div>';
+      html += '<div class="panel-inner">';
+      html += '<div class="concurrent-icon" aria-hidden="true">';
+      html += `
+        <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" focusable="false">
+          <path class="arrow-a" d="M7 14h22v-6l14 10-14 10v-6H7z"/>
+          <path class="arrow-b" d="M7 32h30v-6l14 10-14 10v-6H7z"/>
+          <path class="arrow-a" d="M7 50h18v-6l14 10-14 10v-6H7z" transform="translate(0,-12)"/>
+        </svg>`;
+      html += '</div>';
+      html += '<div class="panel-body">';
+      html += '<div class="panel-head">';
+      html += '<div class="panel-title">MOST CONCURRENT STREAMS</div>';
+      html += '<div class="panel-right">STREAMS</div>';
+      html += '</div>';
+      html += '<div class="list">';
+      items.forEach((it) => {
+        html += '<div class="row">';
+        html += '<div class="row-left">';
+        html += `<div class="name">${escapeHtml(it.name)}</div>`;
+        html += '</div>';
+        html += `<div class="value">${escapeHtml(String(it.value ?? 0))}</div>`;
+        html += '</div>';
+      });
+      html += '</div>';
+      html += '</div>';
+      html += '</div>';
+      html += '</div>';
+      return html;
     }
 
-    async function fetchWatchStats(metric, days) {
-      const url = `/api/reports/watch-statistics?metric=${encodeURIComponent(metric)}&days=${encodeURIComponent(days)}`;
+    async function fetchWatchStats({ metric, days, from, to } = {}) {
+      const q = new URLSearchParams();
+      q.set('metric', String(metric || 'count'));
+      if (from && to) {
+        q.set('from', String(from));
+        q.set('to', String(to));
+      } else {
+        q.set('days', String(days || 30));
+      }
+      const url = `/api/reports/watch-statistics?${q.toString()}`;
       const r = await fetch(url);
       if (!r.ok) throw new Error('Failed to load reports');
       return await r.json();
     }
 
     const content = document.getElementById('content');
-    const metricCountBtn = document.getElementById('metricCount');
-    const metricDurationBtn = document.getElementById('metricDuration');
-    const daysInput = document.getElementById('daysInput');
-    let state = { metric: 'count', days: 1000 };
+    const kpi = document.getElementById('kpi');
+    const searchText = document.getElementById('searchText');
+    const filtersBtn = document.getElementById('filtersBtn');
+    const filtersMenu = document.getElementById('filtersMenu');
+    const columnsBtn = document.getElementById('columnsBtn');
+    const columnsMenu = document.getElementById('columnsMenu');
+    const customRange = document.getElementById('customRange');
+    const fromDate = document.getElementById('fromDate');
+    const toDate = document.getElementById('toDate');
 
-    function setMetric(metric) {
-      state.metric = metric;
-      metricCountBtn.classList.toggle('active', metric === 'count');
-      metricDurationBtn.classList.toggle('active', metric === 'duration');
-      render();
+    const REPORT_PANELS = [
+      { key: 'mostWatchedMovies', label: 'Most Watched Movies' },
+      { key: 'mostPopularMovies', label: 'Most Popular Movies' },
+      { key: 'mostWatchedTvShows', label: 'Most Watched TV Shows' },
+      { key: 'mostPopularTvShows', label: 'Most Popular TV Shows' },
+      { key: 'mostPlayedArtists', label: 'Most Played Artists' },
+      { key: 'mostPopularArtists', label: 'Most Popular Artists' },
+      { key: 'recentlyWatched', label: 'Recently Watched' },
+      { key: 'mostActiveLibraries', label: 'Most Active Libraries' },
+      { key: 'mostActiveUsers', label: 'Most Active Users' },
+      { key: 'mostActivePlatforms', label: 'Most Active Platforms' },
+      { key: 'mostConcurrentStreams', label: 'Most Concurrent Streams' }
+    ];
+
+    const COL_PREF_KEY = 'omnistream_reports_panels';
+    let panelPrefs = (() => {
+      try {
+        const raw = localStorage.getItem(COL_PREF_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object') return null;
+        return parsed;
+      } catch (_) { return null; }
+    })() || Object.fromEntries(REPORT_PANELS.map(p => [p.key, true]));
+
+    let state = {
+      metric: 'count',
+      range: '30d',
+      from: '',
+      to: '',
+      search: ''
+    };
+
+    let lastData = null;
+
+    function setActivePill(range) {
+      ['pill7d','pill30d','pill1y','pillAll','pillCustom'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.classList.toggle('pill-active', el.getAttribute('data-range') === range);
+      });
+      if (customRange) customRange.style.display = range === 'custom' ? 'inline-flex' : 'none';
     }
 
-    async function render() {
-      content.className = 'placeholder';
-      content.textContent = 'Loading watch statistics...';
+    function ymdToday() {
+      const d = new Date();
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+
+    function ymdDaysAgo(daysAgo) {
+      const d = new Date(Date.now() - (daysAgo * 24 * 60 * 60 * 1000));
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+
+    function openMenu(panel, btn) {
+      if (!panel) return;
+      panel.classList.add('open');
+      if (btn) btn.setAttribute('aria-expanded', 'true');
+    }
+    function closeMenu(panel, btn) {
+      if (!panel) return;
+      panel.classList.remove('open');
+      if (btn) btn.setAttribute('aria-expanded', 'false');
+    }
+    function toggleMenu(panel, btn) {
+      if (!panel) return;
+      if (panel.classList.contains('open')) closeMenu(panel, btn);
+      else {
+        closeMenu(filtersMenu, filtersBtn);
+        closeMenu(columnsMenu, columnsBtn);
+        openMenu(panel, btn);
+      }
+    }
+
+    function setMetric(metric) {
+      state.metric = metric === 'duration' ? 'duration' : 'count';
+      render({ refetch: true });
+    }
+
+    function setRange(range) {
+      state.range = range;
+      setActivePill(range);
+      if (range === '7d') {
+        state.from = ymdDaysAgo(7);
+        state.to = ymdToday();
+      } else if (range === '30d') {
+        state.from = ymdDaysAgo(30);
+        state.to = ymdToday();
+      } else if (range === '1y') {
+        state.from = ymdDaysAgo(365);
+        state.to = ymdToday();
+      } else if (range === 'all') {
+        state.from = '1970-01-01';
+        state.to = ymdToday();
+      } else if (range === 'custom') {
+        // keep existing from/to
+      }
+      if (fromDate && state.from) fromDate.value = state.from;
+      if (toDate && state.to) toDate.value = state.to;
+      render({ refetch: true });
+    }
+
+    function buildColumnsMenu() {
+      if (!columnsMenu) return;
+      let html = '<div class="menu-title">Show panels</div>';
+      for (const p of REPORT_PANELS) {
+        const checked = !!panelPrefs[p.key];
+        html += `<label class="menu-item"><input type="checkbox" data-panel="${escapeHtml(p.key)}" ${checked ? 'checked' : ''}> ${escapeHtml(p.label)}</label>`;
+      }
+      columnsMenu.innerHTML = html;
+      columnsMenu.querySelectorAll('input[type="checkbox"][data-panel]').forEach(cb => {
+        cb.addEventListener('change', () => {
+          const k = cb.getAttribute('data-panel');
+          if (!k) return;
+          panelPrefs[k] = cb.checked;
+          try { localStorage.setItem(COL_PREF_KEY, JSON.stringify(panelPrefs)); } catch (_) {}
+          updateColumnsButtonLabel();
+          render({ refetch: false });
+        });
+      });
+      updateColumnsButtonLabel();
+    }
+
+    function updateColumnsButtonLabel() {
+      if (!columnsBtn) return;
+      const enabled = REPORT_PANELS.filter(p => panelPrefs[p.key]).length;
+      columnsBtn.textContent = `Columns ${enabled}`;
+    }
+
+    function applySearchToSections(sections, q) {
+      const query = String(q || '').trim().toLowerCase();
+      if (!query) return sections;
+      const matches = (obj) => {
+        if (!obj || typeof obj !== 'object') return false;
+        const fields = [
+          obj.name, obj.title, obj.user, obj.userKey, obj.platform, obj.product,
+          obj.location, obj.ip, obj.channel, obj.seriesTitle, obj.episodeTitle
+        ];
+        return fields.some(v => String(v || '').toLowerCase().includes(query));
+      };
+      const filterList = (arr) => Array.isArray(arr) ? arr.filter(matches) : arr;
+      return {
+        ...sections,
+        mostWatchedMovies: filterList(sections.mostWatchedMovies),
+        mostPopularMovies: filterList(sections.mostPopularMovies),
+        mostWatchedTvShows: filterList(sections.mostWatchedTvShows),
+        mostPopularTvShows: filterList(sections.mostPopularTvShows),
+        mostPlayedArtists: filterList(sections.mostPlayedArtists),
+        mostPopularArtists: filterList(sections.mostPopularArtists),
+        recentlyWatched: filterList(sections.recentlyWatched),
+        mostActiveLibraries: filterList(sections.mostActiveLibraries),
+        mostActiveUsers: filterList(sections.mostActiveUsers),
+        mostActivePlatforms: filterList(sections.mostActivePlatforms)
+      };
+    }
+
+    async function render(opts = {}) {
+      const doFetch = !lastData || !!opts.refetch;
+      if (doFetch) {
+        content.className = 'placeholder';
+        content.textContent = 'Loading watch statistics...';
+      }
       try {
-        const data = await fetchWatchStats(state.metric, state.days);
-        const s = data.sections || {};
+        const data = doFetch
+          ? await fetchWatchStats({ metric: state.metric, from: state.from, to: state.to })
+          : lastData;
+        lastData = data;
+
+        if (kpi) {
+          kpi.innerHTML = renderSummaryCards(data.summary);
+        }
+
+        const rawSections = data.sections || {};
+        const s = applySearchToSections(rawSections, state.search);
         const valueLabel = data.metric === 'duration' ? 'duration' : 'count';
         const playsOrDuration = data.metric === 'duration' ? 'DURATION' : 'PLAYS';
 
         let html = '<div class="grid">';
-        html += renderPanel({ title: 'Most Watched Movies', right: playsOrDuration, items: s.mostWatchedMovies || [], valueLabel, showThumb: true });
-        html += renderPanel({ title: 'Most Popular Movies', right: 'USERS', items: s.mostPopularMovies || [], valueLabel: 'count', showThumb: true });
-        html += renderPanel({ title: 'Most Watched TV Shows', right: playsOrDuration, items: s.mostWatchedTvShows || [], valueLabel, showThumb: true });
-        html += renderPanel({ title: 'Most Popular TV Shows', right: 'USERS', items: s.mostPopularTvShows || [], valueLabel: 'count', showThumb: true });
-        html += renderPanel({ title: 'Most Played Artists', right: playsOrDuration, items: s.mostPlayedArtists || [], valueLabel, showThumb: true });
-        html += renderPanel({ title: 'Most Popular Artists', right: 'USERS', items: s.mostPopularArtists || [], valueLabel: 'count', showThumb: true });
-        html += renderRecently(s.recentlyWatched || []);
-        html += renderPanel({ title: 'Most Active Libraries', right: playsOrDuration, items: s.mostActiveLibraries || [], valueLabel, showThumb: false });
-        html += renderPanel({ title: 'Most Active Users', right: playsOrDuration, items: s.mostActiveUsers || [], valueLabel, showThumb: false, showAvatars: true, linkUsers: true });
-        html += renderPanel({ title: 'Most Active Platforms', right: playsOrDuration, items: s.mostActivePlatforms || [], valueLabel, showThumb: false });
-        html += renderConcurrent(s.mostConcurrentStreams);
+        if (panelPrefs.mostWatchedMovies) html += renderPanel({ title: 'Most Watched Movies', right: playsOrDuration, items: s.mostWatchedMovies || [], valueLabel, showThumb: true });
+        if (panelPrefs.mostPopularMovies) html += renderPanel({ title: 'Most Popular Movies', right: 'USERS', items: s.mostPopularMovies || [], valueLabel: 'count', showThumb: true });
+        if (panelPrefs.mostWatchedTvShows) html += renderPanel({ title: 'Most Watched TV Shows', right: playsOrDuration, items: s.mostWatchedTvShows || [], valueLabel, showThumb: true });
+        if (panelPrefs.mostPopularTvShows) html += renderPanel({ title: 'Most Popular TV Shows', right: 'USERS', items: s.mostPopularTvShows || [], valueLabel: 'count', showThumb: true });
+        if (panelPrefs.mostPlayedArtists) html += renderPanel({ title: 'Most Played Artists', right: playsOrDuration, items: s.mostPlayedArtists || [], valueLabel, showThumb: true });
+        if (panelPrefs.mostPopularArtists) html += renderPanel({ title: 'Most Popular Artists', right: 'USERS', items: s.mostPopularArtists || [], valueLabel: 'count', showThumb: true });
+        if (panelPrefs.recentlyWatched) html += renderRecently(s.recentlyWatched || []);
+        if (panelPrefs.mostActiveLibraries) html += renderPanel({ title: 'Most Active Libraries', right: playsOrDuration, items: s.mostActiveLibraries || [], valueLabel, showThumb: false });
+        if (panelPrefs.mostActiveUsers) html += renderPanel({ title: 'Most Active Users', right: playsOrDuration, items: s.mostActiveUsers || [], valueLabel, showThumb: false, showAvatars: true, linkUsers: true });
+        if (panelPrefs.mostActivePlatforms) html += renderPanel({ title: 'Most Active Platforms', right: playsOrDuration, items: s.mostActivePlatforms || [], valueLabel, showThumb: false });
+        if (panelPrefs.mostConcurrentStreams) html += renderConcurrent(s.mostConcurrentStreams);
         html += '</div>';
 
         content.className = '';
@@ -353,16 +691,70 @@
       }
     }
 
-    metricCountBtn.addEventListener('click', () => setMetric('count'));
-    metricDurationBtn.addEventListener('click', () => setMetric('duration'));
-    daysInput.addEventListener('change', () => {
-      const v = Number(daysInput.value);
-      state.days = Number.isFinite(v) ? Math.max(1, Math.min(5000, Math.floor(v))) : 1000;
-      daysInput.value = String(state.days);
-      render();
+    if (filtersBtn) filtersBtn.addEventListener('click', () => toggleMenu(filtersMenu, filtersBtn));
+    if (columnsBtn) columnsBtn.addEventListener('click', () => toggleMenu(columnsMenu, columnsBtn));
+    document.addEventListener('click', (e) => {
+      const t = e.target;
+      const inFilters = filtersMenu && (filtersMenu.contains(t) || (filtersBtn && filtersBtn.contains(t)));
+      const inColumns = columnsMenu && (columnsMenu.contains(t) || (columnsBtn && columnsBtn.contains(t)));
+      if (!inFilters) closeMenu(filtersMenu, filtersBtn);
+      if (!inColumns) closeMenu(columnsMenu, columnsBtn);
     });
 
-    render();
+    if (filtersMenu) {
+      filtersMenu.querySelectorAll('input[type="radio"][name="metric"]').forEach(r => {
+        r.addEventListener('change', () => {
+          if (r.checked) setMetric(r.value);
+        });
+      });
+    }
+
+    let searchTimer = null;
+    if (searchText) {
+      searchText.addEventListener('input', () => {
+        state.search = String(searchText.value || '');
+        if (searchTimer) clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => render({ refetch: false }), 180);
+      });
+    }
+
+    ['pill7d','pill30d','pill1y','pillAll','pillCustom'].forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('click', () => setRange(el.getAttribute('data-range')));
+    });
+
+    if (fromDate) {
+      fromDate.addEventListener('change', () => {
+        state.range = 'custom';
+        setActivePill('custom');
+        state.from = String(fromDate.value || '').trim();
+        if (toDate && !String(toDate.value || '').trim()) {
+          state.to = ymdToday();
+          toDate.value = state.to;
+        } else {
+          state.to = String(toDate.value || '').trim();
+        }
+        render({ refetch: true });
+      });
+    }
+    if (toDate) {
+      toDate.addEventListener('change', () => {
+        state.range = 'custom';
+        setActivePill('custom');
+        state.to = String(toDate.value || '').trim();
+        if (fromDate && !String(fromDate.value || '').trim()) {
+          state.from = ymdDaysAgo(30);
+          fromDate.value = state.from;
+        } else {
+          state.from = String(fromDate.value || '').trim();
+        }
+        render({ refetch: true });
+      });
+    }
+
+    buildColumnsMenu();
+    setRange('30d');
   </script>
 </body>
 </html>
