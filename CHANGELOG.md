@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 _No unreleased changes yet._
 
-## [0.4.0] - 2026-03-03
+## [0.4.0] - 2026-03-02
 
 ### Added
 - History DB backups: scheduled and manual backups with download + restore from the System page.
