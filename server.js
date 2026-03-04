@@ -4787,6 +4787,421 @@ app.get('/api/about', (req, res) => {
   });
 });
 
+// Library inventory reports (Plex/Jellyfin/Emby).
+// Note: genre/codec/resolution/storage are computed over the *recently added* window for safety.
+const libraryInventoryCache = new Map();
+const LIBRARY_INVENTORY_CACHE_TTL_MS = 10 * 60 * 1000;
+
+function topKFromMap(map, k) {
+  if (!map || typeof map !== 'object') return [];
+  const arr = [];
+  for (const [name, count] of map.entries()) {
+    arr.push({ name, count });
+  }
+  arr.sort((a, b) => (b.count - a.count) || String(a.name).localeCompare(String(b.name)));
+  return arr.slice(0, Math.max(0, Math.floor(k || 0)));
+}
+
+function formatResolutionLabel(heightOrString) {
+  if (heightOrString == null) return '';
+  if (typeof heightOrString === 'string') {
+    const s = heightOrString.trim();
+    if (!s) return '';
+    // Plex often returns '1080' as a string.
+    if (/^\d+$/.test(s)) return `${s}p`;
+    return s;
+  }
+  const h = Number(heightOrString);
+  if (!Number.isFinite(h) || h <= 0) return '';
+  return `${Math.round(h)}p`;
+}
+
+function addCount(map, key, inc = 1) {
+  const k = String(key || '').trim();
+  if (!k) return;
+  map.set(k, (map.get(k) || 0) + (Number(inc) || 0));
+}
+
+function serverBaseUrl(server) {
+  const base = (server && server.baseUrl ? String(server.baseUrl) : '').replace(/\/$/, '');
+  return base;
+}
+
+async function plexGet(server, relPath, params = {}) {
+  const base = serverBaseUrl(server);
+  const headers = { Accept: 'application/json' };
+  const requestParams = { ...(params || {}) };
+  if (server && server.token) {
+    const tokenLoc = server.tokenLocation || 'query';
+    if (tokenLoc === 'header') headers['X-Plex-Token'] = server.token;
+    else requestParams['X-Plex-Token'] = server.token;
+  }
+  return axios.get(base + relPath, { headers, params: requestParams, timeout: 20000 });
+}
+
+async function jfEmbyGet(server, relPath, params = {}) {
+  const base = serverBaseUrl(server);
+  const headers = {};
+  const requestParams = { ...(params || {}) };
+  if (server && server.token) {
+    const tokenLoc = server.tokenLocation || 'header';
+    if (tokenLoc === 'header') {
+      if (server.type === 'jellyfin') headers['X-MediaBrowser-Token'] = server.token;
+      else headers['X-Emby-Token'] = server.token;
+    } else {
+      if (server.type === 'jellyfin') requestParams.api_key = server.token;
+      else requestParams['X-Emby-Token'] = server.token;
+    }
+  }
+  return axios.get(base + relPath, { headers, params: requestParams, timeout: 25000 });
+}
+
+async function buildPlexLibraryReport(server, { days = 7 } = {}) {
+  const nowMs = Date.now();
+  const cutoffEpochSec = Math.floor((nowMs - (Math.max(1, Math.floor(days)) * 24 * 60 * 60 * 1000)) / 1000);
+  const libsResp = await plexGet(server, '/library/sections');
+  const mc = libsResp && libsResp.data && libsResp.data.MediaContainer ? libsResp.data.MediaContainer : null;
+  const dirs = mc && Array.isArray(mc.Directory) ? mc.Directory : [];
+
+  const libraries = [];
+  for (const d of dirs) {
+    if (!d) continue;
+    const key = d.key != null ? String(d.key) : '';
+    if (!key) continue;
+    const name = d.title != null ? String(d.title) : (d.name != null ? String(d.name) : `Library ${key}`);
+    const libType = d.type != null ? String(d.type) : '';
+
+    let totalItems = null;
+    let unwatchedItems = null;
+    let watchedItems = null;
+    let storageBytes = null;
+
+    if (d.totalSize != null) {
+      const b = Number(d.totalSize);
+      if (Number.isFinite(b) && b >= 0) storageBytes = Math.floor(b);
+    }
+
+    try {
+      const totals = await plexGet(server, `/library/sections/${encodeURIComponent(key)}/all`, {
+        'X-Plex-Container-Start': 0,
+        'X-Plex-Container-Size': 0
+      });
+      const tmc = totals && totals.data && totals.data.MediaContainer ? totals.data.MediaContainer : null;
+      const n = tmc && tmc.totalSize != null ? Number(tmc.totalSize) : null;
+      if (Number.isFinite(n) && n >= 0) totalItems = Math.floor(n);
+    } catch (_) {}
+
+    try {
+      const un = await plexGet(server, `/library/sections/${encodeURIComponent(key)}/all`, {
+        'X-Plex-Container-Start': 0,
+        'X-Plex-Container-Size': 0,
+        unwatched: 1
+      });
+      const umc = un && un.data && un.data.MediaContainer ? un.data.MediaContainer : null;
+      const n = umc && umc.totalSize != null ? Number(umc.totalSize) : null;
+      if (Number.isFinite(n) && n >= 0) {
+        unwatchedItems = Math.floor(n);
+        if (Number.isFinite(totalItems)) watchedItems = Math.max(0, totalItems - unwatchedItems);
+      }
+    } catch (_) {}
+
+    const genreCounts = new Map();
+    const codecCounts = new Map();
+    const resolutionCounts = new Map();
+    let recentlyAddedCount = 0;
+    let recentlyAddedBytes = 0;
+
+    try {
+      let start = 0;
+      const pageSize = 200;
+      const maxPages = 40;
+      const maxScanned = 5000;
+      let scanned = 0;
+      let done = false;
+
+      for (let page = 0; page < maxPages && !done; page++) {
+        const resp = await plexGet(server, `/library/sections/${encodeURIComponent(key)}/all`, {
+          sort: 'addedAt:desc',
+          'X-Plex-Container-Start': start,
+          'X-Plex-Container-Size': pageSize
+        });
+        const pmc = resp && resp.data && resp.data.MediaContainer ? resp.data.MediaContainer : null;
+        const items = pmc && Array.isArray(pmc.Metadata) ? pmc.Metadata : [];
+        if (!items.length) break;
+
+        for (const it of items) {
+          if (!it) continue;
+          const addedAt = typeof it.addedAt === 'number' ? it.addedAt : (typeof it.addedAt === 'string' ? parseInt(it.addedAt, 10) : 0);
+          if (!addedAt || addedAt < cutoffEpochSec) {
+            done = true;
+            break;
+          }
+
+          recentlyAddedCount++;
+          scanned++;
+          if (scanned >= maxScanned) {
+            done = true;
+            break;
+          }
+
+          const genres = Array.isArray(it.Genre) ? it.Genre : [];
+          for (const g of genres) {
+            const tag = g && g.tag != null ? String(g.tag) : '';
+            addCount(genreCounts, tag, 1);
+          }
+
+          const medias = Array.isArray(it.Media) ? it.Media : [];
+          for (const m of medias) {
+            if (!m) continue;
+            addCount(codecCounts, m.videoCodec, 1);
+            const resLabel = formatResolutionLabel(m.videoResolution || m.height);
+            addCount(resolutionCounts, resLabel, 1);
+            const parts = Array.isArray(m.Part) ? m.Part : [];
+            for (const p of parts) {
+              const sz = p && p.size != null ? Number(p.size) : null;
+              if (Number.isFinite(sz) && sz > 0) recentlyAddedBytes += Math.floor(sz);
+            }
+          }
+        }
+
+        start += pageSize;
+      }
+    } catch (_) {}
+
+    libraries.push({
+      id: key,
+      name,
+      type: libType,
+      totalItems,
+      unwatchedItems,
+      watchedItems,
+      recentlyAddedCount,
+      recentlyAdded: {
+        topGenres: topKFromMap(genreCounts, 5),
+        topVideoCodecs: topKFromMap(codecCounts, 5),
+        topResolutions: topKFromMap(resolutionCounts, 5),
+        bytes: recentlyAddedBytes
+      },
+      storageBytes
+    });
+  }
+
+  return { libraries, days: Math.max(1, Math.floor(days)) };
+}
+
+async function buildJellyfinEmbyLibraryReport(server, { days = 7, userId: userIdOverride } = {}) {
+  const nowMs = Date.now();
+  const cutoffMs = nowMs - (Math.max(1, Math.floor(days)) * 24 * 60 * 60 * 1000);
+
+  let userId = userIdOverride ? String(userIdOverride) : '';
+  if (!userId) {
+    const usersResp = await jfEmbyGet(server, '/Users');
+    const users = Array.isArray(usersResp.data) ? usersResp.data : [];
+    const u = users.find(x => x && x.Id) || users[0];
+    userId = u && u.Id ? String(u.Id) : '';
+  }
+
+  if (!userId) {
+    return {
+      days: Math.max(1, Math.floor(days)),
+      userId: '',
+      libraries: [],
+      warning: 'No user available to enumerate libraries.'
+    };
+  }
+
+  const viewsResp = await jfEmbyGet(server, `/Users/${encodeURIComponent(userId)}/Views`);
+  const viewItems = viewsResp && viewsResp.data && Array.isArray(viewsResp.data.Items) ? viewsResp.data.Items : [];
+
+  const libraries = [];
+  for (const v of viewItems) {
+    if (!v || !v.Id) continue;
+    const libId = String(v.Id);
+    const name = v.Name != null ? String(v.Name) : `Library ${libId}`;
+    const libType = v.CollectionType != null ? String(v.CollectionType) : (v.Type != null ? String(v.Type) : '');
+
+    const genreCounts = new Map();
+    const codecCounts = new Map();
+    const resolutionCounts = new Map();
+    let recentlyAddedCount = 0;
+    let recentlyAddedBytes = 0;
+
+    let totalPlayableItems = null;
+    let unplayedItems = null;
+    let playedItems = null;
+    let totalItems = null;
+
+    try {
+      const totalResp = await jfEmbyGet(server, `/Users/${encodeURIComponent(userId)}/Items`, {
+        ParentId: libId,
+        Recursive: true,
+        IncludeItemTypes: 'Movie,Episode',
+        Limit: 1
+      });
+      const total = totalResp && totalResp.data && totalResp.data.TotalRecordCount != null ? Number(totalResp.data.TotalRecordCount) : null;
+      if (Number.isFinite(total) && total >= 0) totalPlayableItems = Math.floor(total);
+    } catch (_) {}
+
+    try {
+      const totalAnyResp = await jfEmbyGet(server, `/Users/${encodeURIComponent(userId)}/Items`, {
+        ParentId: libId,
+        Recursive: true,
+        Limit: 1
+      });
+      const total = totalAnyResp && totalAnyResp.data && totalAnyResp.data.TotalRecordCount != null ? Number(totalAnyResp.data.TotalRecordCount) : null;
+      if (Number.isFinite(total) && total >= 0) totalItems = Math.floor(total);
+    } catch (_) {}
+
+    try {
+      const unResp = await jfEmbyGet(server, `/Users/${encodeURIComponent(userId)}/Items`, {
+        ParentId: libId,
+        Recursive: true,
+        IncludeItemTypes: 'Movie,Episode',
+        Filters: 'IsUnplayed',
+        Limit: 1
+      });
+      const total = unResp && unResp.data && unResp.data.TotalRecordCount != null ? Number(unResp.data.TotalRecordCount) : null;
+      if (Number.isFinite(total) && total >= 0) {
+        unplayedItems = Math.floor(total);
+        if (Number.isFinite(totalPlayableItems)) playedItems = Math.max(0, totalPlayableItems - unplayedItems);
+      }
+    } catch (_) {}
+
+    try {
+      let startIndex = 0;
+      const pageSize = 200;
+      const maxPages = 40;
+      const maxScanned = 5000;
+      let scanned = 0;
+      let done = false;
+
+      for (let page = 0; page < maxPages && !done; page++) {
+        const resp = await jfEmbyGet(server, `/Users/${encodeURIComponent(userId)}/Items`, {
+          ParentId: libId,
+          Recursive: true,
+          IncludeItemTypes: 'Movie,Episode',
+          SortBy: 'DateCreated',
+          SortOrder: 'Descending',
+          StartIndex: startIndex,
+          Limit: pageSize
+        });
+        const items = resp && resp.data && Array.isArray(resp.data.Items) ? resp.data.Items : [];
+        if (!items.length) break;
+
+        for (const it of items) {
+          if (!it) continue;
+          const createdRaw = it.DateCreated || it.PremiereDate || it.ProductionDate;
+          const createdMs = createdRaw ? Date.parse(createdRaw) : NaN;
+          if (!Number.isFinite(createdMs) || createdMs < cutoffMs) {
+            done = true;
+            break;
+          }
+
+          recentlyAddedCount++;
+          scanned++;
+          if (scanned >= maxScanned) {
+            done = true;
+            break;
+          }
+
+          const genres = Array.isArray(it.Genres) ? it.Genres : [];
+          for (const g of genres) addCount(genreCounts, g, 1);
+
+          const mediaSources = Array.isArray(it.MediaSources) ? it.MediaSources : [];
+          for (const src of mediaSources) {
+            if (!src) continue;
+            if (src.Size != null) {
+              const sz = Number(src.Size);
+              if (Number.isFinite(sz) && sz > 0) recentlyAddedBytes += Math.floor(sz);
+            }
+
+            const streams = Array.isArray(src.MediaStreams) ? src.MediaStreams : [];
+            const video = streams.find(s => s && (s.Type === 'Video' || s.Type === 2)) || null;
+            if (video) {
+              addCount(codecCounts, video.Codec, 1);
+              addCount(resolutionCounts, formatResolutionLabel(video.Height), 1);
+            }
+          }
+        }
+
+        startIndex += pageSize;
+      }
+    } catch (_) {}
+
+    libraries.push({
+      id: libId,
+      name,
+      type: libType,
+      totalItems,
+      totalPlayableItems,
+      unwatchedItems: unplayedItems,
+      watchedItems: playedItems,
+      recentlyAddedCount,
+      recentlyAdded: {
+        topGenres: topKFromMap(genreCounts, 5),
+        topVideoCodecs: topKFromMap(codecCounts, 5),
+        topResolutions: topKFromMap(resolutionCounts, 5),
+        bytes: recentlyAddedBytes
+      }
+    });
+  }
+
+  return {
+    days: Math.max(1, Math.floor(days)),
+    userId,
+    libraries
+  };
+}
+
+app.get('/api/reports/library-inventory', async (req, res) => {
+  try {
+    const serverIdRaw = req.query.serverId;
+    const serverId = serverIdRaw != null ? String(serverIdRaw) : '';
+    if (!serverId) return res.status(400).json({ error: 'serverId is required' });
+
+    const server = (Array.isArray(servers) ? servers : []).find(s => s && String(s.id) === serverId);
+    if (!server || !server.baseUrl) return res.status(404).json({ error: 'Server not found' });
+    if (server.disabled) return res.status(404).json({ error: 'Server is disabled' });
+
+    const daysRaw = Number(req.query.days ?? 7);
+    const days = Number.isFinite(daysRaw) ? Math.max(1, Math.min(365, Math.floor(daysRaw))) : 7;
+    const userId = req.query.userId != null ? String(req.query.userId) : '';
+
+    const cacheKey = `${String(server.id)}|${String(server.type || '')}|${days}|${userId}`;
+    const cached = libraryInventoryCache.get(cacheKey);
+    const now = Date.now();
+    if (cached && cached.atMs && (now - cached.atMs) < LIBRARY_INVENTORY_CACHE_TTL_MS && cached.data) {
+      return res.json({ ...cached.data, cached: true });
+    }
+
+    let report;
+    if (String(server.type).toLowerCase() === 'plex') {
+      report = await buildPlexLibraryReport(server, { days });
+    } else if (String(server.type).toLowerCase() === 'jellyfin' || String(server.type).toLowerCase() === 'emby') {
+      report = await buildJellyfinEmbyLibraryReport(server, { days, userId });
+    } else {
+      return res.status(400).json({ error: 'Unsupported server type for library inventory reports' });
+    }
+
+    const payload = {
+      server: {
+        id: String(server.id),
+        name: server.name || server.baseUrl,
+        type: String(server.type || '').toLowerCase()
+      },
+      generatedAt: new Date().toISOString(),
+      days,
+      ...report
+    };
+
+    libraryInventoryCache.set(cacheKey, { atMs: now, data: payload });
+    res.json(payload);
+  } catch (e) {
+    console.error('[OmniStream] Reports library-inventory failed:', e.message);
+    res.status(500).json({ error: 'Failed to build library report', detail: e.message });
+  }
+});
+
 app.get('/api/reports/watch-statistics', async (req, res) => {
   try {
     if (!historyDb || !historyDbReady) {

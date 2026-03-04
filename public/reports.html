@@ -177,6 +177,24 @@
       </div>
 
       <div id="content" class="placeholder">Loading watch statistics...</div>
+
+      <h1 style="margin-top:18px;">LIBRARY REPORTS</h1>
+
+      <div class="toolbar" aria-label="Library reports controls">
+        <div class="control" style="gap:10px;flex-wrap:wrap;">
+          <div class="muted" style="font-size:12px;letter-spacing:0.08em;text-transform:uppercase;">Server</div>
+          <select id="libServer" class="field" aria-label="Library reports server" style="min-width:260px;"></select>
+          <div class="muted" style="font-size:12px;letter-spacing:0.08em;text-transform:uppercase;">Window</div>
+          <select id="libDays" class="field" aria-label="Library reports window" style="min-width:160px;">
+            <option value="7" selected>Last 7 days</option>
+            <option value="30">Last 30 days</option>
+            <option value="90">Last 90 days</option>
+          </select>
+          <button id="libRefresh" class="btn" type="button">Refresh</button>
+        </div>
+      </div>
+
+      <div id="libraryContent" class="placeholder">Loading library reports...</div>
     </main>
   </div>
 
@@ -485,6 +503,11 @@
     const fromDate = document.getElementById('fromDate');
     const toDate = document.getElementById('toDate');
 
+    const libServer = document.getElementById('libServer');
+    const libDays = document.getElementById('libDays');
+    const libRefresh = document.getElementById('libRefresh');
+    const libraryContent = document.getElementById('libraryContent');
+
     const REPORT_PANELS = [
       { key: 'mostWatchedMovies', label: 'Most Watched Movies' },
       { key: 'mostPopularMovies', label: 'Most Popular Movies' },
@@ -519,6 +542,163 @@
     };
 
     let lastData = null;
+
+    function formatBytes(bytes) {
+      const b = Number(bytes);
+      if (!Number.isFinite(b) || b <= 0) return '0 B';
+      const units = ['B','KB','MB','GB','TB','PB'];
+      let v = b;
+      let i = 0;
+      while (v >= 1024 && i < units.length - 1) {
+        v /= 1024;
+        i++;
+      }
+      const dp = v >= 100 ? 0 : (v >= 10 ? 1 : 2);
+      return `${v.toFixed(dp)} ${units[i]}`;
+    }
+
+    function renderKvPanel({ title, right, rows }) {
+      const items = Array.isArray(rows) ? rows : [];
+      const hue = hashHue(title);
+      let html = '<div class="panel">';
+      html += `<div class="panel-bg fallback" style="--hue:${hue}deg;"></div>`;
+      html += '<div class="panel-overlay"></div>';
+      html += '<div class="panel-inner">';
+      html += '<div class="panel-body">';
+      html += '<div class="panel-head">';
+      html += `<div class="panel-title">${escapeHtml(title)}</div>`;
+      html += `<div class="panel-right">${escapeHtml(right || '')}</div>`;
+      html += '</div>';
+      html += '<div class="list">';
+      if (!items.length) {
+        html += '<div class="row"><span class="muted">No data yet.</span></div>';
+      } else {
+        items.forEach((it) => {
+          html += '<div class="row">';
+          html += '<div class="row-left">';
+          html += `<div class="name">${escapeHtml(it.name || '')}</div>`;
+          html += '</div>';
+          html += `<div class="value">${escapeHtml(String(it.value ?? ''))}</div>`;
+          html += '</div>';
+        });
+      }
+      html += '</div>';
+      html += '</div>';
+      html += '</div>';
+      html += '</div>';
+      return html;
+    }
+
+    async function fetchServers() {
+      const r = await fetch('/api/servers');
+      if (!r.ok) throw new Error('Failed to load servers');
+      const arr = await r.json();
+      return Array.isArray(arr) ? arr : [];
+    }
+
+    async function fetchLibraryInventory({ serverId, days } = {}) {
+      const q = new URLSearchParams();
+      q.set('serverId', String(serverId || ''));
+      q.set('days', String(days || 7));
+      const r = await fetch(`/api/reports/library-inventory?${q.toString()}`);
+      if (!r.ok) throw new Error('Failed to load library report');
+      return await r.json();
+    }
+
+    function rowsFromLibrary(lib, days) {
+      const rows = [];
+      const num = (v) => {
+        const n = Number(v);
+        return Number.isFinite(n) ? Math.floor(n) : null;
+      };
+
+      const totalItems = num(lib.totalItems);
+      const totalPlayableItems = num(lib.totalPlayableItems);
+      const unwatchedItems = num(lib.unwatchedItems);
+      const watchedItems = num(lib.watchedItems);
+      const added = num(lib.recentlyAddedCount);
+
+      if (totalItems != null) rows.push({ name: 'TOTAL ITEMS', value: fmtInt(totalItems) });
+      if (totalPlayableItems != null && totalPlayableItems !== totalItems) rows.push({ name: 'PLAYABLE ITEMS', value: fmtInt(totalPlayableItems) });
+      if (unwatchedItems != null) rows.push({ name: 'UNWATCHED', value: fmtInt(unwatchedItems) });
+      if (watchedItems != null) rows.push({ name: 'WATCHED', value: fmtInt(watchedItems) });
+      if (added != null) rows.push({ name: `ADDED (${days}D)`, value: fmtInt(added) });
+
+      if (lib.storageBytes != null) rows.push({ name: 'STORAGE (TOTAL)', value: formatBytes(lib.storageBytes) });
+      if (lib.recentlyAdded && lib.recentlyAdded.bytes != null) rows.push({ name: `RECENT SIZE (${days}D)`, value: formatBytes(lib.recentlyAdded.bytes) });
+
+      const top = (arr) => Array.isArray(arr) ? arr.slice(0, 3) : [];
+
+      top(lib.recentlyAdded && lib.recentlyAdded.topGenres).forEach(g => rows.push({ name: `GENRE: ${String(g.name || '').toUpperCase()}`, value: fmtInt(g.count || 0) }));
+      top(lib.recentlyAdded && lib.recentlyAdded.topVideoCodecs).forEach(c => rows.push({ name: `CODEC: ${String(c.name || '').toUpperCase()}`, value: fmtInt(c.count || 0) }));
+      top(lib.recentlyAdded && lib.recentlyAdded.topResolutions).forEach(r => rows.push({ name: `RES: ${String(r.name || '').toUpperCase()}`, value: fmtInt(r.count || 0) }));
+
+      return rows;
+    }
+
+    async function renderLibraryReports({ refetchServers = false } = {}) {
+      if (!libraryContent) return;
+
+      const PREF_KEY = 'omnistream_library_reports_server';
+
+      try {
+        if (refetchServers || !libServer || !libServer.options.length) {
+          libraryContent.className = 'placeholder';
+          libraryContent.textContent = 'Loading library reports...';
+
+          const all = await fetchServers();
+          const eligible = all.filter(s => s && !s.disabled && ['plex','jellyfin','emby'].includes(String(s.type || '').toLowerCase()));
+          if (!eligible.length) {
+            libraryContent.className = 'placeholder';
+            libraryContent.textContent = 'No enabled Plex/Jellyfin/Emby servers found.';
+            if (libServer) libServer.innerHTML = '';
+            return;
+          }
+
+          const saved = (() => { try { return localStorage.getItem(PREF_KEY) || ''; } catch (_) { return ''; } })();
+          const selected = eligible.some(s => String(s.id) === String(saved)) ? String(saved) : String(eligible[0].id);
+
+          if (libServer) {
+            libServer.innerHTML = eligible.map(s => {
+              const label = `${String(s.name || s.baseUrl || s.id)} (${String(s.type || '').toUpperCase()})`;
+              const sel = String(s.id) === selected ? 'selected' : '';
+              return `<option value="${escapeHtml(String(s.id))}" ${sel}>${escapeHtml(label)}</option>`;
+            }).join('');
+          }
+        }
+
+        const serverId = libServer ? String(libServer.value || '') : '';
+        const days = libDays ? Number(libDays.value || 7) : 7;
+        if (!serverId) {
+          libraryContent.className = 'placeholder';
+          libraryContent.textContent = 'Pick a server to generate library reports.';
+          return;
+        }
+
+        try { localStorage.setItem('omnistream_library_reports_server', serverId); } catch (_) {}
+
+        libraryContent.className = 'placeholder';
+        libraryContent.textContent = 'Loading library reports...';
+
+        const data = await fetchLibraryInventory({ serverId, days });
+        const libs = Array.isArray(data.libraries) ? data.libraries : [];
+
+        let html = '<div class="grid">';
+        for (const lib of libs) {
+          const title = lib && lib.name ? String(lib.name) : 'Library';
+          const right = lib && lib.type ? String(lib.type).toUpperCase() : (data.server && data.server.type ? String(data.server.type).toUpperCase() : '');
+          html += renderKvPanel({ title, right, rows: rowsFromLibrary(lib || {}, days) });
+        }
+        html += '</div>';
+
+        libraryContent.className = '';
+        libraryContent.innerHTML = html;
+      } catch (e) {
+        console.error(e);
+        libraryContent.className = 'placeholder';
+        libraryContent.textContent = 'Failed to load library reports.';
+      }
+    }
 
     function setActivePill(range) {
       ['pill7d','pill30d','pill1y','pillAll','pillCustom'].forEach(id => {
@@ -755,6 +935,18 @@
 
     buildColumnsMenu();
     setRange('30d');
+
+    if (libServer) {
+      libServer.addEventListener('change', () => renderLibraryReports({ refetchServers: false }));
+    }
+    if (libDays) {
+      libDays.addEventListener('change', () => renderLibraryReports({ refetchServers: false }));
+    }
+    if (libRefresh) {
+      libRefresh.addEventListener('click', () => renderLibraryReports({ refetchServers: true }));
+    }
+
+    renderLibraryReports({ refetchServers: true });
   </script>
 </body>
 </html>
