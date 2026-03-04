@@ -190,6 +190,9 @@
             <option value="30">Last 30 days</option>
             <option value="90">Last 90 days</option>
           </select>
+          <label class="menu-item" style="padding:0 6px;">
+            <input id="libFullScan" type="checkbox"> Full scan (slow)
+          </label>
           <button id="libRefresh" class="btn" type="button">Refresh</button>
         </div>
       </div>
@@ -505,6 +508,7 @@
 
     const libServer = document.getElementById('libServer');
     const libDays = document.getElementById('libDays');
+    const libFullScan = document.getElementById('libFullScan');
     const libRefresh = document.getElementById('libRefresh');
     const libraryContent = document.getElementById('libraryContent');
 
@@ -605,7 +609,23 @@
       return await r.json();
     }
 
-    function rowsFromLibrary(lib, days) {
+    async function startLibraryFullScan({ serverId, days } = {}) {
+      const r = await fetch('/api/reports/library-inventory/full-scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ serverId, days })
+      });
+      if (!r.ok && r.status !== 202) throw new Error('Failed to start full scan');
+      return await r.json();
+    }
+
+    async function fetchLibraryFullScanJob(jobId) {
+      const r = await fetch(`/api/reports/library-inventory/full-scan/${encodeURIComponent(String(jobId || ''))}`);
+      if (!r.ok) throw new Error('Failed to load full scan job');
+      return await r.json();
+    }
+
+    function rowsFromLibrary(lib, days, { preferFullScan = false } = {}) {
       const rows = [];
       const num = (v) => {
         const n = Number(v);
@@ -627,11 +647,27 @@
       if (lib.storageBytes != null) rows.push({ name: 'STORAGE (TOTAL)', value: formatBytes(lib.storageBytes) });
       if (lib.recentlyAdded && lib.recentlyAdded.bytes != null) rows.push({ name: `RECENT SIZE (${days}D)`, value: formatBytes(lib.recentlyAdded.bytes) });
 
+      if (lib.fullScan && preferFullScan) {
+        if (lib.fullScan.bytes != null) rows.push({ name: 'FULL SIZE (ALL)', value: formatBytes(lib.fullScan.bytes) });
+        if (lib.fullScan.scannedItems != null) rows.push({ name: 'FULL ITEMS SCANNED', value: fmtInt(lib.fullScan.scannedItems) });
+      }
+
       const top = (arr) => Array.isArray(arr) ? arr.slice(0, 3) : [];
 
-      top(lib.recentlyAdded && lib.recentlyAdded.topGenres).forEach(g => rows.push({ name: `GENRE: ${String(g.name || '').toUpperCase()}`, value: fmtInt(g.count || 0) }));
-      top(lib.recentlyAdded && lib.recentlyAdded.topVideoCodecs).forEach(c => rows.push({ name: `CODEC: ${String(c.name || '').toUpperCase()}`, value: fmtInt(c.count || 0) }));
-      top(lib.recentlyAdded && lib.recentlyAdded.topResolutions).forEach(r => rows.push({ name: `RES: ${String(r.name || '').toUpperCase()}`, value: fmtInt(r.count || 0) }));
+      const genres = (preferFullScan && lib.fullScan && Array.isArray(lib.fullScan.topGenres))
+        ? lib.fullScan.topGenres
+        : (lib.recentlyAdded && lib.recentlyAdded.topGenres);
+      const codecs = (preferFullScan && lib.fullScan && Array.isArray(lib.fullScan.topVideoCodecs))
+        ? lib.fullScan.topVideoCodecs
+        : (lib.recentlyAdded && lib.recentlyAdded.topVideoCodecs);
+      const ress = (preferFullScan && lib.fullScan && Array.isArray(lib.fullScan.topResolutions))
+        ? lib.fullScan.topResolutions
+        : (lib.recentlyAdded && lib.recentlyAdded.topResolutions);
+
+      const suffix = preferFullScan ? ' (FULL)' : ` (${days}D)`;
+      top(genres).forEach(g => rows.push({ name: `GENRE${suffix}: ${String(g.name || '').toUpperCase()}`, value: fmtInt(g.count || 0) }));
+      top(codecs).forEach(c => rows.push({ name: `CODEC${suffix}: ${String(c.name || '').toUpperCase()}`, value: fmtInt(c.count || 0) }));
+      top(ress).forEach(r => rows.push({ name: `RES${suffix}: ${String(r.name || '').toUpperCase()}`, value: fmtInt(r.count || 0) }));
 
       return rows;
     }
@@ -669,6 +705,7 @@
 
         const serverId = libServer ? String(libServer.value || '') : '';
         const days = libDays ? Number(libDays.value || 7) : 7;
+        const doFullScan = !!(libFullScan && libFullScan.checked);
         if (!serverId) {
           libraryContent.className = 'placeholder';
           libraryContent.textContent = 'Pick a server to generate library reports.';
@@ -678,16 +715,49 @@
         try { localStorage.setItem('omnistream_library_reports_server', serverId); } catch (_) {}
 
         libraryContent.className = 'placeholder';
-        libraryContent.textContent = 'Loading library reports...';
+        libraryContent.textContent = doFullScan ? 'Starting full scan... (this can take a while)' : 'Loading library reports...';
 
-        const data = await fetchLibraryInventory({ serverId, days });
+        const data = doFullScan
+          ? await (async () => {
+            const job = await startLibraryFullScan({ serverId, days });
+            const jobId = job && job.id ? job.id : '';
+            if (!jobId) throw new Error('Full scan job did not return an id');
+
+            const startMs = Date.now();
+            const maxWaitMs = 60 * 60 * 1000; // 1 hour
+            while (true) {
+              const j = await fetchLibraryFullScanJob(jobId);
+              if (j && j.status === 'done' && j.result) return j.result;
+              if (j && j.status === 'error') throw new Error(j.error || 'Full scan failed');
+
+              const p = j && j.progress ? j.progress : {};
+              const libName = p.libraryName ? String(p.libraryName) : '';
+              const libIdx = Number.isFinite(Number(p.libraryIndex)) ? Number(p.libraryIndex) : 0;
+              const libTotal = Number.isFinite(Number(p.librariesTotal)) ? Number(p.librariesTotal) : 0;
+              const scanned = Number.isFinite(Number(p.scanned)) ? Number(p.scanned) : 0;
+              const total = (p.total != null && Number.isFinite(Number(p.total))) ? Number(p.total) : null;
+              const pct = (total && total > 0) ? Math.min(99, Math.floor((scanned / total) * 100)) : null;
+
+              const lineA = libTotal > 0 ? `Scanning library ${libIdx + 1}/${libTotal}` : 'Scanning libraries';
+              const lineB = libName ? `— ${libName}` : '';
+              const lineC = total ? ` (${fmtInt(scanned)} / ${fmtInt(total)}${pct != null ? `, ${pct}%` : ''})` : ` (${fmtInt(scanned)} scanned)`;
+              libraryContent.textContent = `${lineA} ${lineB}${lineC}`;
+
+              if ((Date.now() - startMs) > maxWaitMs) {
+                throw new Error('Full scan timed out waiting for results');
+              }
+              await new Promise(r => setTimeout(r, 1500));
+            }
+          })()
+          : await fetchLibraryInventory({ serverId, days });
         const libs = Array.isArray(data.libraries) ? data.libraries : [];
+        const preferFull = data && data.mode === 'full';
 
         let html = '<div class="grid">';
         for (const lib of libs) {
           const title = lib && lib.name ? String(lib.name) : 'Library';
           const right = lib && lib.type ? String(lib.type).toUpperCase() : (data.server && data.server.type ? String(data.server.type).toUpperCase() : '');
-          html += renderKvPanel({ title, right, rows: rowsFromLibrary(lib || {}, days) });
+          html += renderKvPanel({ title, right, rows: rowsFromLibrary(lib || {}, days, { preferFullScan: preferFull }) });
         }
         html += '</div>';
 
@@ -944,6 +1014,12 @@
     }
     if (libRefresh) {
       libRefresh.addEventListener('click', () => renderLibraryReports({ refetchServers: true }));
+    }
+
+    if (libFullScan) {
+      libFullScan.addEventListener('change', () => {
+        // Only refetch on explicit refresh or server/window change.
+      });
     }
 
     renderLibraryReports({ refetchServers: true });

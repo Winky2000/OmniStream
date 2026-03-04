@@ -4792,6 +4792,43 @@ app.get('/api/about', (req, res) => {
 const libraryInventoryCache = new Map();
 const LIBRARY_INVENTORY_CACHE_TTL_MS = 10 * 60 * 1000;
 
+// Full-scan jobs can take a long time on large libraries.
+// We run them async and let the UI poll for progress/results.
+const libraryInventoryScanJobs = new Map();
+const LIBRARY_INVENTORY_JOB_TTL_MS = 6 * 60 * 60 * 1000;
+
+function newJobId() {
+  return `${Date.now().toString(36)}-${crypto.randomBytes(6).toString('hex')}`;
+}
+
+function getJobPublicView(job) {
+  if (!job || typeof job !== 'object') return null;
+  return {
+    id: job.id,
+    status: job.status,
+    createdAt: job.createdAt,
+    updatedAt: job.updatedAt,
+    server: job.server,
+    days: job.days,
+    progress: job.progress || null,
+    error: job.error || null,
+    result: job.status === 'done' ? (job.result || null) : null
+  };
+}
+
+function cleanupOldLibraryJobs() {
+  const now = Date.now();
+  for (const [id, job] of libraryInventoryScanJobs.entries()) {
+    const updatedMs = job && job.updatedAt ? Date.parse(job.updatedAt) : NaN;
+    const ageMs = Number.isFinite(updatedMs) ? (now - updatedMs) : (now - now);
+    if (!Number.isFinite(ageMs) || ageMs > LIBRARY_INVENTORY_JOB_TTL_MS) {
+      libraryInventoryScanJobs.delete(id);
+    }
+  }
+}
+
+setInterval(cleanupOldLibraryJobs, 10 * 60 * 1000);
+
 function topKFromMap(map, k) {
   if (!map || typeof map !== 'object') return [];
   const arr = [];
@@ -4911,6 +4948,12 @@ async function buildPlexLibraryReport(server, { days = 7 } = {}) {
     let recentlyAddedCount = 0;
     let recentlyAddedBytes = 0;
 
+    const fullGenreCounts = new Map();
+    const fullCodecCounts = new Map();
+    const fullResolutionCounts = new Map();
+    let fullScanned = 0;
+    let fullBytes = 0;
+
     try {
       let start = 0;
       const pageSize = 200;
@@ -4968,6 +5011,58 @@ async function buildPlexLibraryReport(server, { days = 7 } = {}) {
       }
     } catch (_) {}
 
+    // Full scan: walk every item in the library.
+    // This can take a long time; intended to be run via the job runner.
+    const runFullScan = async (onProgress) => {
+      try {
+        let start = 0;
+        const pageSize = 200;
+        // Iterate until Plex returns no more items.
+        while (true) {
+          const resp = await plexGet(server, `/library/sections/${encodeURIComponent(key)}/all`, {
+            'X-Plex-Container-Start': start,
+            'X-Plex-Container-Size': pageSize
+          });
+          const pmc = resp && resp.data && resp.data.MediaContainer ? resp.data.MediaContainer : null;
+          const items = pmc && Array.isArray(pmc.Metadata) ? pmc.Metadata : [];
+          const total = pmc && pmc.totalSize != null ? Number(pmc.totalSize) : null;
+          if (onProgress) {
+            onProgress({
+              libraryId: key,
+              libraryName: name,
+              scanned: fullScanned,
+              total: Number.isFinite(total) ? Math.floor(total) : null
+            });
+          }
+          if (!items.length) break;
+          for (const it of items) {
+            if (!it) continue;
+            fullScanned++;
+            const genres = Array.isArray(it.Genre) ? it.Genre : [];
+            for (const g of genres) {
+              const tag = g && g.tag != null ? String(g.tag) : '';
+              addCount(fullGenreCounts, tag, 1);
+            }
+            const medias = Array.isArray(it.Media) ? it.Media : [];
+            for (const m of medias) {
+              if (!m) continue;
+              addCount(fullCodecCounts, m.videoCodec, 1);
+              const resLabel = formatResolutionLabel(m.videoResolution || m.height);
+              addCount(fullResolutionCounts, resLabel, 1);
+              const parts = Array.isArray(m.Part) ? m.Part : [];
+              for (const p of parts) {
+                const sz = p && p.size != null ? Number(p.size) : null;
+                if (Number.isFinite(sz) && sz > 0) fullBytes += Math.floor(sz);
+              }
+            }
+          }
+          start += pageSize;
+        }
+      } catch (_) {
+        // Best-effort; leave fullScan fields empty on failure.
+      }
+    };
+
     libraries.push({
       id: key,
       name,
@@ -4982,7 +5077,15 @@ async function buildPlexLibraryReport(server, { days = 7 } = {}) {
         topResolutions: topKFromMap(resolutionCounts, 5),
         bytes: recentlyAddedBytes
       },
-      storageBytes
+      storageBytes,
+      _fullScanRunner: runFullScan,
+      _fullScanState: {
+        scannedItems: () => fullScanned,
+        bytes: () => fullBytes,
+        topGenres: () => topKFromMap(fullGenreCounts, 5),
+        topVideoCodecs: () => topKFromMap(fullCodecCounts, 5),
+        topResolutions: () => topKFromMap(fullResolutionCounts, 5)
+      }
     });
   }
 
@@ -5025,6 +5128,12 @@ async function buildJellyfinEmbyLibraryReport(server, { days = 7, userId: userId
     const resolutionCounts = new Map();
     let recentlyAddedCount = 0;
     let recentlyAddedBytes = 0;
+
+    const fullGenreCounts = new Map();
+    const fullCodecCounts = new Map();
+    const fullResolutionCounts = new Map();
+    let fullScanned = 0;
+    let fullBytes = 0;
 
     let totalPlayableItems = null;
     let unplayedItems = null;
@@ -5128,6 +5237,64 @@ async function buildJellyfinEmbyLibraryReport(server, { days = 7, userId: userId
       }
     } catch (_) {}
 
+    const runFullScan = async (onProgress) => {
+      try {
+        let startIndex = 0;
+        const pageSize = 200;
+        // Pull items in pages until there are no more.
+        while (true) {
+          const resp = await jfEmbyGet(server, `/Users/${encodeURIComponent(userId)}/Items`, {
+            ParentId: libId,
+            Recursive: true,
+            IncludeItemTypes: 'Movie,Episode',
+            SortBy: 'SortName',
+            SortOrder: 'Ascending',
+            StartIndex: startIndex,
+            Limit: pageSize,
+            Fields: 'Genres,MediaSources'
+          });
+          const items = resp && resp.data && Array.isArray(resp.data.Items) ? resp.data.Items : [];
+          const total = resp && resp.data && resp.data.TotalRecordCount != null ? Number(resp.data.TotalRecordCount) : null;
+          if (onProgress) {
+            onProgress({
+              libraryId: libId,
+              libraryName: name,
+              scanned: fullScanned,
+              total: Number.isFinite(total) ? Math.floor(total) : null
+            });
+          }
+          if (!items.length) break;
+
+          for (const it of items) {
+            if (!it) continue;
+            fullScanned++;
+            const genres = Array.isArray(it.Genres) ? it.Genres : [];
+            for (const g of genres) addCount(fullGenreCounts, g, 1);
+
+            const mediaSources = Array.isArray(it.MediaSources) ? it.MediaSources : [];
+            for (const src of mediaSources) {
+              if (!src) continue;
+              if (src.Size != null) {
+                const sz = Number(src.Size);
+                if (Number.isFinite(sz) && sz > 0) fullBytes += Math.floor(sz);
+              }
+
+              const streams = Array.isArray(src.MediaStreams) ? src.MediaStreams : [];
+              const video = streams.find(s => s && (s.Type === 'Video' || s.Type === 2)) || null;
+              if (video) {
+                addCount(fullCodecCounts, video.Codec, 1);
+                addCount(fullResolutionCounts, formatResolutionLabel(video.Height), 1);
+              }
+            }
+          }
+
+          startIndex += pageSize;
+        }
+      } catch (_) {
+        // Best-effort; leave fullScan fields empty on failure.
+      }
+    };
+
     libraries.push({
       id: libId,
       name,
@@ -5142,6 +5309,14 @@ async function buildJellyfinEmbyLibraryReport(server, { days = 7, userId: userId
         topVideoCodecs: topKFromMap(codecCounts, 5),
         topResolutions: topKFromMap(resolutionCounts, 5),
         bytes: recentlyAddedBytes
+      },
+      _fullScanRunner: runFullScan,
+      _fullScanState: {
+        scannedItems: () => fullScanned,
+        bytes: () => fullBytes,
+        topGenres: () => topKFromMap(fullGenreCounts, 5),
+        topVideoCodecs: () => topKFromMap(fullCodecCounts, 5),
+        topResolutions: () => topKFromMap(fullResolutionCounts, 5)
       }
     });
   }
@@ -5150,6 +5325,86 @@ async function buildJellyfinEmbyLibraryReport(server, { days = 7, userId: userId
     days: Math.max(1, Math.floor(days)),
     userId,
     libraries
+  };
+}
+
+async function buildLibraryInventoryPayload({ server, days, userId, fullScan, onProgress } = {}) {
+  const type = String(server && server.type ? server.type : '').toLowerCase();
+  let report;
+  if (type === 'plex') {
+    report = await buildPlexLibraryReport(server, { days });
+  } else if (type === 'jellyfin' || type === 'emby') {
+    report = await buildJellyfinEmbyLibraryReport(server, { days, userId });
+  } else {
+    throw new Error('Unsupported server type for library inventory reports');
+  }
+
+  if (fullScan) {
+    const libs = Array.isArray(report.libraries) ? report.libraries : [];
+    for (let i = 0; i < libs.length; i++) {
+      const lib = libs[i];
+      if (onProgress) {
+        onProgress({
+          phase: 'scanning',
+          libraryIndex: i,
+          librariesTotal: libs.length,
+          libraryId: lib && lib.id != null ? String(lib.id) : '',
+          libraryName: lib && lib.name != null ? String(lib.name) : ''
+        });
+      }
+      if (lib && typeof lib._fullScanRunner === 'function') {
+        await lib._fullScanRunner((p) => {
+          if (onProgress) {
+            onProgress({
+              phase: 'library',
+              libraryIndex: i,
+              librariesTotal: libs.length,
+              ...p
+            });
+          }
+        });
+      }
+
+      // Attach fullScan summary.
+      if (lib && lib._fullScanState && typeof lib._fullScanState === 'object') {
+        try {
+          lib.fullScan = {
+            scannedItems: Number(lib._fullScanState.scannedItems && lib._fullScanState.scannedItems()) || 0,
+            bytes: Number(lib._fullScanState.bytes && lib._fullScanState.bytes()) || 0,
+            topGenres: lib._fullScanState.topGenres ? lib._fullScanState.topGenres() : [],
+            topVideoCodecs: lib._fullScanState.topVideoCodecs ? lib._fullScanState.topVideoCodecs() : [],
+            topResolutions: lib._fullScanState.topResolutions ? lib._fullScanState.topResolutions() : []
+          };
+        } catch (_) {
+          // ignore
+        }
+      }
+
+      // Remove internal fields.
+      delete lib._fullScanRunner;
+      delete lib._fullScanState;
+    }
+  } else {
+    // Strip internal fields if present.
+    const libs = Array.isArray(report.libraries) ? report.libraries : [];
+    for (const lib of libs) {
+      if (lib && typeof lib === 'object') {
+        delete lib._fullScanRunner;
+        delete lib._fullScanState;
+      }
+    }
+  }
+
+  return {
+    server: {
+      id: String(server.id),
+      name: server.name || server.baseUrl,
+      type
+    },
+    generatedAt: new Date().toISOString(),
+    days,
+    mode: fullScan ? 'full' : 'recent',
+    ...report
   };
 }
 
@@ -5174,31 +5429,94 @@ app.get('/api/reports/library-inventory', async (req, res) => {
       return res.json({ ...cached.data, cached: true });
     }
 
-    let report;
-    if (String(server.type).toLowerCase() === 'plex') {
-      report = await buildPlexLibraryReport(server, { days });
-    } else if (String(server.type).toLowerCase() === 'jellyfin' || String(server.type).toLowerCase() === 'emby') {
-      report = await buildJellyfinEmbyLibraryReport(server, { days, userId });
-    } else {
-      return res.status(400).json({ error: 'Unsupported server type for library inventory reports' });
-    }
-
-    const payload = {
-      server: {
-        id: String(server.id),
-        name: server.name || server.baseUrl,
-        type: String(server.type || '').toLowerCase()
-      },
-      generatedAt: new Date().toISOString(),
-      days,
-      ...report
-    };
+    const payload = await buildLibraryInventoryPayload({ server, days, userId, fullScan: false });
 
     libraryInventoryCache.set(cacheKey, { atMs: now, data: payload });
     res.json(payload);
   } catch (e) {
     console.error('[OmniStream] Reports library-inventory failed:', e.message);
     res.status(500).json({ error: 'Failed to build library report', detail: e.message });
+  }
+});
+
+app.post('/api/reports/library-inventory/full-scan', async (req, res) => {
+  try {
+    const body = (req && req.body && typeof req.body === 'object') ? req.body : {};
+    const serverId = body.serverId != null ? String(body.serverId) : '';
+    if (!serverId) return res.status(400).json({ error: 'serverId is required' });
+
+    const server = (Array.isArray(servers) ? servers : []).find(s => s && String(s.id) === serverId);
+    if (!server || !server.baseUrl) return res.status(404).json({ error: 'Server not found' });
+    if (server.disabled) return res.status(404).json({ error: 'Server is disabled' });
+
+    const daysRaw = Number(body.days ?? 7);
+    const days = Number.isFinite(daysRaw) ? Math.max(1, Math.min(365, Math.floor(daysRaw))) : 7;
+    const userId = body.userId != null ? String(body.userId) : '';
+
+    const id = newJobId();
+    const job = {
+      id,
+      status: 'running',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      server: {
+        id: String(server.id),
+        name: server.name || server.baseUrl,
+        type: String(server.type || '').toLowerCase()
+      },
+      days,
+      progress: {
+        phase: 'starting',
+        libraryIndex: 0,
+        librariesTotal: 0,
+        libraryId: '',
+        libraryName: '',
+        scanned: 0,
+        total: null
+      },
+      error: null,
+      result: null
+    };
+    libraryInventoryScanJobs.set(id, job);
+
+    // Fire and forget.
+    (async () => {
+      try {
+        const payload = await buildLibraryInventoryPayload({
+          server,
+          days,
+          userId,
+          fullScan: true,
+          onProgress: (p) => {
+            job.progress = { ...(job.progress || {}), ...(p || {}) };
+            job.updatedAt = new Date().toISOString();
+          }
+        });
+        job.result = payload;
+        job.status = 'done';
+        job.updatedAt = new Date().toISOString();
+      } catch (e) {
+        job.status = 'error';
+        job.error = e && e.message ? String(e.message) : 'Full scan failed';
+        job.updatedAt = new Date().toISOString();
+      }
+    })();
+
+    res.status(202).json(getJobPublicView(job));
+  } catch (e) {
+    console.error('[OmniStream] Reports library full-scan start failed:', e.message);
+    res.status(500).json({ error: 'Failed to start full scan', detail: e.message });
+  }
+});
+
+app.get('/api/reports/library-inventory/full-scan/:id', async (req, res) => {
+  try {
+    const id = req && req.params && req.params.id ? String(req.params.id) : '';
+    const job = id ? libraryInventoryScanJobs.get(id) : null;
+    if (!job) return res.status(404).json({ error: 'Job not found' });
+    res.json(getJobPublicView(job));
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to load job', detail: e.message });
   }
 });
 
