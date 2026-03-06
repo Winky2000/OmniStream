@@ -497,7 +497,26 @@ function getSessionIdFromReq(req) {
   return sid ? String(sid) : '';
 }
 
+function getBearerTokenFromReq(req) {
+  try {
+    const raw = String(req.headers.authorization || '').trim();
+    if (!raw) return '';
+    const m = raw.match(/^Bearer\s+(.+)$/i);
+    return m && m[1] ? String(m[1]).trim() : '';
+  } catch (_) {
+    return '';
+  }
+}
+
 function getSessionForReq(req) {
+  const bearer = getBearerTokenFromReq(req);
+  if (bearer && bearer.includes('.')) {
+    const verified = verifySignedSessionToken(bearer);
+    if (verified) {
+      return { sid: bearer, username: verified.username, createdAtMs: verified.createdAtMs, lastSeenAtMs: Date.now() };
+    }
+  }
+
   const sid = getSessionIdFromReq(req);
   if (!sid) return null;
   // New format: signed token in cookie (survives restarts).
@@ -659,6 +678,17 @@ app.get('/favicon.ico', (req, res) => {
 });
 
 // Now that auth gate is installed, serve the static UI.
+// Prevent stale cached HTML from making UI changes appear broken.
+app.use((req, res, next) => {
+  try {
+    if (req.method === 'GET' && req.path && req.path.endsWith('.html')) {
+      res.set('Cache-Control', 'no-store');
+    }
+  } catch (_) {
+    // ignore
+  }
+  next();
+});
 app.use(express.static('public'));
 
 // Auth API
@@ -714,6 +744,48 @@ app.post('/api/auth/login', (req, res) => {
   } catch (e) {
     console.error('[OmniStream] login failed:', e.message);
     res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+// Token login for native clients (no cookies). Returns the same signed session token used in cookies.
+app.post('/api/auth/token', (req, res) => {
+  try {
+    if (!internalAuthEnabled()) {
+      return res.status(400).json({ error: 'Internal auth is disabled', code: 'INTERNAL_AUTH_DISABLED' });
+    }
+
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const username = typeof body.username === 'string' ? body.username.trim() : '';
+    const password = typeof body.password === 'string' ? body.password : '';
+
+    const authCfg = getAuthConfig();
+    const expectedUser = String(authCfg.username || 'admin');
+    const storedHash = String(authCfg.passwordHash || '');
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Missing username or password' });
+    }
+    if (username !== expectedUser) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    if (!storedHash || !pbkdf2VerifyPassword(password, storedHash)) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const token = createSignedSessionToken(expectedUser);
+    if (!token) {
+      return res.status(500).json({ error: 'Token issuance failed (session secret missing)' });
+    }
+
+    const verified = verifySignedSessionToken(token);
+    return res.json({
+      ok: true,
+      token,
+      expiresAtMs: verified ? verified.expiresAtMs : null,
+      mustChangePassword: authCfg.passwordChangeRequired === true
+    });
+  } catch (e) {
+    console.error('[OmniStream] token login failed:', e.message);
+    res.status(500).json({ error: 'Token login failed' });
   }
 });
 
@@ -1564,11 +1636,27 @@ function formatTimestampForFilename(date) {
   return `${yyyy}${mm}${dd}-${hh}${mi}${ss}`;
 }
 
-function saveSentNewsletterToDisk(rendered) {
+function expandNewsletterFilenameTemplate(input, rendered) {
+  const s = String(input || '').trim();
+  if (!s) return '';
+  const startDate = rendered && rendered._startDate ? String(rendered._startDate) : '';
+  const endDate = rendered && rendered._endDate ? String(rendered._endDate) : '';
+  const subject = rendered && rendered.subject ? String(rendered.subject) : '';
+  return s
+    .replace(/\{\{\s*START_DATE\s*\}\}/gi, startDate)
+    .replace(/\{\{\s*END_DATE\s*\}\}/gi, endDate)
+    .replace(/\{\{\s*SUBJECT\s*\}\}/gi, subject);
+}
+
+function saveSentNewsletterToDisk(rendered, { fileName } = {}) {
   try {
     const ts = formatTimestampForFilename(new Date());
     const subject = rendered && rendered.subject ? String(rendered.subject) : 'newsletter';
-    const base = `${ts}_${safeFilename(subject)}`;
+    const hintExpanded = expandNewsletterFilenameTemplate(fileName, rendered);
+    const hint = hintExpanded ? String(hintExpanded).trim() : '';
+    const hintNoExt = hint.replace(/\.html?$/i, '');
+    const hintClean = hintNoExt ? safeFilename(hintNoExt) : '';
+    const base = hintClean ? `${ts}_${hintClean}` : `${ts}_${safeFilename(subject)}`;
     fs.mkdirSync(SENT_NEWSLETTERS_DIR, { recursive: true });
     const files = [];
 
@@ -1665,6 +1753,46 @@ function normalizeTimeHHMM(input) {
   const hh = String(m[1]).padStart(2, '0');
   const mm = String(m[2]).padStart(2, '0');
   return `${hh}:${mm}`;
+}
+
+function normalizeNewsletterTimeframeDays(input) {
+  const n = Number(input);
+  if (!Number.isFinite(n)) return null;
+  const i = Math.floor(n);
+  if (i < 1) return 1;
+  if (i > 365) return 365;
+  return i;
+}
+
+function normalizeNewsletterIncludedLibraries(input) {
+  const arr = Array.isArray(input) ? input : [];
+  const cleaned = arr
+    .map(x => String(x || '').trim())
+    .filter(Boolean);
+  const uniq = Array.from(new Set(cleaned));
+  // Avoid unbounded config growth.
+  return uniq.slice(0, 200);
+}
+
+function normalizeNewsletterSaveFileName(input) {
+  const s = String(input || '').trim();
+  if (!s) return '';
+  // Keep it short and predictable.
+  return s.slice(0, 160);
+}
+
+function normalizeNewsletterLastMessageId(input) {
+  const s = String(input || '').trim();
+  if (!s) return '';
+  // Basic sanity limit.
+  return s.slice(0, 240);
+}
+
+function normalizeNewsletterEmailAgent(input) {
+  const s = String(input || '').trim();
+  // UI currently provides a single built-in option.
+  if (!s) return 'builtin-email-1';
+  return s.slice(0, 64);
 }
 
 async function sendNewsletterBroadcast({ subject, body, startDate, endDate, publicBaseUrl, serverId } = {}) {
@@ -2461,8 +2589,9 @@ async function renderNewsletterSubjectAndBody(subject, body, fetchRecentlyAdded,
   if (needsRecent) {
     try {
       if (typeof fetchRecentlyAdded === 'function') {
+        const includedLibraries = normalizeNewsletterIncludedLibraries(options && options.includedLibraries);
         // Fetch more than we display so counts reflect the full date window.
-        const items = await fetchRecentlyAdded({ perServer: 50, serverId: scopeServerId });
+        const items = await fetchRecentlyAdded({ perServer: 50, serverId: scopeServerId, includedLibraries });
         recentlyAddedBlocks = buildRecentlyAddedBlocks((items || []), { publicBaseUrl, startDate, endDate, displayLimit: 20, scopeServerName });
       } else {
         recentlyAddedBlocks = { text: 'Recently added list unavailable.', html: '<div>Recently added list unavailable.</div>' };
@@ -2533,6 +2662,12 @@ ensureDefaultNewsletterTemplate();
 // Track last derived notifications so we only fire notifiers on changes
 let lastNotificationIds = new Set();
 
+// Track state transitions used for event-style notifications. These are only
+// updated from the poll loop (triggerNotifiers) so /api/notifications remains
+// a pure snapshot.
+let lastSessionSnapshot = new Map(); // sessionKey -> { serverId, serverName, user, title, transcoding, location, bandwidth }
+let lastServerOnlineSnapshot = new Map(); // serverId -> boolean
+
 // Track global polling health/metadata
 let lastPollAt = null;           // ISO string of last completed pollAll
 let lastPollDurationMs = null;   // Duration of last pollAll in milliseconds
@@ -2556,10 +2691,261 @@ function shouldSendNotificationToChannel(notification, channelCfg) {
   const kind = notification.kind;
   if (!kind || !triggers) return true;
   if (kind === 'offline') return triggers.offline !== false;
+  if (kind === 'serverBackUp') return triggers.serverBackUp !== false;
   if (kind === 'wanTranscode') return triggers.wanTranscodes !== false;
   if (kind === 'highBandwidth') return triggers.highBandwidth !== false;
+  if (kind === 'anyWan') return triggers.anyWan !== false;
+  if (kind === 'highWanBandwidth') return triggers.highWanBandwidth !== false;
   if (kind === 'historyDbBackup') return triggers.historyDbBackups !== false;
+  // Chatty triggers are opt-in
+  if (kind === 'playbackStart') return triggers.playbackStart === true;
+  if (kind === 'playbackStop') return triggers.playbackStop === true;
   return true;
+}
+
+function buildEventNotificationsFromSnapshots() {
+  try {
+    const notifications = [];
+    const nowIso = new Date().toISOString();
+
+    // Only include enabled servers
+    const enabledServerIds = new Set((Array.isArray(servers) ? servers : [])
+      .filter(s => s && !s.disabled && s.id != null)
+      .map(s => String(s.id)));
+
+    // Build current online snapshot + current session snapshot
+    const currentOnline = new Map();
+    const currentSessions = new Map();
+
+    Object.values(statuses).forEach(st => {
+      const stId = st && st.id != null ? String(st.id) : null;
+      if (!stId || !enabledServerIds.has(stId)) return;
+
+      const online = !!st.online;
+      currentOnline.set(stId, online);
+
+      if (!online || !Array.isArray(st.sessions)) return;
+      st.sessions.forEach(sess => {
+        const rawSessionId = sess.sessionId || sess.sessionKey || sess.id || '';
+        const derived = [
+          st.id,
+          rawSessionId || '',
+          sess.user || sess.userName || '',
+          sess.title || '',
+          sess.player || '',
+          sess.ip || ''
+        ].map(v => String(v || '').toLowerCase()).join('|');
+        const sessionKey = derived;
+
+        const seriesTitle = (sess.seriesTitle || '').toString();
+        const episodeTitle = (sess.episode || sess.episodeTitle || '').toString();
+        const channel = (sess.channel || '').toString();
+        const title = seriesTitle
+          ? `${seriesTitle} - ${episodeTitle || sess.title || ''}`.replace(/\s+-\s*$/, '')
+          : (sess.title || channel || 'Playback');
+
+        const user = sess.user || sess.userName || 'Unknown';
+        const transcoding = typeof sess.transcoding === 'boolean'
+          ? sess.transcoding
+          : (sess.stream && typeof sess.stream === 'string' && sess.stream.toLowerCase().includes('transcode'));
+        const location = sess.location || '';
+        const bandwidth = typeof sess.bandwidth === 'number' ? sess.bandwidth : null;
+
+        currentSessions.set(sessionKey, {
+          serverId: stId,
+          serverName: st.name || 'Server',
+          user,
+          title,
+          transcoding,
+          location,
+          bandwidth
+        });
+      });
+    });
+
+    // Server back up events
+    for (const [serverId, online] of currentOnline.entries()) {
+      const wasOnline = lastServerOnlineSnapshot.has(serverId)
+        ? !!lastServerOnlineSnapshot.get(serverId)
+        : online;
+      if (!wasOnline && online) {
+        // Find server name from statuses if possible
+        const st = statuses[serverId];
+        const name = st && st.name ? st.name : 'Server';
+        notifications.push({
+          id: `server-back-up-${serverId}-${Date.now()}`,
+          level: 'info',
+          serverId,
+          serverName: name,
+          time: nowIso,
+          kind: 'serverBackUp',
+          message: `${name} is back online`
+        });
+      }
+    }
+
+    // Playback start/stop events
+    for (const [sessionKey, meta] of currentSessions.entries()) {
+      if (lastSessionSnapshot.has(sessionKey)) continue;
+      const details = [
+        meta.user ? `User: ${meta.user}` : '',
+        meta.location ? `Location: ${meta.location}` : '',
+        meta.transcoding ? 'Transcoding' : '',
+        (typeof meta.bandwidth === 'number') ? `BW: ${meta.bandwidth.toFixed(1)} Mbps` : ''
+      ].filter(Boolean).join(' • ');
+      notifications.push({
+        id: `playback-start-${sessionKey}`,
+        level: 'info',
+        serverId: meta.serverId,
+        serverName: meta.serverName,
+        time: nowIso,
+        kind: 'playbackStart',
+        message: `Playback started on ${meta.serverName}: ${meta.title}${details ? ` (${details})` : ''}`
+      });
+    }
+
+    for (const [sessionKey, meta] of lastSessionSnapshot.entries()) {
+      if (currentSessions.has(sessionKey)) continue;
+      const details = [
+        meta.user ? `User: ${meta.user}` : '',
+        meta.location ? `Location: ${meta.location}` : '',
+        meta.transcoding ? 'Transcoding' : ''
+      ].filter(Boolean).join(' • ');
+      notifications.push({
+        id: `playback-stop-${sessionKey}-${Date.now()}`,
+        level: 'info',
+        serverId: meta.serverId,
+        serverName: meta.serverName,
+        time: nowIso,
+        kind: 'playbackStop',
+        message: `Playback stopped on ${meta.serverName}: ${meta.title}${details ? ` (${details})` : ''}`
+      });
+    }
+
+    // Update snapshots
+    lastSessionSnapshot = currentSessions;
+    lastServerOnlineSnapshot = currentOnline;
+
+    return notifications;
+  } catch (e) {
+    console.error('[OmniStream] Failed to build event notifications:', e.message);
+    return [];
+  }
+}
+
+function getNotifierAgents() {
+  const raw = appConfig && appConfig.notifiers && appConfig.notifiers.agents;
+  const agents = Array.isArray(raw) ? raw : [];
+  return agents
+    .map(a => (a && typeof a === 'object' ? a : null))
+    .filter(Boolean);
+}
+
+function normalizeNotifierAgentId(input) {
+  const n = Number(input);
+  if (!Number.isFinite(n)) return null;
+  const i = Math.floor(n);
+  if (i < 1) return null;
+  if (i > 1_000_000_000) return null;
+  return i;
+}
+
+function allocateNextNotifierAgentId(existingAgents) {
+  const ids = (Array.isArray(existingAgents) ? existingAgents : [])
+    .map(a => normalizeNotifierAgentId(a && a.id))
+    .filter(Boolean);
+  const max = ids.length ? Math.max(...ids) : 0;
+  return max + 1;
+}
+
+function normalizeEmailRecipientList(input) {
+  // Accept array, comma/semicolon/newline-separated string, or single string.
+  if (Array.isArray(input)) {
+    const cleaned = input
+      .map(v => String(v || '').trim())
+      .filter(Boolean);
+    return Array.from(new Set(cleaned)).slice(0, 200);
+  }
+
+  const s = input != null ? String(input) : '';
+  const parts = s
+    .split(/[;,\n]+/g)
+    .map(v => String(v || '').trim())
+    .filter(Boolean);
+  return Array.from(new Set(parts)).slice(0, 200);
+}
+
+function normalizeEmailEncryptionMode(input) {
+  const s = String(input || '').trim().toLowerCase();
+  if (s === 'ssl' || s === 'ssltls' || s === 'ssl/tls') return 'ssl';
+  if (s === 'none') return 'none';
+  return 'starttls';
+}
+
+function sanitizeEmailNotifierAgent(agent) {
+  const a = agent && typeof agent === 'object' ? agent : {};
+  const id = normalizeNotifierAgentId(a.id);
+  const enabled = a.enabled !== false;
+  const type = 'email';
+  const cfg = (a.config && typeof a.config === 'object') ? a.config : {};
+  const smtp = (cfg.smtp && typeof cfg.smtp === 'object') ? cfg.smtp : {};
+  const auth = (smtp.auth && typeof smtp.auth === 'object') ? smtp.auth : {};
+  const triggers = (a.triggers && typeof a.triggers === 'object') ? a.triggers : {};
+  const text = (a.text && typeof a.text === 'object') ? a.text : {};
+
+  const encryption = normalizeEmailEncryptionMode(cfg.encryption || smtp.encryption);
+  const secure = encryption === 'ssl' ? true : false;
+  const requireTLS = encryption === 'starttls' ? true : false;
+
+  return {
+    id,
+    type,
+    enabled,
+    config: {
+      fromName: cfg.fromName != null ? String(cfg.fromName).trim().slice(0, 200) : '',
+      from: cfg.from != null ? String(cfg.from).trim() : '',
+      // Back-compat: previously this was stored as a single string.
+      to: normalizeEmailRecipientList(cfg.to),
+      cc: normalizeEmailRecipientList(cfg.cc),
+      bcc: normalizeEmailRecipientList(cfg.bcc),
+      encryption,
+      allowHtml: cfg.allowHtml === true,
+      smtp: {
+        host: smtp.host != null ? String(smtp.host).trim() : '',
+        port: smtp.port != null ? Number(smtp.port) : undefined,
+        secure,
+        requireTLS,
+        auth: {
+          user: auth.user != null ? String(auth.user).trim() : '',
+          pass: auth.pass != null ? String(auth.pass) : ''
+        }
+      }
+    },
+    triggers: {
+      offline: triggers.offline !== false,
+      serverBackUp: triggers.serverBackUp !== false,
+      wanTranscodes: triggers.wanTranscodes !== false,
+      highBandwidth: triggers.highBandwidth !== false,
+      anyWan: triggers.anyWan !== false,
+      highWanBandwidth: triggers.highWanBandwidth !== false,
+      historyDbBackups: triggers.historyDbBackups !== false
+      ,
+      playbackStart: triggers.playbackStart === true,
+      playbackStop: triggers.playbackStop === true
+    },
+    text: {
+      subject: text.subject != null ? String(text.subject).slice(0, 200) : '',
+      body: text.body != null ? String(text.body).slice(0, 5000) : ''
+    }
+  };
+}
+
+function setNotifierAgents(nextAgents) {
+  if (!appConfig.notifiers || typeof appConfig.notifiers !== 'object') {
+    appConfig.notifiers = {};
+  }
+  appConfig.notifiers.agents = Array.isArray(nextAgents) ? nextAgents : [];
+  fs.writeFileSync(CONFIG_FILE, JSON.stringify(appConfig, null, 2));
 }
 
 function recordNotifierError(channel, message) {
@@ -2575,7 +2961,7 @@ function recordNotifierError(channel, message) {
 
 function triggerNotifiers() {
   try {
-    const notifications = buildNotificationsSnapshot();
+    const notifications = buildNotificationsSnapshot().concat(buildEventNotificationsFromSnapshots());
     const currentIds = new Set(notifications.map(n => n.id));
     // Only notify on newly-appearing notifications compared to previous poll
     const newlyActive = notifications.filter(n => !lastNotificationIds.has(n.id));
@@ -2584,6 +2970,7 @@ function triggerNotifiers() {
       return;
     }
     const notifierCfg = (appConfig && appConfig.notifiers) || {};
+    const agents = getNotifierAgents();
     newlyActive.forEach(n => {
       if (shouldSendNotificationToChannel(n, notifierCfg.discord)) {
         sendDiscordNotification(n);
@@ -2609,6 +2996,22 @@ function triggerNotifiers() {
       if (shouldSendNotificationToChannel(n, notifierCfg.gotify)) {
         sendGotifyNotification(n);
       }
+
+      // Notifier Agents (email)
+      agents.forEach(agent => {
+        try {
+          if (!agent || agent.type !== 'email' || agent.enabled === false) return;
+          // Reuse the same trigger semantics as legacy channels.
+          if (!shouldSendNotificationToChannel(n, { triggers: agent.triggers })) return;
+          sendEmailNotificationWithConfig(n, agent.config, {
+            subject: agent.text && agent.text.subject ? agent.text.subject : '',
+            body: agent.text && agent.text.body ? agent.text.body : ''
+          });
+        } catch (e) {
+          console.error('[OmniStream] Notifier agent failure:', e.message);
+          recordNotifierError('notifier-agent', e.message);
+        }
+      });
     });
     lastNotificationIds = currentIds;
   } catch (e) {
@@ -2657,25 +3060,48 @@ function formatDiscordMessage(n) {
   return `${prefix} [${server}] ${n.message}${when ? ` (${when})` : ''}`;
 }
 
-function sendEmailNotification(notification) {
-  const emailCfg = appConfig?.notifiers?.email;
+function sendEmailNotificationWithConfig(notification, emailCfg, overrides) {
   if (!emailCfg || emailCfg.enabled === false || !nodemailer) return;
+  const fromName = emailCfg.fromName != null ? String(emailCfg.fromName).trim() : '';
+  const fromAddr = emailCfg.from != null ? String(emailCfg.from).trim() : '';
+  const toList = normalizeEmailRecipientList(emailCfg.to);
+  const ccList = normalizeEmailRecipientList(emailCfg.cc);
+  const bccList = normalizeEmailRecipientList(emailCfg.bcc);
+  if (!fromAddr || !toList.length) return;
   try {
     const transport = nodemailer.createTransport(emailCfg.smtp || {});
     const level = (notification.level || 'info').toUpperCase();
-    const subject = `[OmniStream] ${level}: ${notification.message}`;
+    const fallbackSubject = `[OmniStream] ${level}: ${notification.message}`;
     const textLines = [
       `Server: ${notification.serverName || 'Server'}`,
       `Time: ${notification.time || new Date().toISOString()}`,
       '',
       notification.message
     ];
+
+    const overrideSubject = overrides && overrides.subject != null ? String(overrides.subject).trim() : '';
+    const overrideBody = overrides && overrides.body != null ? String(overrides.body) : '';
+    const subject = overrideSubject || fallbackSubject;
+    const body = overrideBody ? overrideBody : textLines.join('\n');
+
     const mailOptions = {
-      from: emailCfg.from,
-      to: emailCfg.to,
+      from: fromName ? `${fromName} <${fromAddr}>` : fromAddr,
+      to: toList,
       subject,
-      text: textLines.join('\n')
+      text: body
     };
+
+    if (ccList.length) mailOptions.cc = ccList;
+    if (bccList.length) mailOptions.bcc = bccList;
+
+    const allowHtml = emailCfg.allowHtml === true;
+    const looksLikeHtml = /<\w[\s\S]*>/i.test(body);
+    if (allowHtml && looksLikeHtml) {
+      mailOptions.html = body;
+      const stripped = stripHtmlToText(body);
+      if (stripped) mailOptions.text = stripped;
+    }
+
     transport.sendMail(mailOptions, (err) => {
       if (err) {
         console.error('[OmniStream] Email notifier error:', err.message);
@@ -2686,6 +3112,11 @@ function sendEmailNotification(notification) {
     console.error('[OmniStream] Email notifier failure:', e.message);
     recordNotifierError('email', e.message);
   }
+}
+
+function sendEmailNotification(notification) {
+  const emailCfg = appConfig?.notifiers?.email;
+  sendEmailNotificationWithConfig(notification, emailCfg, null);
 }
 
 function sendGenericWebhookNotification(notification) {
@@ -4472,7 +4903,8 @@ async function pollServer(s) {
         // Jellyfin accepts api_key in query
         finalUrl += `${sep}api_key=${encodeURIComponent(s.token)}`;
       } else {
-        finalUrl += `${sep}X-Emby-Token=${encodeURIComponent(s.token)}`;
+        // Emby commonly uses api_key in query (some setups may also accept X-Emby-Token).
+        finalUrl += `${sep}api_key=${encodeURIComponent(s.token)}&X-Emby-Token=${encodeURIComponent(s.token)}`;
       }
     }
   }
@@ -4886,14 +5318,19 @@ async function jfEmbyGet(server, relPath, params = {}) {
       if (server.type === 'jellyfin') headers['X-MediaBrowser-Token'] = server.token;
       else headers['X-Emby-Token'] = server.token;
     } else {
-      if (server.type === 'jellyfin') requestParams.api_key = server.token;
-      else requestParams['X-Emby-Token'] = server.token;
+      if (server.type === 'jellyfin') {
+        requestParams.api_key = server.token;
+      } else {
+        // Emby: prefer api_key in query, but also include X-Emby-Token for compatibility.
+        requestParams.api_key = server.token;
+        requestParams['X-Emby-Token'] = server.token;
+      }
     }
   }
   return axios.get(base + relPath, { headers, params: requestParams, timeout: 25000 });
 }
 
-async function buildPlexLibraryReport(server, { days = 7 } = {}) {
+async function buildPlexLibraryReport(server, { days = 7, onProgress } = {}) {
   const nowMs = Date.now();
   const cutoffEpochSec = Math.floor((nowMs - (Math.max(1, Math.floor(days)) * 24 * 60 * 60 * 1000)) / 1000);
   const libsResp = await plexGet(server, '/library/sections');
@@ -4901,22 +5338,106 @@ async function buildPlexLibraryReport(server, { days = 7 } = {}) {
   const dirs = mc && Array.isArray(mc.Directory) ? mc.Directory : [];
 
   const libraries = [];
-  for (const d of dirs) {
+  for (let libraryIndex = 0; libraryIndex < dirs.length; libraryIndex++) {
+    const d = dirs[libraryIndex];
     if (!d) continue;
     const key = d.key != null ? String(d.key) : '';
     if (!key) continue;
     const name = d.title != null ? String(d.title) : (d.name != null ? String(d.name) : `Library ${key}`);
     const libType = d.type != null ? String(d.type) : '';
 
+    if (onProgress) {
+      onProgress({
+        phase: 'building',
+        libraryIndex,
+        librariesTotal: dirs.length,
+        libraryId: key,
+        libraryName: name,
+        scanned: 0,
+        total: null
+      });
+    }
+
+    const normalizeRelPath = (v) => {
+      if (v == null) return null;
+      const s = String(v).trim();
+      if (!s) return null;
+      if (s.startsWith('/')) return s;
+      // If Plex returns a relative path without a leading slash, treat it as relative to server root.
+      if (s.includes('://')) return null;
+      if (s.startsWith('library/') || s.startsWith(':/') || s.startsWith('photo/')) return `/${s}`;
+      return `/${s}`;
+    };
+
+    const thumbPath = normalizeRelPath(d.thumb);
+    const artPath = normalizeRelPath(d.art);
+    // Some Plex setups do not include section-level thumb/art/composite in /library/sections.
+    // Only trust the composite path if Plex provided one.
+    const compositePath = normalizeRelPath(d.composite);
+
+    const posterFromItem = (item, { preferSeriesPoster = false } = {}) => {
+      if (!item || typeof item !== 'object') return null;
+      const cand = preferSeriesPoster
+        ? (item.grandparentThumb || item.parentThumb || item.thumb || item.art)
+        : (item.thumb || item.parentThumb || item.grandparentThumb || item.art);
+      return normalizeRelPath(cand);
+    };
+
+    const typeLower = libType.toLowerCase();
+
+    // Lightweight timestamps for UI (library age + last added) without requiring a full scan.
+    // For TV libraries we consider episodes (type=4) so "last added" aligns with Plex.
+    let earliestItemAt = null;
+    let latestItemAt = null;
+    let earliestPosterPath = null;
+    let latestPosterPath = null;
+
     let totalItems = null;
     let unwatchedItems = null;
     let watchedItems = null;
     let storageBytes = null;
 
+    let movieCount = null;
+    let showCount = null;
+    let episodeCount = null;
+
     if (d.totalSize != null) {
       const b = Number(d.totalSize);
       if (Number.isFinite(b) && b >= 0) storageBytes = Math.floor(b);
     }
+
+    try {
+      const typeParams = typeLower === 'show' ? { type: 4 } : {};
+      const earliestResp = await plexGet(server, `/library/sections/${encodeURIComponent(key)}/all`, {
+        sort: 'addedAt:asc',
+        'X-Plex-Container-Start': 0,
+        'X-Plex-Container-Size': 1,
+        ...typeParams
+      });
+      const emc = earliestResp && earliestResp.data && earliestResp.data.MediaContainer ? earliestResp.data.MediaContainer : null;
+      const item = emc && Array.isArray(emc.Metadata) && emc.Metadata[0] ? emc.Metadata[0] : null;
+      const addedAt = item && item.addedAt != null ? Number(item.addedAt) : NaN;
+      if (Number.isFinite(addedAt) && addedAt > 0) earliestItemAt = new Date(addedAt * 1000).toISOString();
+      earliestPosterPath = posterFromItem(item, { preferSeriesPoster: typeLower === 'show' });
+    } catch (_) {}
+
+    try {
+      const typeParams = typeLower === 'show' ? { type: 4 } : {};
+      const latestResp = await plexGet(server, `/library/sections/${encodeURIComponent(key)}/all`, {
+        sort: 'addedAt:desc',
+        'X-Plex-Container-Start': 0,
+        'X-Plex-Container-Size': 1,
+        ...typeParams
+      });
+      const lmc = latestResp && latestResp.data && latestResp.data.MediaContainer ? latestResp.data.MediaContainer : null;
+      const item = lmc && Array.isArray(lmc.Metadata) && lmc.Metadata[0] ? lmc.Metadata[0] : null;
+      const addedAt = item && item.addedAt != null ? Number(item.addedAt) : NaN;
+      if (Number.isFinite(addedAt) && addedAt > 0) latestItemAt = new Date(addedAt * 1000).toISOString();
+      latestPosterPath = posterFromItem(item, { preferSeriesPoster: typeLower === 'show' });
+    } catch (_) {}
+
+    // Prefer a real item poster if section artwork isn't present.
+    const posterPath = latestPosterPath || earliestPosterPath || thumbPath || artPath || compositePath || null;
 
     try {
       const totals = await plexGet(server, `/library/sections/${encodeURIComponent(key)}/all`, {
@@ -4927,6 +5448,24 @@ async function buildPlexLibraryReport(server, { days = 7 } = {}) {
       const n = tmc && tmc.totalSize != null ? Number(tmc.totalSize) : null;
       if (Number.isFinite(n) && n >= 0) totalItems = Math.floor(n);
     } catch (_) {}
+
+    if (typeLower === 'movie') {
+      if (Number.isFinite(totalItems)) movieCount = totalItems;
+    } else if (typeLower === 'show') {
+      if (Number.isFinite(totalItems)) showCount = totalItems;
+      try {
+        // Plex: count episodes in a TV library.
+        // type=4 filters to episodes.
+        const epTotals = await plexGet(server, `/library/sections/${encodeURIComponent(key)}/all`, {
+          'X-Plex-Container-Start': 0,
+          'X-Plex-Container-Size': 0,
+          type: 4
+        });
+        const emc = epTotals && epTotals.data && epTotals.data.MediaContainer ? epTotals.data.MediaContainer : null;
+        const n = emc && emc.totalSize != null ? Number(emc.totalSize) : null;
+        if (Number.isFinite(n) && n >= 0) episodeCount = Math.floor(n);
+      } catch (_) {}
+    }
 
     try {
       const un = await plexGet(server, `/library/sections/${encodeURIComponent(key)}/all`, {
@@ -4947,12 +5486,15 @@ async function buildPlexLibraryReport(server, { days = 7 } = {}) {
     const resolutionCounts = new Map();
     let recentlyAddedCount = 0;
     let recentlyAddedBytes = 0;
+    let recentlyLatestEpochSec = null;
 
     const fullGenreCounts = new Map();
     const fullCodecCounts = new Map();
     const fullResolutionCounts = new Map();
     let fullScanned = 0;
     let fullBytes = 0;
+    let fullEarliestEpochSec = null;
+    let fullLatestEpochSec = null;
 
     try {
       let start = 0;
@@ -4962,11 +5504,15 @@ async function buildPlexLibraryReport(server, { days = 7 } = {}) {
       let scanned = 0;
       let done = false;
 
+      const enumerateParams = typeLower === 'show' ? { type: 4 } : {};
+
       for (let page = 0; page < maxPages && !done; page++) {
         const resp = await plexGet(server, `/library/sections/${encodeURIComponent(key)}/all`, {
           sort: 'addedAt:desc',
           'X-Plex-Container-Start': start,
           'X-Plex-Container-Size': pageSize
+          ,
+          ...enumerateParams
         });
         const pmc = resp && resp.data && resp.data.MediaContainer ? resp.data.MediaContainer : null;
         const items = pmc && Array.isArray(pmc.Metadata) ? pmc.Metadata : [];
@@ -4978,6 +5524,10 @@ async function buildPlexLibraryReport(server, { days = 7 } = {}) {
           if (!addedAt || addedAt < cutoffEpochSec) {
             done = true;
             break;
+          }
+
+          if (Number.isFinite(addedAt) && addedAt > 0) {
+            if (recentlyLatestEpochSec == null || addedAt > recentlyLatestEpochSec) recentlyLatestEpochSec = addedAt;
           }
 
           recentlyAddedCount++;
@@ -5017,11 +5567,13 @@ async function buildPlexLibraryReport(server, { days = 7 } = {}) {
       try {
         let start = 0;
         const pageSize = 200;
+        const enumerateParams = typeLower === 'show' ? { type: 4 } : {};
         // Iterate until Plex returns no more items.
         while (true) {
           const resp = await plexGet(server, `/library/sections/${encodeURIComponent(key)}/all`, {
             'X-Plex-Container-Start': start,
-            'X-Plex-Container-Size': pageSize
+            'X-Plex-Container-Size': pageSize,
+            ...enumerateParams
           });
           const pmc = resp && resp.data && resp.data.MediaContainer ? resp.data.MediaContainer : null;
           const items = pmc && Array.isArray(pmc.Metadata) ? pmc.Metadata : [];
@@ -5038,6 +5590,11 @@ async function buildPlexLibraryReport(server, { days = 7 } = {}) {
           for (const it of items) {
             if (!it) continue;
             fullScanned++;
+            const addedAt = typeof it.addedAt === 'number' ? it.addedAt : (typeof it.addedAt === 'string' ? parseInt(it.addedAt, 10) : NaN);
+            if (Number.isFinite(addedAt) && addedAt > 0) {
+              if (fullEarliestEpochSec == null || addedAt < fullEarliestEpochSec) fullEarliestEpochSec = addedAt;
+              if (fullLatestEpochSec == null || addedAt > fullLatestEpochSec) fullLatestEpochSec = addedAt;
+            }
             const genres = Array.isArray(it.Genre) ? it.Genre : [];
             for (const g of genres) {
               const tag = g && g.tag != null ? String(g.tag) : '';
@@ -5067,7 +5624,16 @@ async function buildPlexLibraryReport(server, { days = 7 } = {}) {
       id: key,
       name,
       type: libType,
+      thumbPath,
+      artPath,
+      compositePath,
+      posterPath,
+      earliestItemAt,
+      latestItemAt,
       totalItems,
+      movieCount,
+      showCount,
+      episodeCount,
       unwatchedItems,
       watchedItems,
       recentlyAddedCount,
@@ -5075,13 +5641,16 @@ async function buildPlexLibraryReport(server, { days = 7 } = {}) {
         topGenres: topKFromMap(genreCounts, 5),
         topVideoCodecs: topKFromMap(codecCounts, 5),
         topResolutions: topKFromMap(resolutionCounts, 5),
-        bytes: recentlyAddedBytes
+        bytes: recentlyAddedBytes,
+        latestItemAt: recentlyLatestEpochSec ? new Date(recentlyLatestEpochSec * 1000).toISOString() : null
       },
       storageBytes,
       _fullScanRunner: runFullScan,
       _fullScanState: {
         scannedItems: () => fullScanned,
         bytes: () => fullBytes,
+        earliestItemAt: () => fullEarliestEpochSec ? new Date(fullEarliestEpochSec * 1000).toISOString() : null,
+        latestItemAt: () => fullLatestEpochSec ? new Date(fullLatestEpochSec * 1000).toISOString() : null,
         topGenres: () => topKFromMap(fullGenreCounts, 5),
         topVideoCodecs: () => topKFromMap(fullCodecCounts, 5),
         topResolutions: () => topKFromMap(fullResolutionCounts, 5)
@@ -5092,7 +5661,7 @@ async function buildPlexLibraryReport(server, { days = 7 } = {}) {
   return { libraries, days: Math.max(1, Math.floor(days)) };
 }
 
-async function buildJellyfinEmbyLibraryReport(server, { days = 7, userId: userIdOverride } = {}) {
+async function buildJellyfinEmbyLibraryReport(server, { days = 7, userId: userIdOverride, onProgress } = {}) {
   const nowMs = Date.now();
   const cutoffMs = nowMs - (Math.max(1, Math.floor(days)) * 24 * 60 * 60 * 1000);
 
@@ -5116,29 +5685,125 @@ async function buildJellyfinEmbyLibraryReport(server, { days = 7, userId: userId
   const viewsResp = await jfEmbyGet(server, `/Users/${encodeURIComponent(userId)}/Views`);
   const viewItems = viewsResp && viewsResp.data && Array.isArray(viewsResp.data.Items) ? viewsResp.data.Items : [];
 
+  const views = viewItems.filter(v => v && v.Id);
+
   const libraries = [];
-  for (const v of viewItems) {
-    if (!v || !v.Id) continue;
+  for (let libraryIndex = 0; libraryIndex < views.length; libraryIndex++) {
+    const v = views[libraryIndex];
     const libId = String(v.Id);
     const name = v.Name != null ? String(v.Name) : `Library ${libId}`;
     const libType = v.CollectionType != null ? String(v.CollectionType) : (v.Type != null ? String(v.Type) : '');
+
+    if (onProgress) {
+      onProgress({
+        phase: 'building',
+        libraryIndex,
+        librariesTotal: views.length,
+        libraryId: libId,
+        libraryName: name,
+        scanned: 0,
+        total: null
+      });
+    }
+
+    // Jellyfin/Emby: library views usually support /Items/:id/Images/Primary
+    // (may 404 if the server has no image for that view; the UI will fall back).
+    const thumbPath = `/Items/${libId}/Images/Primary?maxWidth=96&maxHeight=96&quality=90`;
+    const posterPath = thumbPath;
+
+    // Lightweight timestamps for UI (library age + last added) without requiring a full scan.
+    let earliestItemAt = null;
+    let latestItemAt = null;
+    try {
+      const earliestResp = await jfEmbyGet(server, `/Users/${encodeURIComponent(userId)}/Items`, {
+        ParentId: libId,
+        Recursive: true,
+        IncludeItemTypes: 'Movie,Episode',
+        SortBy: 'DateCreated',
+        SortOrder: 'Ascending',
+        StartIndex: 0,
+        Limit: 1
+      });
+      const items = earliestResp && earliestResp.data && Array.isArray(earliestResp.data.Items) ? earliestResp.data.Items : [];
+      const it = items && items[0] ? items[0] : null;
+      const raw = it && (it.DateCreated || it.PremiereDate || it.ProductionDate);
+      const ms = raw ? Date.parse(raw) : NaN;
+      if (Number.isFinite(ms)) earliestItemAt = new Date(ms).toISOString();
+    } catch (_) {}
+    try {
+      const latestResp = await jfEmbyGet(server, `/Users/${encodeURIComponent(userId)}/Items`, {
+        ParentId: libId,
+        Recursive: true,
+        IncludeItemTypes: 'Movie,Episode',
+        SortBy: 'DateCreated',
+        SortOrder: 'Descending',
+        StartIndex: 0,
+        Limit: 1
+      });
+      const items = latestResp && latestResp.data && Array.isArray(latestResp.data.Items) ? latestResp.data.Items : [];
+      const it = items && items[0] ? items[0] : null;
+      const raw = it && (it.DateCreated || it.PremiereDate || it.ProductionDate);
+      const ms = raw ? Date.parse(raw) : NaN;
+      if (Number.isFinite(ms)) latestItemAt = new Date(ms).toISOString();
+    } catch (_) {}
+
+    let movieCount = null;
+    let showCount = null;
+    let episodeCount = null;
 
     const genreCounts = new Map();
     const codecCounts = new Map();
     const resolutionCounts = new Map();
     let recentlyAddedCount = 0;
     let recentlyAddedBytes = 0;
+    let recentlyLatestMs = null;
 
     const fullGenreCounts = new Map();
     const fullCodecCounts = new Map();
     const fullResolutionCounts = new Map();
     let fullScanned = 0;
     let fullBytes = 0;
+    let fullEarliestMs = null;
+    let fullLatestMs = null;
 
     let totalPlayableItems = null;
     let unplayedItems = null;
     let playedItems = null;
     let totalItems = null;
+
+    // Type-specific counts for summary UIs.
+    try {
+      const movieResp = await jfEmbyGet(server, `/Users/${encodeURIComponent(userId)}/Items`, {
+        ParentId: libId,
+        Recursive: true,
+        IncludeItemTypes: 'Movie',
+        Limit: 1
+      });
+      const total = movieResp && movieResp.data && movieResp.data.TotalRecordCount != null ? Number(movieResp.data.TotalRecordCount) : null;
+      if (Number.isFinite(total) && total >= 0) movieCount = Math.floor(total);
+    } catch (_) {}
+
+    try {
+      const showResp = await jfEmbyGet(server, `/Users/${encodeURIComponent(userId)}/Items`, {
+        ParentId: libId,
+        Recursive: true,
+        IncludeItemTypes: 'Series',
+        Limit: 1
+      });
+      const total = showResp && showResp.data && showResp.data.TotalRecordCount != null ? Number(showResp.data.TotalRecordCount) : null;
+      if (Number.isFinite(total) && total >= 0) showCount = Math.floor(total);
+    } catch (_) {}
+
+    try {
+      const epResp = await jfEmbyGet(server, `/Users/${encodeURIComponent(userId)}/Items`, {
+        ParentId: libId,
+        Recursive: true,
+        IncludeItemTypes: 'Episode',
+        Limit: 1
+      });
+      const total = epResp && epResp.data && epResp.data.TotalRecordCount != null ? Number(epResp.data.TotalRecordCount) : null;
+      if (Number.isFinite(total) && total >= 0) episodeCount = Math.floor(total);
+    } catch (_) {}
 
     try {
       const totalResp = await jfEmbyGet(server, `/Users/${encodeURIComponent(userId)}/Items`, {
@@ -5206,6 +5871,10 @@ async function buildJellyfinEmbyLibraryReport(server, { days = 7, userId: userId
             break;
           }
 
+          if (Number.isFinite(createdMs)) {
+            if (recentlyLatestMs == null || createdMs > recentlyLatestMs) recentlyLatestMs = createdMs;
+          }
+
           recentlyAddedCount++;
           scanned++;
           if (scanned >= maxScanned) {
@@ -5268,6 +5937,13 @@ async function buildJellyfinEmbyLibraryReport(server, { days = 7, userId: userId
           for (const it of items) {
             if (!it) continue;
             fullScanned++;
+
+            const createdRaw = it.DateCreated || it.PremiereDate || it.ProductionDate;
+            const createdMs = createdRaw ? Date.parse(createdRaw) : NaN;
+            if (Number.isFinite(createdMs)) {
+              if (fullEarliestMs == null || createdMs < fullEarliestMs) fullEarliestMs = createdMs;
+              if (fullLatestMs == null || createdMs > fullLatestMs) fullLatestMs = createdMs;
+            }
             const genres = Array.isArray(it.Genres) ? it.Genres : [];
             for (const g of genres) addCount(fullGenreCounts, g, 1);
 
@@ -5299,7 +5975,14 @@ async function buildJellyfinEmbyLibraryReport(server, { days = 7, userId: userId
       id: libId,
       name,
       type: libType,
+      thumbPath,
+      posterPath,
+      earliestItemAt,
+      latestItemAt,
       totalItems,
+      movieCount,
+      showCount,
+      episodeCount,
       totalPlayableItems,
       unwatchedItems: unplayedItems,
       watchedItems: playedItems,
@@ -5308,12 +5991,15 @@ async function buildJellyfinEmbyLibraryReport(server, { days = 7, userId: userId
         topGenres: topKFromMap(genreCounts, 5),
         topVideoCodecs: topKFromMap(codecCounts, 5),
         topResolutions: topKFromMap(resolutionCounts, 5),
-        bytes: recentlyAddedBytes
+        bytes: recentlyAddedBytes,
+        latestItemAt: Number.isFinite(recentlyLatestMs) ? new Date(recentlyLatestMs).toISOString() : null
       },
       _fullScanRunner: runFullScan,
       _fullScanState: {
         scannedItems: () => fullScanned,
         bytes: () => fullBytes,
+        earliestItemAt: () => Number.isFinite(fullEarliestMs) ? new Date(fullEarliestMs).toISOString() : null,
+        latestItemAt: () => Number.isFinite(fullLatestMs) ? new Date(fullLatestMs).toISOString() : null,
         topGenres: () => topKFromMap(fullGenreCounts, 5),
         topVideoCodecs: () => topKFromMap(fullCodecCounts, 5),
         topResolutions: () => topKFromMap(fullResolutionCounts, 5)
@@ -5332,9 +6018,9 @@ async function buildLibraryInventoryPayload({ server, days, userId, fullScan, on
   const type = String(server && server.type ? server.type : '').toLowerCase();
   let report;
   if (type === 'plex') {
-    report = await buildPlexLibraryReport(server, { days });
+    report = await buildPlexLibraryReport(server, { days, onProgress: fullScan ? onProgress : null });
   } else if (type === 'jellyfin' || type === 'emby') {
-    report = await buildJellyfinEmbyLibraryReport(server, { days, userId });
+    report = await buildJellyfinEmbyLibraryReport(server, { days, userId, onProgress: fullScan ? onProgress : null });
   } else {
     throw new Error('Unsupported server type for library inventory reports');
   }
@@ -5371,6 +6057,8 @@ async function buildLibraryInventoryPayload({ server, days, userId, fullScan, on
           lib.fullScan = {
             scannedItems: Number(lib._fullScanState.scannedItems && lib._fullScanState.scannedItems()) || 0,
             bytes: Number(lib._fullScanState.bytes && lib._fullScanState.bytes()) || 0,
+            earliestItemAt: lib._fullScanState.earliestItemAt ? lib._fullScanState.earliestItemAt() : null,
+            latestItemAt: lib._fullScanState.latestItemAt ? lib._fullScanState.latestItemAt() : null,
             topGenres: lib._fullScanState.topGenres ? lib._fullScanState.topGenres() : [],
             topVideoCodecs: lib._fullScanState.topVideoCodecs ? lib._fullScanState.topVideoCodecs() : [],
             topResolutions: lib._fullScanState.topResolutions ? lib._fullScanState.topResolutions() : []
@@ -5434,8 +6122,13 @@ app.get('/api/reports/library-inventory', async (req, res) => {
     libraryInventoryCache.set(cacheKey, { atMs: now, data: payload });
     res.json(payload);
   } catch (e) {
-    console.error('[OmniStream] Reports library-inventory failed:', e.message);
-    res.status(500).json({ error: 'Failed to build library report', detail: e.message });
+    const status = e && e.response && typeof e.response.status === 'number' ? e.response.status : null;
+    const detail = e && e.message ? String(e.message) : 'Library inventory failed';
+    console.error('[OmniStream] Reports library-inventory failed:', detail);
+    if (status && status >= 400 && status < 600) {
+      return res.status(status).json({ error: 'Failed to build library report', detail, status });
+    }
+    res.status(500).json({ error: 'Failed to build library report', detail });
   }
 });
 
@@ -5504,8 +6197,13 @@ app.post('/api/reports/library-inventory/full-scan', async (req, res) => {
 
     res.status(202).json(getJobPublicView(job));
   } catch (e) {
-    console.error('[OmniStream] Reports library full-scan start failed:', e.message);
-    res.status(500).json({ error: 'Failed to start full scan', detail: e.message });
+    const status = e && e.response && typeof e.response.status === 'number' ? e.response.status : null;
+    const detail = e && e.message ? String(e.message) : 'Failed to start full scan';
+    console.error('[OmniStream] Reports library full-scan start failed:', detail);
+    if (status && status >= 400 && status < 600) {
+      return res.status(status).json({ error: 'Failed to start full scan', detail, status });
+    }
+    res.status(500).json({ error: 'Failed to start full scan', detail });
   }
 });
 
@@ -6028,7 +6726,7 @@ app.get('/api/poster', async (req, res) => {
         } else if (server.type === 'jellyfin') {
           url += `${sep}api_key=${encodeURIComponent(server.token)}`;
         } else {
-          url += `${sep}X-Emby-Token=${encodeURIComponent(server.token)}`;
+          url += `${sep}api_key=${encodeURIComponent(server.token)}&X-Emby-Token=${encodeURIComponent(server.token)}`;
         }
       }
     }
@@ -6052,7 +6750,11 @@ app.get('/api/poster', async (req, res) => {
     res.setHeader('Cache-Control', 'public, max-age=3600');
     resp.data.pipe(res);
   } catch (e) {
-    console.error('[OmniStream] Poster proxy failed:', e.message);
+    const status = e && e.response && typeof e.response.status === 'number' ? e.response.status : null;
+    console.error('[OmniStream] Poster proxy failed:', e && e.message ? e.message : String(e));
+    if (status && status >= 400 && status < 600) {
+      return res.status(status).end();
+    }
     res.status(502).end();
   }
 });
@@ -6095,7 +6797,7 @@ app.get('/api/poster/signed', async (req, res) => {
         } else if (server.type === 'jellyfin') {
           url += `${sep}api_key=${encodeURIComponent(server.token)}`;
         } else {
-          url += `${sep}X-Emby-Token=${encodeURIComponent(server.token)}`;
+          url += `${sep}api_key=${encodeURIComponent(server.token)}&X-Emby-Token=${encodeURIComponent(server.token)}`;
         }
       }
     }
@@ -7088,8 +7790,9 @@ app.get('/api/subscribers/summary', (req, res) => {
   });
 
   // Helper: fetch recently added items from enabled Plex servers
-  async function fetchPlexRecentlyAdded({ perServer = 10, serverId = '' } = {}) {
+  async function fetchPlexRecentlyAdded({ perServer = 10, serverId = '', includedLibraries = [] } = {}) {
     const wantedId = serverId != null ? String(serverId).trim() : '';
+    const wantedLibraries = wantedId ? normalizeNewsletterIncludedLibraries(includedLibraries) : [];
     const enabledPlex = servers.filter(s => {
       if (!s || s.disabled || s.type !== 'plex' || !s.token) return false;
       if (wantedId && String(s.id) !== wantedId) return false;
@@ -7226,12 +7929,17 @@ app.get('/api/subscribers/summary', (req, res) => {
           sectionDirs = [];
         }
 
-        const sections = sectionDirs
+        let sections = sectionDirs
           .map(d => ({
             key: d && d.key != null ? String(d.key) : '',
             type: d && d.type ? String(d.type).toLowerCase() : ''
           }))
           .filter(s => s.key && (s.type === 'movie' || s.type === 'show'));
+
+        if (wantedLibraries.length) {
+          const allow = new Set(wantedLibraries);
+          sections = sections.filter(s => allow.has(String(s.key)));
+        }
 
         const pullFrom = async (plexPath) => {
           const resp = await plexGet(server, plexPath, {
@@ -7416,14 +8124,15 @@ app.get('/api/subscribers/summary', (req, res) => {
     }
   }
 
-  async function fetchUnifiedRecentlyAdded({ perServer = 10, serverId = '' } = {}) {
+  async function fetchUnifiedRecentlyAdded({ perServer = 10, serverId = '', includedLibraries = [] } = {}) {
     const wantedId = serverId != null ? String(serverId).trim() : '';
+    const wantedLibraries = wantedId ? normalizeNewsletterIncludedLibraries(includedLibraries) : [];
 
     if (wantedId) {
       const server = servers.find(s => s && String(s.id) === wantedId);
       if (!server || server.disabled) return [];
       if (server.type === 'plex') {
-        return fetchPlexRecentlyAdded({ perServer, serverId: wantedId });
+        return fetchPlexRecentlyAdded({ perServer, serverId: wantedId, includedLibraries: wantedLibraries });
       }
       if (server.type === 'jellyfin' || server.type === 'emby') {
         return fetchJellyfinOrEmbyRecentlyAddedForServer(server, { perServer });
@@ -7930,6 +8639,8 @@ app.post('/api/notifiers/test', (req, res) => {
   try {
     const body = req.body && typeof req.body === 'object' ? req.body : {};
     const requested = Array.isArray(body.channels) ? body.channels : null;
+    const overrideSubject = body && body.subjectLine != null ? String(body.subjectLine).trim() : '';
+    const overrideBody = body && body.messageBody != null ? String(body.messageBody) : '';
     const notifierCfg = (appConfig && appConfig.notifiers) || {};
     const notification = {
       id: `test-${Date.now()}`,
@@ -7949,7 +8660,10 @@ app.post('/api/notifiers/test', (req, res) => {
       sent.push('discord');
     }
     if (shouldUse('email') && notifierCfg.email && notifierCfg.email.enabled !== false && notifierCfg.email.from && notifierCfg.email.to) {
-      sendEmailNotification(notification);
+      sendEmailNotificationWithConfig(notification, notifierCfg.email, {
+        subject: overrideSubject,
+        body: overrideBody
+      });
       sent.push('email');
     }
     if (shouldUse('webhook') && notifierCfg.webhook && notifierCfg.webhook.url) {
@@ -7980,6 +8694,162 @@ app.post('/api/notifiers/test', (req, res) => {
     res.json({ ok: true, channels: sent });
   } catch (e) {
     console.error('[OmniStream] Failed to send test notification:', e.message);
+    res.status(500).json({ error: 'Failed to send test notification' });
+  }
+});
+
+// Notifier Agents (Tautulli-style)
+app.get('/api/notifier-agents', (req, res) => {
+  const agents = getNotifierAgents();
+  // Only email agents are currently supported.
+  const cleaned = agents
+    .filter(a => a && a.type === 'email')
+    .map(a => sanitizeEmailNotifierAgent(a))
+    .filter(a => a && a.id != null);
+  res.json({ agents: cleaned });
+});
+
+app.post('/api/notifier-agents', (req, res) => {
+  try {
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const type = body.type != null ? String(body.type).trim().toLowerCase() : 'email';
+    if (type !== 'email') {
+      return res.status(400).json({ error: 'Only email notifier agents are supported right now.' });
+    }
+
+    const existing = getNotifierAgents();
+    const id = allocateNextNotifierAgentId(existing);
+    const created = sanitizeEmailNotifierAgent({
+      id,
+      type: 'email',
+      enabled: true,
+      config: {
+        fromName: '',
+        from: '',
+        to: [],
+        cc: [],
+        bcc: [],
+        encryption: 'starttls',
+        allowHtml: false,
+        smtp: { host: '', port: 587, secure: false, auth: { user: '', pass: '' } }
+      },
+      triggers: {
+        offline: true,
+        serverBackUp: true,
+        wanTranscodes: true,
+        highBandwidth: true,
+        anyWan: true,
+        highWanBandwidth: true,
+        historyDbBackups: true,
+        playbackStart: false,
+        playbackStop: false
+      },
+      text: { subject: '', body: '' }
+    });
+    const next = existing.concat([created]);
+    setNotifierAgents(next);
+    res.json({ ok: true, agent: created });
+  } catch (e) {
+    console.error('[OmniStream] Failed to create notifier agent:', e.message);
+    res.status(500).json({ error: 'Failed to create notifier agent' });
+  }
+});
+
+app.put('/api/notifier-agents/:id', (req, res) => {
+  try {
+    const id = normalizeNotifierAgentId(req.params && req.params.id);
+    if (!id) return res.status(400).json({ error: 'Invalid agent id' });
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const incoming = body.agent && typeof body.agent === 'object' ? body.agent : body;
+
+    const existing = getNotifierAgents();
+    const idx = existing.findIndex(a => normalizeNotifierAgentId(a && a.id) === id);
+    if (idx < 0) return res.status(404).json({ error: 'Agent not found' });
+
+    const nextAgent = sanitizeEmailNotifierAgent({ ...existing[idx], ...incoming, id });
+    const next = existing.slice();
+    next[idx] = nextAgent;
+    setNotifierAgents(next);
+    res.json({ ok: true, agent: nextAgent });
+  } catch (e) {
+    console.error('[OmniStream] Failed to update notifier agent:', e.message);
+    res.status(500).json({ error: 'Failed to update notifier agent' });
+  }
+});
+
+app.delete('/api/notifier-agents/:id', (req, res) => {
+  try {
+    const id = normalizeNotifierAgentId(req.params && req.params.id);
+    if (!id) return res.status(400).json({ error: 'Invalid agent id' });
+    const existing = getNotifierAgents();
+    const next = existing.filter(a => normalizeNotifierAgentId(a && a.id) !== id);
+    if (next.length === existing.length) return res.status(404).json({ error: 'Agent not found' });
+    setNotifierAgents(next);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[OmniStream] Failed to delete notifier agent:', e.message);
+    res.status(500).json({ error: 'Failed to delete notifier agent' });
+  }
+});
+
+app.post('/api/notifier-agents/:id/duplicate', (req, res) => {
+  try {
+    const id = normalizeNotifierAgentId(req.params && req.params.id);
+    if (!id) return res.status(400).json({ error: 'Invalid agent id' });
+    const existing = getNotifierAgents();
+    const agent = existing.find(a => normalizeNotifierAgentId(a && a.id) === id);
+    if (!agent) return res.status(404).json({ error: 'Agent not found' });
+    const nextId = allocateNextNotifierAgentId(existing);
+    const copy = sanitizeEmailNotifierAgent({ ...agent, id: nextId });
+    const next = existing.concat([copy]);
+    setNotifierAgents(next);
+    res.json({ ok: true, agent: copy });
+  } catch (e) {
+    console.error('[OmniStream] Failed to duplicate notifier agent:', e.message);
+    res.status(500).json({ error: 'Failed to duplicate notifier agent' });
+  }
+});
+
+app.post('/api/notifier-agents/:id/test', async (req, res) => {
+  try {
+    const id = normalizeNotifierAgentId(req.params && req.params.id);
+    if (!id) return res.status(400).json({ error: 'Invalid agent id' });
+    if (!nodemailer) return res.status(500).json({ error: 'Email sending not available (nodemailer not installed).' });
+
+    const existing = getNotifierAgents();
+    const agent = existing.find(a => normalizeNotifierAgentId(a && a.id) === id);
+    if (!agent) return res.status(404).json({ error: 'Agent not found' });
+    const cleaned = sanitizeEmailNotifierAgent(agent);
+    const fromName = cleaned.config && cleaned.config.fromName ? String(cleaned.config.fromName).trim() : '';
+    const from = cleaned.config && cleaned.config.from ? String(cleaned.config.from).trim() : '';
+    const toList = normalizeEmailRecipientList(cleaned.config && cleaned.config.to);
+    const ccList = normalizeEmailRecipientList(cleaned.config && cleaned.config.cc);
+    const bccList = normalizeEmailRecipientList(cleaned.config && cleaned.config.bcc);
+    if (!from || !toList.length) return res.status(400).json({ error: 'Agent from/to must be configured.' });
+
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const subjectLine = body.subjectLine != null ? String(body.subjectLine).trim() : 'OmniStream Test Notification';
+    const messageBody = body.messageBody != null ? String(body.messageBody) : 'Test Notification';
+    const transport = nodemailer.createTransport(cleaned.config.smtp || {});
+    const mailOptions = {
+      from: fromName ? `${fromName} <${from}>` : from,
+      to: toList,
+      subject: subjectLine,
+      text: messageBody
+    };
+
+    if (ccList.length) mailOptions.cc = ccList;
+    if (bccList.length) mailOptions.bcc = bccList;
+    if (cleaned.config.allowHtml === true && /<\w[\s\S]*>/i.test(messageBody)) {
+      mailOptions.html = messageBody;
+      const stripped = stripHtmlToText(messageBody);
+      if (stripped) mailOptions.text = stripped;
+    }
+
+    const info = await transport.sendMail(mailOptions);
+    res.json({ ok: true, messageId: info && info.messageId ? String(info.messageId) : '' });
+  } catch (e) {
+    console.error('[OmniStream] Failed to send notifier agent test:', e.message);
     res.status(500).json({ error: 'Failed to send test notification' });
   }
 });
@@ -8395,7 +9265,15 @@ app.put('/api/config/app', (req, res) => {
             templateId,
             dayOfWeek: normalizeDayOfWeek(s && s.dayOfWeek),
             time,
-            lastSentDate: normalizeDateInput(s && s.lastSentDate) || ''
+            lastSentDate: normalizeDateInput(s && s.lastSentDate) || '',
+            timeframeDays: normalizeNewsletterTimeframeDays(s && s.timeframeDays) || 7,
+            includedLibraries: normalizeNewsletterIncludedLibraries(s && s.includedLibraries),
+            saveOnly: s && s.saveOnly === true,
+            saveFileName: normalizeNewsletterSaveFileName(s && s.saveFileName),
+            sendAsHtml: !(s && s.sendAsHtml === false),
+            groupThread: s && s.groupThread === true,
+            emailAgent: normalizeNewsletterEmailAgent(s && s.emailAgent),
+            lastMessageId: normalizeNewsletterLastMessageId(s && s.lastMessageId)
           };
         });
       }
@@ -8439,7 +9317,15 @@ app.put('/api/config/app', (req, res) => {
         templateId: s && s.templateId != null ? String(s.templateId) : DEFAULT_NEWSLETTER_TEMPLATE_ID,
         dayOfWeek: normalizeDayOfWeek(s && s.dayOfWeek),
         time: normalizeTimeHHMM(s && s.time) || '09:00',
-        lastSentDate: s && s.lastSentDate ? String(s.lastSentDate) : ''
+        lastSentDate: s && s.lastSentDate ? String(s.lastSentDate) : '',
+        timeframeDays: normalizeNewsletterTimeframeDays(s && s.timeframeDays) || 7,
+        includedLibraries: normalizeNewsletterIncludedLibraries(s && s.includedLibraries),
+        saveOnly: s && s.saveOnly === true,
+        saveFileName: normalizeNewsletterSaveFileName(s && s.saveFileName),
+        sendAsHtml: !(s && s.sendAsHtml === false),
+        groupThread: s && s.groupThread === true,
+        emailAgent: normalizeNewsletterEmailAgent(s && s.emailAgent),
+        lastMessageId: normalizeNewsletterLastMessageId(s && s.lastMessageId)
       }))
       : [
         {
@@ -8449,7 +9335,15 @@ app.put('/api/config/app', (req, res) => {
           templateId: appConfig.newsletterSchedule?.templateId != null ? String(appConfig.newsletterSchedule.templateId) : DEFAULT_NEWSLETTER_TEMPLATE_ID,
           dayOfWeek: normalizeDayOfWeek(appConfig.newsletterSchedule?.dayOfWeek),
           time: normalizeTimeHHMM(appConfig.newsletterSchedule?.time) || '09:00',
-          lastSentDate: appConfig.newsletterSchedule?.lastSentDate || ''
+          lastSentDate: appConfig.newsletterSchedule?.lastSentDate || '',
+          timeframeDays: 7,
+          includedLibraries: [],
+          saveOnly: false,
+          saveFileName: '',
+          sendAsHtml: true,
+          groupThread: false,
+          emailAgent: 'builtin-email-1',
+          lastMessageId: ''
         }
       ];
     res.json({

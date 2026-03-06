@@ -48,6 +48,7 @@ OmniStream is a dashboard to monitor multiple Plex, Jellyfin, and Emby servers o
 - Simple notifications (offline servers, WAN transcodes, high bandwidth, and History DB backup success/failure)
 - Newsletter: subscriber list, templates, preview/send, and weekly scheduled sends
 - Lightweight health endpoint for external monitors (Home Assistant, Uptime Kuma)
+- Optional native mobile clients (read-only) for remotely viewing status/sessions
 
 ## Security notes
 
@@ -63,6 +64,15 @@ OmniStream is a dashboard to monitor multiple Plex, Jellyfin, and Emby servers o
 - If you are running OmniStream behind Nginx + Basic Auth / 2FA, set **Authentication mode** to **Nginx** in **Settings → System** to disable internal auth completely.
 - Regardless of auth mode, treat OmniStream like an admin panel: keep it on a **trusted network** (LAN/VPN) and/or restrict inbound access so only your reverse proxy can reach it.
 - As of recent builds, **CORS is disabled by default**. If you intentionally need cross-origin API access, set `OMNISTREAM_CORS_ORIGINS` to a comma-separated allowlist (for example: `http://YOUR_UI_HOST_1:3000,http://YOUR_UI_HOST_2:8080`).
+
+### Mobile apps (read-only)
+
+This repo includes native iOS and Android client source under [mobile/](mobile/README.md).
+
+- Login: `POST /api/auth/token` → returns a signed token
+- API calls: `Authorization: Bearer <token>`
+
+The mobile apps are intentionally read-only (no playback controls or admin actions).
 
 ### Nginx + username/password (Basic Auth)
 

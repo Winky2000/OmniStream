@@ -109,6 +109,7 @@
         <a href="glance.html" class="nav-link">At a glance</a>
         <a href="history.html" class="nav-link">History</a>
         <a href="reports.html" class="nav-link nav-link-active">Reports</a>
+        <a href="libraries.html" class="nav-link">Libraries</a>
         <a href="notifications.html" class="nav-link">Notifications</a>
         <div class="settings-group">
           <button type="button" class="nav-group-toggle newsletter-toggle">Newsletter</button>
@@ -600,12 +601,40 @@
       return Array.isArray(arr) ? arr : [];
     }
 
+    async function readFetchError(r) {
+      const status = r && typeof r.status === 'number' ? r.status : 0;
+      let text = '';
+      try { text = await r.text(); } catch (_) {}
+
+      const looksLikeExpressCannotPost = (t) => {
+        const s = String(t || '');
+        if (!s) return false;
+        if (!s.toLowerCase().includes('cannot post')) return false;
+        return s.includes('/api/reports/library-inventory/full-scan');
+      };
+
+      let msg = '';
+      try {
+        const j = text ? JSON.parse(text) : null;
+        msg = (j && (j.detail || j.error)) ? String(j.detail || j.error) : '';
+      } catch (_) {
+        msg = text ? String(text).trim() : '';
+      }
+
+      if (status === 404 && looksLikeExpressCannotPost(text)) {
+        msg = 'Full scan endpoint not available on this OmniStream server build. Update OmniStream and restart the server/container.';
+      }
+
+      msg = msg || (status ? `HTTP ${status}` : 'Request failed');
+      return status ? `HTTP ${status}: ${msg}` : msg;
+    }
+
     async function fetchLibraryInventory({ serverId, days } = {}) {
       const q = new URLSearchParams();
       q.set('serverId', String(serverId || ''));
       q.set('days', String(days || 7));
       const r = await fetch(`/api/reports/library-inventory?${q.toString()}`);
-      if (!r.ok) throw new Error('Failed to load library report');
+      if (!r.ok) throw new Error(await readFetchError(r));
       return await r.json();
     }
 
@@ -615,13 +644,13 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ serverId, days })
       });
-      if (!r.ok && r.status !== 202) throw new Error('Failed to start full scan');
+      if (r.status !== 202) throw new Error(await readFetchError(r));
       return await r.json();
     }
 
     async function fetchLibraryFullScanJob(jobId) {
       const r = await fetch(`/api/reports/library-inventory/full-scan/${encodeURIComponent(String(jobId || ''))}`);
-      if (!r.ok) throw new Error('Failed to load full scan job');
+      if (!r.ok) throw new Error(await readFetchError(r));
       return await r.json();
     }
 
@@ -632,12 +661,18 @@
         return Number.isFinite(n) ? Math.floor(n) : null;
       };
 
+      const movieCount = num(lib.movieCount);
+      const showCount = num(lib.showCount);
+      const episodeCount = num(lib.episodeCount);
       const totalItems = num(lib.totalItems);
       const totalPlayableItems = num(lib.totalPlayableItems);
       const unwatchedItems = num(lib.unwatchedItems);
       const watchedItems = num(lib.watchedItems);
       const added = num(lib.recentlyAddedCount);
 
+      if (movieCount != null) rows.push({ name: 'MOVIES', value: fmtInt(movieCount) });
+      if (showCount != null) rows.push({ name: 'SHOWS', value: fmtInt(showCount) });
+      if (episodeCount != null) rows.push({ name: 'EPISODES', value: fmtInt(episodeCount) });
       if (totalItems != null) rows.push({ name: 'TOTAL ITEMS', value: fmtInt(totalItems) });
       if (totalPlayableItems != null && totalPlayableItems !== totalItems) rows.push({ name: 'PLAYABLE ITEMS', value: fmtInt(totalPlayableItems) });
       if (unwatchedItems != null) rows.push({ name: 'UNWATCHED', value: fmtInt(unwatchedItems) });
@@ -731,6 +766,7 @@
               if (j && j.status === 'error') throw new Error(j.error || 'Full scan failed');
 
               const p = j && j.progress ? j.progress : {};
+              const phase = p.phase != null ? String(p.phase) : '';
               const libName = p.libraryName ? String(p.libraryName) : '';
               const libIdx = Number.isFinite(Number(p.libraryIndex)) ? Number(p.libraryIndex) : 0;
               const libTotal = Number.isFinite(Number(p.librariesTotal)) ? Number(p.librariesTotal) : 0;
@@ -738,10 +774,18 @@
               const total = (p.total != null && Number.isFinite(Number(p.total))) ? Number(p.total) : null;
               const pct = (total && total > 0) ? Math.min(99, Math.floor((scanned / total) * 100)) : null;
 
-              const lineA = libTotal > 0 ? `Scanning library ${libIdx + 1}/${libTotal}` : 'Scanning libraries';
-              const lineB = libName ? `— ${libName}` : '';
-              const lineC = total ? ` (${fmtInt(scanned)} / ${fmtInt(total)}${pct != null ? `, ${pct}%` : ''})` : ` (${fmtInt(scanned)} scanned)`;
-              libraryContent.textContent = `${lineA} ${lineB}${lineC}`;
+              if (phase === 'building') {
+                const lineA = libTotal > 0 ? `Preparing library ${libIdx + 1}/${libTotal}` : 'Preparing libraries';
+                const lineB = libName ? `— ${libName}` : '';
+                libraryContent.textContent = `${lineA} ${lineB}`.trim();
+              } else if (phase === 'starting') {
+                libraryContent.textContent = 'Starting full scan... (this can take a while)';
+              } else {
+                const lineA = libTotal > 0 ? `Scanning library ${libIdx + 1}/${libTotal}` : 'Scanning libraries';
+                const lineB = libName ? `— ${libName}` : '';
+                const lineC = total ? ` (${fmtInt(scanned)} / ${fmtInt(total)}${pct != null ? `, ${pct}%` : ''})` : ` (${fmtInt(scanned)} scanned)`;
+                libraryContent.textContent = `${lineA} ${lineB}${lineC}`;
+              }
 
               if ((Date.now() - startMs) > maxWaitMs) {
                 throw new Error('Full scan timed out waiting for results');
@@ -766,7 +810,7 @@
       } catch (e) {
         console.error(e);
         libraryContent.className = 'placeholder';
-        libraryContent.textContent = 'Failed to load library reports.';
+        libraryContent.textContent = (e && e.message) ? String(e.message) : 'Failed to load library reports.';
       }
     }
 

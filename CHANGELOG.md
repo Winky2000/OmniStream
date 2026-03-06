@@ -8,6 +8,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 _No unreleased changes yet._
 
+## [0.5.0] - 2026-03-05
+
+### Added
+- Mobile clients (read-only): native iOS (SwiftUI) and Android (Kotlin/Compose) source under `mobile/`.
+- API token auth for native clients: `POST /api/auth/token` plus `Authorization: Bearer <token>` support.
+- Libraries page: per-server library inventory summaries with optional full scan progress.
+- Notifiers: email “agent” configuration (multiple SMTP profiles) and optional playback start/stop notifications.
+
+### Changed
+- Emby/Jellyfin token handling: prefer `api_key` query param for compatibility (while still sending `X-Emby-Token`).
+
+### Fixed
+- Reports/Library inventory: improved error messages when full scan endpoints are unavailable or return upstream HTTP errors.
+
 ## [0.4.0] - 2026-03-02
 
 ### Added
@@ -181,4 +195,5 @@ _No unreleased changes yet._
 [0.3.7]: https://github.com/Winky2000/OmniStream/releases/tag/v0.3.7
 [0.3.8]: https://github.com/Winky2000/OmniStream/releases/tag/v0.3.8
 [0.4.0]: https://github.com/Winky2000/OmniStream/releases/tag/v0.4.0
-[Unreleased]: https://github.com/Winky2000/OmniStream/compare/v0.4.0...HEAD
+[0.5.0]: https://github.com/Winky2000/OmniStream/releases/tag/v0.5.0
+[Unreleased]: https://github.com/Winky2000/OmniStream/compare/v0.5.0...HEAD
