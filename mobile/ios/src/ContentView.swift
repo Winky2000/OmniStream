@@ -1,18 +1,14 @@
 import SwiftUI
 
 enum AppScreen {
-    case login
+    case pair
     case status
 }
 
 struct ContentView: View {
-    @State private var screen: AppScreen = .login
-    @State private var username: String = "admin"
-    @State private var password: String = ""
-
-    @State private var isBusy: Bool = false
+    @State private var screen: AppScreen = .pair
+    @State private var deviceTokenInput: String = ""
     @State private var errorText: String? = nil
-    @State private var mustChangePassword: Bool = false
 
     @State private var statusText: String = ""
     @State private var lastUpdated: Date? = nil
@@ -25,8 +21,8 @@ struct ContentView: View {
     var body: some View {
         NavigationView {
             Group {
-                if screen == .login {
-                    loginView
+                if screen == .pair {
+                    pairView
                 } else {
                     statusView
                 }
@@ -37,6 +33,8 @@ struct ContentView: View {
             if let token = TokenStore.shared.loadToken(), !token.isEmpty {
                 screen = .status
                 startPolling(with: token)
+            } else {
+                screen = .pair
             }
         }
         .onDisappear {
@@ -45,18 +43,21 @@ struct ContentView: View {
         }
     }
 
-    private var loginView: some View {
+    private var pairView: some View {
         Form {
             Section(header: Text("Server")) {
                 Text(AppConfig.baseURL.absoluteString)
                     .font(.footnote)
             }
 
-            Section(header: Text("Login")) {
-                TextField("Username", text: $username)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled(true)
-                SecureField("Password", text: $password)
+            Section(header: Text("Link device")) {
+                Text("This mobile app must be linked from the OmniStream web UI after login (Settings → System → Tools → Mobile devices).")
+                    .font(.footnote)
+                    .foregroundColor(.secondary)
+
+                TextEditor(text: $deviceTokenInput)
+                    .frame(minHeight: 80)
+                    .font(.system(.footnote, design: .monospaced))
 
                 if let errorText {
                     Text(errorText)
@@ -64,16 +65,10 @@ struct ContentView: View {
                         .font(.footnote)
                 }
 
-                if mustChangePassword {
-                    Text("Password change required. Use the web UI to change it, then log in again.")
-                        .foregroundColor(.orange)
-                        .font(.footnote)
+                Button("Link device") {
+                    linkDevice()
                 }
-
-                Button(isBusy ? "Signing in…" : "Sign In") {
-                    Task { await doLogin() }
-                }
-                .disabled(isBusy)
+                .disabled(deviceTokenInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
     }
@@ -202,31 +197,14 @@ struct ContentView: View {
         }
     }
 
-    private func doLogin() async {
+    private func linkDevice() {
+        let token = deviceTokenInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !token.isEmpty else { return }
         errorText = nil
-        mustChangePassword = false
-        isBusy = true
-        defer { isBusy = false }
-
-        do {
-            let resp = try await ApiClient.shared.loginToken(username: username, password: password)
-            guard resp.ok == true, let token = resp.token, !token.isEmpty else {
-                errorText = resp.error ?? "Login failed"
-                return
-            }
-
-            mustChangePassword = resp.mustChangePassword == true
-            if mustChangePassword {
-                TokenStore.shared.clearToken()
-                return
-            }
-
-            TokenStore.shared.saveToken(token)
-            screen = .status
-            startPolling(with: token)
-        } catch {
-            errorText = error.localizedDescription
-        }
+        TokenStore.shared.saveToken(token)
+        deviceTokenInput = ""
+        screen = .status
+        startPolling(with: token)
     }
 
     private func startPolling(with token: String) {
@@ -248,6 +226,18 @@ struct ContentView: View {
             lastUpdated = Date()
             errorText = nil
         } catch {
+            if let apiErr = error as? ApiError {
+                switch apiErr {
+                case .http(let code, _):
+                    if code == 401 || code == 403 {
+                        errorText = "Device token is invalid or not linked. Link this device again in the web UI."
+                        logout()
+                        return
+                    }
+                default:
+                    break
+                }
+            }
             errorText = error.localizedDescription
         }
     }
@@ -260,7 +250,6 @@ struct ContentView: View {
         snapshot = nil
         lastUpdated = nil
         errorText = nil
-        password = ""
-        screen = .login
+        screen = .pair
     }
 }

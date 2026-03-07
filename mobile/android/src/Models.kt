@@ -1,4 +1,4 @@
-package com.example.omnistreammobile
+package com.winkys.omnistreammobile
 
 data class StatusServerRow(
     val id: String,
@@ -19,7 +19,16 @@ data class StatusSessionRow(
     val title: String,
     val detail: String,
     val transcoding: Boolean,
-    val bandwidthMbps: Double?
+    val bandwidthMbps: Double?,
+    val posterUrl: String? = null,
+    val backgroundUrl: String? = null,
+    val year: Int? = null,
+    val mediaType: String? = null,
+    val duration: Long? = null,
+    val viewOffset: Long? = null,
+    val channelName: String? = null,
+    val platform: String? = null,
+    val product: String? = null
 )
 
 data class StatusSnapshot(

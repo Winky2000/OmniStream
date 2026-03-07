@@ -26,7 +26,7 @@ Also enable Kotlin serialization plugin.
 Copy these files into your project under `app/src/main/java/.../`:
 - `Config.kt`
 - `Api.kt`
-- `TokenStore.kt`
+- `SettingsStore.kt`
 - `MainActivity.kt`
 
 They are located in this repo under:
@@ -34,15 +34,17 @@ They are located in this repo under:
 
 ## Configure the server URL
 
-Edit `BASE_URL` in `Config.kt`.
+The app prompts you for the OmniStream base URL on first launch (or via Settings in the app). No code edits are required.
 
 ## What you’ll see
 
-- Login screen (username/password)
+- Link device screen (device token)
 - Status screen (polls `/api/status` every ~10 seconds) with:
 	- Summary (online servers, streams, transcodes)
 	- Server list
 	- Live sessions list
 	- Optional raw JSON toggle
 
-If OmniStream returns `mustChangePassword: true` during login, use the web UI to change it.
+To get a device token, log into the OmniStream web UI and go to:
+
+- Settings → System → Tools → Mobile devices

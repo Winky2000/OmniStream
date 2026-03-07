@@ -69,8 +69,8 @@ OmniStream is a dashboard to monitor multiple Plex, Jellyfin, and Emby servers o
 
 This repo includes native iOS and Android client source under [mobile/](mobile/README.md).
 
-- Login: `POST /api/auth/token` → returns a signed token
-- API calls: `Authorization: Bearer <token>`
+- Create a device token in the web UI: **Settings → System → Tools → Mobile devices**
+- API calls: `Authorization: Bearer <deviceToken>`
 
 The mobile apps are intentionally read-only (no playback controls or admin actions).
 

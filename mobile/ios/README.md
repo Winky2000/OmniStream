@@ -27,11 +27,13 @@ Edit `baseURL` in `Config.swift`.
 
 ## What you’ll see
 
-- Login screen (username/password)
+- Link device screen (device token)
 - Status screen (polls `/api/status` every ~10 seconds) with:
 	- Summary (online servers, streams, transcodes)
 	- Server list
 	- Live sessions list
 	- Optional raw JSON disclosure
 
-If OmniStream returns `mustChangePassword: true` during login, use the web UI to change it.
+To get a device token, log into the OmniStream web UI and go to:
+
+- Settings → System → Tools → Mobile devices

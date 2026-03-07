@@ -1,59 +1,29 @@
-package com.example.omnistreammobile
+package com.winkys.omnistreammobile
 
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import okhttp3.MediaType.Companion.toMediaType
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.intOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
-
-@Serializable
-data class TokenResponse(
-    val ok: Boolean? = null,
-    val token: String? = null,
-    val error: String? = null,
-    @SerialName("expiresAtMs") val expiresAtMs: Long? = null,
-    @SerialName("mustChangePassword") val mustChangePassword: Boolean? = null
-)
 
 class Api(private val client: OkHttpClient = OkHttpClient()) {
     private val json = Json { ignoreUnknownKeys = true }
+    private val prettyJson = Json { prettyPrint = true }
 
-    fun loginToken(username: String, password: String): TokenResponse {
-        val payload = "{\"username\":\"${escape(username)}\",\"password\":\"${escape(password)}\"}"
-        val body = payload.toRequestBody("application/json".toMediaType())
-
+    fun fetchStatusSnapshot(baseUrl: String, token: String): StatusSnapshot {
         val req = Request.Builder()
-            .url("${AppConfig.BASE_URL}/api/auth/token")
-            .post(body)
-            .build()
-
-        client.newCall(req).execute().use { resp ->
-            val raw = resp.body?.string() ?: ""
-            val decoded = runCatching { json.decodeFromString(TokenResponse.serializer(), raw) }
-                .getOrElse { TokenResponse(ok = false, error = raw.ifBlank { "Request failed" }) }
-
-            if (!resp.isSuccessful) {
-                return decoded.copy(ok = false, error = decoded.error ?: "HTTP ${resp.code}")
-            }
-            return decoded
-        }
-    }
-
-    fun fetchStatusSnapshot(token: String): StatusSnapshot {
-        val req = Request.Builder()
-            .url("${AppConfig.BASE_URL}/api/status")
+            .url("$baseUrl/api/status")
             .get()
             .header("Authorization", "Bearer $token")
             .build()
 
         client.newCall(req).execute().use { resp ->
-            val raw = resp.body?.string() ?: ""
+            val raw = resp.body.string()
             if (!resp.isSuccessful) {
                 throw RuntimeException("HTTP ${resp.code}: ${raw.ifBlank { "Request failed" }}")
             }
@@ -61,7 +31,7 @@ class Api(private val client: OkHttpClient = OkHttpClient()) {
             val el = runCatching { json.parseToJsonElement(raw) }.getOrNull()
             val rawPretty = if (el != null) {
                 runCatching {
-                    Json { prettyPrint = true }.encodeToString(JsonElement.serializer(), el)
+                    prettyJson.encodeToString(JsonElement.serializer(), el)
                 }.getOrNull() ?: raw
             } else {
                 raw
@@ -81,11 +51,11 @@ class Api(private val client: OkHttpClient = OkHttpClient()) {
                 )
             }
 
-            return parseSnapshot(el, rawPretty)
+            return parseSnapshot(baseUrl, token, el, rawPretty)
         }
     }
 
-    private fun parseSnapshot(root: JsonObject, rawPretty: String): StatusSnapshot {
+    private fun parseSnapshot(baseUrl: String, token: String, root: JsonObject, rawPretty: String): StatusSnapshot {
         val serversEl = root["servers"]
         val statusesEl = root["statuses"]
         val pollEl = root["poll"]
@@ -139,40 +109,127 @@ class Api(private val client: OkHttpClient = OkHttpClient()) {
                 )
             )
 
-            val sessions = st?.get("sessions") as? JsonArray
-            if (sessions != null) {
-                for (sessEl in sessions) {
+            val sessionsArr = st?.get("sessions") as? JsonArray
+            if (sessionsArr != null) {
+                for (sessEl in sessionsArr) {
                     val sess = sessEl as? JsonObject ?: continue
                     val user = sess["user"].asString() ?: sess["userName"].asString() ?: ""
-                    val title = sess["title"].asString() ?: ""
-                    val product = sess["product"].asString() ?: sess["platform"].asString() ?: ""
-                    val player = sess["player"].asString() ?: ""
-                    val location = sess["location"].asString() ?: ""
-                    val quality = sess["quality"].asString() ?: ""
+                    
+                    val sTitle = sess["seriesTitle"].asString() ?: sess["series_title"].asString()
+                    val gTitle = sess["grandparentTitle"].asString() ?: sess["grandparent_title"].asString()
+                    val cTitle = sess["channelTitle"].asString() ?: sess["channel_title"].asString() ?: sess["channelName"].asString()
+                    val pTitle = sess["parentTitle"].asString() ?: sess["parent_title"].asString()
+                    val epTitle = sess["title"].asString() ?: ""
+                    
+                    val displayTitle = when {
+                        !sTitle.isNullOrBlank() -> "$sTitle / $epTitle"
+                        !gTitle.isNullOrBlank() -> "$gTitle / $epTitle"
+                        !cTitle.isNullOrBlank() -> "$cTitle / $epTitle"
+                        !pTitle.isNullOrBlank() -> "$pTitle / $epTitle"
+                        else -> epTitle
+                    }
+
+                    val mediaType = sess["mediaType"].asString() ?: sess["type"].asString()
+                    val channel = sess["channelTitle"].asString() ?: sess["channelName"].asString() ?: sess["channel"].asString()
+                    val isLive = (sess["isLive"].asBoolean() == true) || (mediaType?.lowercase() == "live") || !channel.isNullOrBlank()
+                    
+                    // SUPPRESS YEAR FOR LIVE TV OR PLACEHOLDER >= 2025
+                    var year = sess["year"].asInt()
+                    if (isLive || (year != null && year >= 2025)) year = null
+
+                    val duration = sess["duration"].asLong() ?: sess["durationMs"].asLong()
+                    val viewOffset = sess["viewOffset"].asLong() ?: sess["view_offset"].asLong() ?: sess["progress"].asLong()
+                    
+                    val rawPlatform = sess["platform"].asString()?.lowercase() ?: ""
+                    val rawProduct = sess["product"].asString()?.lowercase() ?: ""
+                    val rawPlayer = sess["player"].asString()?.lowercase() ?: ""
+                    
+                    // Explicit categorization for icon mapping (Apple priority)
+                    val platformCat = when {
+                        rawPlatform.contains("ios") || rawPlatform.contains("iphone") || rawPlatform.contains("ipad") || rawPlatform.contains("apple") || rawProduct.contains("apple") -> "ios"
+                        rawPlatform.contains("roku") || rawProduct.contains("roku") || rawPlayer.contains("roku") -> "roku"
+                        rawProduct.contains("tv") || rawPlatform.contains("tv") || rawPlayer.contains("tv") || rawProduct.contains("fire") || rawPlatform.contains("fire") -> "tv"
+                        rawPlatform.contains("android") -> "android"
+                        rawPlatform.contains("mobile") -> "mobile"
+                        rawPlatform.contains("web") || rawPlatform.contains("chrome") || rawPlatform.contains("firefox") || rawPlatform.contains("windows") || rawPlatform.contains("pc") || rawPlatform.contains("safari") -> "pc"
+                        else -> "other"
+                    }
 
                     val transcoding = isTranscoding(sess)
                     val bw = sess["bandwidth"].asDouble()
 
-                    val detailParts = listOf(
-                        if (transcoding) "Transcode" else "Direct Play",
-                        quality,
-                        location,
-                        if (player.isNotBlank()) "Player: $player" else "",
-                        product
-                    ).filter { it.isNotBlank() }
-
                     val sid = sess["sessionId"].asString() ?: sess["sessionKey"].asString() ?: sess["id"].asString() ?: ""
-                    val rowId = listOf(id, sid, user, title).joinToString("|")
+                    val rowId = listOf(id, sid, user, displayTitle).joinToString("|")
+
+                    // Resolve Poster URL
+                    val posterPath = sess["seriesPoster"].asString() 
+                        ?: sess["series_poster"].asString()
+                        ?: sess["grandparentThumb"].asString()
+                        ?: sess["grandparent_thumb"].asString()
+                        ?: sess["channelThumb"].asString()
+                        ?: sess["channel_thumb"].asString()
+                        ?: sess["networkThumb"].asString()
+                        ?: sess["network_thumb"].asString()
+                        ?: sess["parentThumb"].asString()
+                        ?: sess["parent_thumb"].asString()
+                        ?: sess["poster"].asString() 
+                        ?: sess["thumb"].asString()
+                        ?: sess["image"].asString()
+                    
+                    val posterUrl = posterPath?.let { path ->
+                        val isExternal = path.startsWith("http")
+                        val full = if (isExternal) path else "$baseUrl/${path.trimStart('/')}"
+                        
+                        if (!isExternal) {
+                            val connector = if (full.contains("?")) "&" else "?"
+                            "$full${connector}token=$token&X-Plex-Token=$token&X-Omnistream-Token=$token"
+                        } else {
+                            full
+                        }
+                    }
+
+                    // Resolve Background Art URL
+                    val backPath = sess["background"].asString()
+                        ?: sess["art"].asString() 
+                        ?: sess["backdrop"].asString() 
+                        ?: sess["seriesArt"].asString() 
+                        ?: sess["series_art"].asString()
+                        ?: sess["channelArt"].asString()
+                        ?: sess["channel_art"].asString()
+                        ?: sess["parentArt"].asString()
+                        ?: sess["parent_art"].asString()
+                        ?: sess["fanart"].asString()
+                        
+                    val backgroundUrl = backPath?.let { path ->
+                        val isExternal = path.startsWith("http")
+                        val full = if (isExternal) path else "$baseUrl/${path.trimStart('/')}"
+                        
+                        if (!isExternal) {
+                            val connector = if (full.contains("?")) "&" else "?"
+                            "$full${connector}token=$token&X-Plex-Token=$token&X-Omnistream-Token=$token"
+                        } else {
+                            full
+                        }
+                    }
 
                     sessionRows.add(
                         StatusSessionRow(
                             id = rowId,
                             serverName = name,
                             user = user,
-                            title = title,
-                            detail = detailParts.joinToString(" • "),
+                            title = displayTitle,
+                            detail = "",
                             transcoding = transcoding,
-                            bandwidthMbps = bw
+                            bandwidthMbps = bw,
+                            posterUrl = posterUrl,
+                            backgroundUrl = backgroundUrl,
+                            year = year,
+                            mediaType = mediaType,
+                            duration = duration,
+                            viewOffset = viewOffset,
+                            channelName = channel,
+                            platform = platformCat,
+                            product = rawProduct
                         )
                     )
                 }
@@ -201,18 +258,28 @@ class Api(private val client: OkHttpClient = OkHttpClient()) {
         val stream = sess["stream"].asString()?.lowercase() ?: ""
         if (stream.contains("transcode")) return true
         val state = sess["state"].asString()?.lowercase() ?: ""
-        if (state.contains("transcode")) return true
-        return false
+        return state.contains("transcode")
     }
 
     private fun JsonElement?.asString(): String? {
         val p = this as? JsonPrimitive ?: return null
+        if (p.isString) {
+            val content = p.content
+            if (content == "null" || content.isBlank()) return null
+            return content
+        }
+        if (p.content == "null") return null
         return p.content
     }
 
     private fun JsonElement?.asInt(): Int? {
         val p = this as? JsonPrimitive ?: return null
-        return p.intOrNull
+        return p.doubleOrNull?.toInt() ?: p.intOrNull
+    }
+
+    private fun JsonElement?.asLong(): Long? {
+        val p = this as? JsonPrimitive ?: return null
+        return p.doubleOrNull?.toLong() ?: p.content.toLongOrNull()
     }
 
     private fun JsonElement?.asDouble(): Double? {

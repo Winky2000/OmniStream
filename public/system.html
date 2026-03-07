@@ -168,6 +168,32 @@
         </div>
 
         <div class="card">
+          <h2>Mobile devices</h2>
+          <div class="row">Mobile apps are read-only. To use them, create a <b>device token</b> here after logging in, then paste it into the mobile app.</div>
+          <div class="hint">Device tokens are shown once. If you lose it, delete the device and create a new token.</div>
+          <div class="config-row" style="margin-top:10px;">
+            <label>
+              Device name
+              <input type="text" id="mobileDeviceName" placeholder="My phone">
+            </label>
+            <button class="btn" id="mobileDeviceCreateBtn">Create device token</button>
+            <div class="row" id="mobileDeviceCreateStatus" style="margin-top:6px;"></div>
+            <div id="mobileDeviceTokenBox" style="display:none;margin-top:10px;">
+              <label>
+                Device token
+                <textarea id="mobileDeviceToken" readonly style="width:100%;max-width:640px;min-height:72px;padding:6px 10px;border-radius:6px;border:1px solid #444;background:var(--bg);color:var(--text-main);box-sizing:border-box;"></textarea>
+              </label>
+              <div class="config-actions" style="margin-top:6px;">
+                <button class="btn" id="mobileDeviceCopyBtn">Copy token</button>
+                <span class="hint" id="mobileDeviceCopyStatus"></span>
+              </div>
+            </div>
+          </div>
+          <div class="row" style="margin-top:12px;"><b>Paired devices</b></div>
+          <div id="mobileDevicesList" class="row" style="display:block;"></div>
+        </div>
+
+        <div class="card">
           <h2>History DB backups</h2>
           <div class="row" style="gap:10px;flex-wrap:wrap;">
             <b>Auto backup:</b>
@@ -574,6 +600,115 @@
         }
       });
     }
+
+    async function loadMobileDevices() {
+      const listEl = document.getElementById('mobileDevicesList');
+      if (!listEl) return;
+      listEl.textContent = 'Loading...';
+      try {
+        const r = await fetch('/api/mobile/devices');
+        if (!r.ok) {
+          const t = await r.text().catch(() => '');
+          throw new Error(t || ('HTTP ' + r.status));
+        }
+        const data = await r.json();
+        const devices = Array.isArray(data.devices) ? data.devices : [];
+        if (!devices.length) {
+          listEl.innerHTML = '<span class="muted">No mobile devices yet.</span>';
+          return;
+        }
+
+        let html = '';
+        devices.forEach(d => {
+          const id = d && d.id ? String(d.id) : '';
+          const name = d && d.name ? String(d.name) : 'Mobile device';
+          const createdAt = d && d.createdAt ? fmtTime(d.createdAt) : '-';
+          const lastUsedAt = d && d.lastUsedAt ? fmtTime(d.lastUsedAt) : '-';
+          html += '<div class="row" style="display:flex;justify-content:space-between;gap:10px;align-items:center;">';
+          html += '<div style="min-width:0;flex:1;">';
+          html += `<div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(name)}</div>`;
+          html += `<div class="muted" style="font-size:12px;">Created: ${escapeHtml(createdAt)} • Last used: ${escapeHtml(lastUsedAt)}</div>`;
+          html += '</div>';
+          html += `<button class="btn" data-mobile-device-delete="${escapeHtml(id)}">Delete</button>`;
+          html += '</div>';
+        });
+        listEl.innerHTML = html;
+
+        listEl.querySelectorAll('button[data-mobile-device-delete]').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const id = btn.getAttribute('data-mobile-device-delete') || '';
+            const ok = confirm('Delete this mobile device? The token will stop working immediately.');
+            if (!ok) return;
+            try {
+              const resp = await fetch('/api/mobile/devices/' + encodeURIComponent(id), { method: 'DELETE' });
+              if (!resp.ok) {
+                const t = await resp.text().catch(() => '');
+                throw new Error(t || ('HTTP ' + resp.status));
+              }
+              await loadMobileDevices();
+            } catch (e) {
+              alert('Delete failed. Check server logs.');
+              console.error('Delete mobile device failed:', e);
+            }
+          });
+        });
+      } catch (e) {
+        console.error('Failed to load mobile devices:', e);
+        listEl.innerHTML = '<span class="muted">Failed to load mobile devices.</span>';
+      }
+    }
+
+    (function() {
+      const createBtn = document.getElementById('mobileDeviceCreateBtn');
+      const nameInput = document.getElementById('mobileDeviceName');
+      const statusEl = document.getElementById('mobileDeviceCreateStatus');
+      const tokenBox = document.getElementById('mobileDeviceTokenBox');
+      const tokenEl = document.getElementById('mobileDeviceToken');
+      const copyBtn = document.getElementById('mobileDeviceCopyBtn');
+      const copyStatus = document.getElementById('mobileDeviceCopyStatus');
+      if (!createBtn || !statusEl || !tokenBox || !tokenEl) return;
+
+      createBtn.addEventListener('click', async () => {
+        statusEl.textContent = 'Creating...';
+        statusEl.className = 'row';
+        tokenBox.style.display = 'none';
+        tokenEl.value = '';
+        if (copyStatus) copyStatus.textContent = '';
+        try {
+          const payload = { name: (nameInput && nameInput.value) ? String(nameInput.value).trim() : '' };
+          const r = await fetch('/api/mobile/devices', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          const text = await r.text().catch(() => '');
+          if (!r.ok) throw new Error(text || ('HTTP ' + r.status));
+          const data = text ? JSON.parse(text) : {};
+          if (!data || !data.token) throw new Error('Server did not return a token');
+          tokenEl.value = String(data.token);
+          tokenBox.style.display = 'block';
+          statusEl.textContent = 'Device token created.';
+          statusEl.className = 'row status-ok';
+          await loadMobileDevices();
+        } catch (e) {
+          console.error('Create mobile device failed:', e);
+          statusEl.textContent = 'Create failed. Check server logs.';
+          statusEl.className = 'row status-error';
+        }
+      });
+
+      if (copyBtn) {
+        copyBtn.addEventListener('click', async () => {
+          try {
+            await navigator.clipboard.writeText(tokenEl.value || '');
+            if (copyStatus) copyStatus.textContent = 'Copied.';
+          } catch (e) {
+            console.error('Copy failed:', e);
+            if (copyStatus) copyStatus.textContent = 'Copy failed.';
+          }
+        });
+      }
+    })();
     document.getElementById('configSaveBtn').addEventListener('click', async () => {
       const statusEl = document.getElementById('configStatus');
       statusEl.textContent = 'Saving...';
@@ -642,6 +777,7 @@
     loadAppConfig();
     loadDbBackupConfig();
     loadDbBackupList();
+    loadMobileDevices();
 
     function updateAuthModeUI() {
       const authModeSel = document.getElementById('cfgAuthMode');

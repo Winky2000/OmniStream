@@ -508,6 +508,100 @@ function getBearerTokenFromReq(req) {
   }
 }
 
+function ensureMobileDevicesConfig() {
+  if (!appConfig.mobile || typeof appConfig.mobile !== 'object') {
+    appConfig.mobile = {};
+  }
+  if (!Array.isArray(appConfig.mobile.devices)) {
+    appConfig.mobile.devices = [];
+  }
+  return appConfig.mobile.devices;
+}
+
+function normalizeMobileDeviceName(input) {
+  const raw = (typeof input === 'string' ? input : '').trim();
+  if (!raw) return 'Mobile device';
+  return raw.length > 64 ? raw.slice(0, 64) : raw;
+}
+
+function hashMobileDeviceToken(token) {
+  return crypto.createHash('sha256').update(String(token), 'utf8').digest('hex');
+}
+
+function safeTimingEqualHex(aHex, bHex) {
+  try {
+    const a = Buffer.from(String(aHex || ''), 'hex');
+    const b = Buffer.from(String(bHex || ''), 'hex');
+    if (!a.length || a.length !== b.length) return false;
+    return crypto.timingSafeEqual(a, b);
+  } catch (_) {
+    return false;
+  }
+}
+
+function getMobileDeviceTokenFromReq(req) {
+  try {
+    const bearer = getBearerTokenFromReq(req);
+    if (bearer && !bearer.includes('.')) return bearer;
+  } catch (_) {
+    // ignore
+  }
+
+  try {
+    const q = req && req.query && (req.query.token || req.query.deviceToken);
+    if (typeof q === 'string' && q.trim()) return q.trim();
+  } catch (_) {
+    // ignore
+  }
+
+  try {
+    const h = String(req.headers['x-omnistream-device-token'] || '').trim();
+    if (h) return h;
+  } catch (_) {
+    // ignore
+  }
+
+  return '';
+}
+
+function getMobileDeviceForReq(req) {
+  const token = getMobileDeviceTokenFromReq(req);
+  if (!token) return null;
+  // Keep the token format intentionally permissive; callers might paste with whitespace.
+  if (token.length < 16 || token.length > 256) return null;
+
+  const devices = ensureMobileDevicesConfig();
+  if (!devices.length) return null;
+  const tokenHash = hashMobileDeviceToken(token);
+
+  for (const d of devices) {
+    if (!d || d.disabled === true) continue;
+    const stored = typeof d.tokenHash === 'string' ? d.tokenHash : '';
+    if (!stored) continue;
+    if (safeTimingEqualHex(stored, tokenHash)) {
+      try {
+        d.lastUsedAtMs = Date.now();
+      } catch (_) {
+        // ignore
+      }
+      return d;
+    }
+  }
+
+  return null;
+}
+
+function sanitizeMobileDeviceForClient(d) {
+  if (!d || typeof d !== 'object') return null;
+  return {
+    id: d.id != null ? String(d.id) : '',
+    name: d.name != null ? String(d.name) : 'Mobile device',
+    disabled: d.disabled === true,
+    createdAt: (typeof d.createdAtMs === 'number' && Number.isFinite(d.createdAtMs)) ? new Date(d.createdAtMs).toISOString() : null,
+    lastUsedAt: (typeof d.lastUsedAtMs === 'number' && Number.isFinite(d.lastUsedAtMs)) ? new Date(d.lastUsedAtMs).toISOString() : null
+  };
+}
+
 function getSessionForReq(req) {
   const bearer = getBearerTokenFromReq(req);
   if (bearer && bearer.includes('.')) {
@@ -592,6 +686,7 @@ app.use((req, res, next) => {
     const isLoginPage = p === '/login.html';
     const isChangePwPage = p === '/change-password.html';
     const isAuthApi = p.startsWith('/api/auth/');
+    const isPublicAuthApi = p === '/api/auth/login' || p === '/api/auth/me';
 
     // Allow static assets needed for login/change-password UI
     if (isPublicAuthAssetPath(p)) {
@@ -608,6 +703,15 @@ app.use((req, res, next) => {
 
     if (!authed) {
       if (isApi) {
+        // Allow the mobile app to call a tight set of endpoints using a registered device token
+        // (created from the web UI after login). Only applies when internal auth is enabled.
+        if (p === '/api/status' || p === '/api/poster') {
+          const device = getMobileDeviceForReq(req);
+          if (device) {
+            req.omnistreamMobileDevice = device;
+            return next();
+          }
+        }
         // Allow signed thumbnail proxy requests for email clients without cookies.
         // Signature is validated inside the route handler.
         if (p === '/api/newsletter/plex/thumb') {
@@ -632,8 +736,8 @@ app.use((req, res, next) => {
           const exp = typeof req.query.exp === 'string' || typeof req.query.exp === 'number' ? String(req.query.exp).trim() : '';
           if (sig && exp) return next();
         }
-        // Allow calling auth endpoints without a session (login + me)
-        if (isAuthApi) return next();
+        // Allow calling only login/me without a session
+        if (isAuthApi && isPublicAuthApi) return next();
         return res.status(401).json({ error: 'Unauthorized', code: 'UNAUTHENTICATED' });
       }
       // Non-API: redirect to login
@@ -747,45 +851,79 @@ app.post('/api/auth/login', (req, res) => {
   }
 });
 
-// Token login for native clients (no cookies). Returns the same signed session token used in cookies.
+// Token issuance for native clients: requires an existing authenticated web session.
+// This prevents mobile apps from bypassing the "add device" flow.
 app.post('/api/auth/token', (req, res) => {
   try {
     if (!internalAuthEnabled()) {
       return res.status(400).json({ error: 'Internal auth is disabled', code: 'INTERNAL_AUTH_DISABLED' });
     }
 
+    const sess = getSessionForReq(req);
+    if (!sess || !sess.username) {
+      return res.status(401).json({ error: 'Unauthorized', code: 'UNAUTHENTICATED' });
+    }
+
     const body = req.body && typeof req.body === 'object' ? req.body : {};
-    const username = typeof body.username === 'string' ? body.username.trim() : '';
-    const password = typeof body.password === 'string' ? body.password : '';
+    const name = normalizeMobileDeviceName(body.name || body.deviceName);
 
-    const authCfg = getAuthConfig();
-    const expectedUser = String(authCfg.username || 'admin');
-    const storedHash = String(authCfg.passwordHash || '');
-    if (!username || !password) {
-      return res.status(400).json({ error: 'Missing username or password' });
-    }
-    if (username !== expectedUser) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
-    if (!storedHash || !pbkdf2VerifyPassword(password, storedHash)) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
+    const devices = ensureMobileDevicesConfig();
+    const id = `mob-${Date.now().toString(36)}-${crypto.randomBytes(4).toString('hex')}`;
+    const token = crypto.randomBytes(32).toString('hex');
+    const tokenHash = hashMobileDeviceToken(token);
+    const now = Date.now();
+    const device = { id, name, tokenHash, createdAtMs: now, lastUsedAtMs: null, disabled: false };
+    devices.push(device);
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify(appConfig, null, 2));
 
-    const token = createSignedSessionToken(expectedUser);
-    if (!token) {
-      return res.status(500).json({ error: 'Token issuance failed (session secret missing)' });
-    }
-
-    const verified = verifySignedSessionToken(token);
-    return res.json({
-      ok: true,
-      token,
-      expiresAtMs: verified ? verified.expiresAtMs : null,
-      mustChangePassword: authCfg.passwordChangeRequired === true
-    });
+    return res.json({ ok: true, device: sanitizeMobileDeviceForClient(device), token });
   } catch (e) {
     console.error('[OmniStream] token login failed:', e.message);
-    res.status(500).json({ error: 'Token login failed' });
+    res.status(500).json({ error: 'Token issuance failed' });
+  }
+});
+
+// Mobile device management (requires auth via the standard auth gate)
+app.get('/api/mobile/devices', (req, res) => {
+  try {
+    const devices = ensureMobileDevicesConfig();
+    res.json({ devices: devices.map(sanitizeMobileDeviceForClient).filter(Boolean) });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to list mobile devices' });
+  }
+});
+
+app.post('/api/mobile/devices', (req, res) => {
+  try {
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const name = normalizeMobileDeviceName(body.name);
+    const devices = ensureMobileDevicesConfig();
+    const id = `mob-${Date.now().toString(36)}-${crypto.randomBytes(4).toString('hex')}`;
+    const token = crypto.randomBytes(32).toString('hex');
+    const tokenHash = hashMobileDeviceToken(token);
+    const now = Date.now();
+    const device = { id, name, tokenHash, createdAtMs: now, lastUsedAtMs: null, disabled: false };
+    devices.push(device);
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify(appConfig, null, 2));
+    res.json({ ok: true, device: sanitizeMobileDeviceForClient(device), token });
+  } catch (e) {
+    console.error('[OmniStream] failed to create mobile device:', e.message);
+    res.status(500).json({ error: 'Failed to create mobile device' });
+  }
+});
+
+app.delete('/api/mobile/devices/:id', (req, res) => {
+  try {
+    const id = req.params && req.params.id ? String(req.params.id) : '';
+    if (!id) return res.status(400).json({ error: 'Missing id' });
+    const devices = ensureMobileDevicesConfig();
+    const next = devices.filter(d => !(d && String(d.id) === id));
+    appConfig.mobile.devices = next;
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify(appConfig, null, 2));
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[OmniStream] failed to delete mobile device:', e.message);
+    res.status(500).json({ error: 'Failed to delete mobile device' });
   }
 });
 
