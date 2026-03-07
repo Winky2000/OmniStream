@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 _No unreleased changes yet._
 
+## [0.6.0] - 2026-03-06
+
+### Added
+- Mobile device pairing: device tokens generated from the authenticated web UI.
+- System → Tools: “Mobile devices” management (create/copy/revoke device tokens).
+- Server endpoints for managing paired devices: `GET/POST/DELETE /api/mobile/devices`.
+
+### Changed
+- Mobile clients now require pairing via device token (no username/password login flow).
+- `POST /api/auth/token` now requires an authenticated session and issues a device token.
+
 ## [0.5.0] - 2026-03-05
 
 ### Added
@@ -196,4 +207,5 @@ _No unreleased changes yet._
 [0.3.8]: https://github.com/Winky2000/OmniStream/releases/tag/v0.3.8
 [0.4.0]: https://github.com/Winky2000/OmniStream/releases/tag/v0.4.0
 [0.5.0]: https://github.com/Winky2000/OmniStream/releases/tag/v0.5.0
-[Unreleased]: https://github.com/Winky2000/OmniStream/compare/v0.5.0...HEAD
+[0.6.0]: https://github.com/Winky2000/OmniStream/releases/tag/v0.6.0
+[Unreleased]: https://github.com/Winky2000/OmniStream/compare/v0.6.0...HEAD
