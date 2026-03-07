@@ -6,7 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
-_No unreleased changes yet._
+### Fixed
+- Mobile clients: allow `/api/poster` access using a registered device token (paired mobile device).
 
 ## [0.6.0] - 2026-03-06
 

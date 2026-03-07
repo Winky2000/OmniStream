@@ -6830,7 +6830,12 @@ app.get('/api/poster', async (req, res) => {
     }
 
     const sess = internalAuthEnabled() ? getSessionForReq(req) : null;
-    const authed = !internalAuthEnabled() || Boolean(sess && sess.username);
+    // When internal auth is enabled, mobile clients may access posters using a registered device token.
+    // The auth gate sets req.omnistreamMobileDevice when such a token is present/valid.
+    const mobileDevice = internalAuthEnabled()
+      ? (req.omnistreamMobileDevice || getMobileDeviceForReq(req))
+      : null;
+    const authed = !internalAuthEnabled() || Boolean(sess && sess.username) || Boolean(mobileDevice);
 
     const relRaw = String(artworkPath);
     if (!relRaw.startsWith('/') || relRaw.includes('..') || relRaw.includes('://')) {
