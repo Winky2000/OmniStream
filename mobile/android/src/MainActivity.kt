@@ -67,8 +67,21 @@ class MainActivity : ComponentActivity() {
 private fun OmniStreamApp(settingsStore: SettingsStore, api: Api) {
     var baseUrl by remember { mutableStateOf(settingsStore.loadBaseUrl()) }
     var token by remember { mutableStateOf(settingsStore.loadToken()) }
+
+    fun isLikelyDeviceToken(value: String?): Boolean {
+        val t = value?.trim() ?: return false
+        if (t.length != 64) return false
+        if (!t.all { it.isDigit() || (it.lowercaseChar() in 'a'..'f') }) return false
+        return true
+    }
     
-    var screen by remember { mutableStateOf(if (baseUrl == null) "setup" else if (token == null) "pair" else "status") }
+    var screen by remember {
+        mutableStateOf(
+            if (baseUrl == null) "setup"
+            else if (!isLikelyDeviceToken(token)) "pair"
+            else "status"
+        )
+    }
     
     var deviceTokenInput by remember { mutableStateOf("") }
     var errorText by remember { mutableStateOf<String?>(null) }
@@ -78,8 +91,17 @@ private fun OmniStreamApp(settingsStore: SettingsStore, api: Api) {
 
     val scope = rememberCoroutineScope()
 
+    LaunchedEffect(token) {
+        if (token != null && !isLikelyDeviceToken(token)) {
+            settingsStore.clearToken()
+            token = null
+            snapshot = null
+            screen = "pair"
+        }
+    }
+
     LaunchedEffect(screen, token, baseUrl) {
-        if (screen != "status" || token.isNullOrBlank() || baseUrl.isNullOrBlank()) return@LaunchedEffect
+        if (screen != "status" || !isLikelyDeviceToken(token) || baseUrl.isNullOrBlank()) return@LaunchedEffect
 
         while (true) {
             try {
@@ -111,7 +133,7 @@ private fun OmniStreamApp(settingsStore: SettingsStore, api: Api) {
                 onSave = { newUrl ->
                     settingsStore.saveBaseUrl(newUrl)
                     baseUrl = settingsStore.loadBaseUrl()
-                    screen = if (token == null) "pair" else "status"
+                    screen = if (!isLikelyDeviceToken(token)) "pair" else "status"
                 }
             )
         }
