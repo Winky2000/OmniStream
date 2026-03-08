@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const cors = require('cors');
 const crypto = require('crypto');
+const QRCode = require('qrcode');
 const sqlite3 = require('sqlite3').verbose();
 const https = require('https');
 let nodemailer = null;
@@ -876,7 +877,15 @@ app.post('/api/auth/token', (req, res) => {
     devices.push(device);
     fs.writeFileSync(CONFIG_FILE, JSON.stringify(appConfig, null, 2));
 
-    return res.json({ ok: true, device: sanitizeMobileDeviceForClient(device), token });
+    // QR code is best-effort (helps mobile pairing without copy/paste).
+    return QRCode.toString(token, { type: 'svg', margin: 1, width: 192 }, (err, svg) => {
+      return res.json({
+        ok: true,
+        device: sanitizeMobileDeviceForClient(device),
+        token,
+        qrSvg: err ? null : svg
+      });
+    });
   } catch (e) {
     console.error('[OmniStream] token login failed:', e.message);
     res.status(500).json({ error: 'Token issuance failed' });
@@ -905,7 +914,16 @@ app.post('/api/mobile/devices', (req, res) => {
     const device = { id, name, tokenHash, createdAtMs: now, lastUsedAtMs: null, disabled: false };
     devices.push(device);
     fs.writeFileSync(CONFIG_FILE, JSON.stringify(appConfig, null, 2));
-    res.json({ ok: true, device: sanitizeMobileDeviceForClient(device), token });
+
+    // QR code is best-effort (helps mobile pairing without copy/paste).
+    return QRCode.toString(token, { type: 'svg', margin: 1, width: 192 }, (err, svg) => {
+      return res.json({
+        ok: true,
+        device: sanitizeMobileDeviceForClient(device),
+        token,
+        qrSvg: err ? null : svg
+      });
+    });
   } catch (e) {
     console.error('[OmniStream] failed to create mobile device:', e.message);
     res.status(500).json({ error: 'Failed to create mobile device' });

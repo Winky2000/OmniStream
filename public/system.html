@@ -193,6 +193,10 @@
                 <button class="btn" id="mobileDeviceCopyBtn">Copy token</button>
                 <span class="hint" id="mobileDeviceCopyStatus"></span>
               </div>
+              <div id="mobileDeviceQrBox" style="display:none;margin-top:10px;">
+                <div class="hint">Scan this QR code from your phone to copy the device token.</div>
+                <div id="mobileDeviceQr" style="display:inline-block;background:#fff;padding:10px;border-radius:10px;"></div>
+              </div>
             </div>
           </div>
           <div class="row" style="margin-top:12px;"><b>Paired devices</b></div>
@@ -685,6 +689,8 @@
       const statusEl = document.getElementById('mobileDeviceCreateStatus');
       const tokenBox = document.getElementById('mobileDeviceTokenBox');
       const tokenEl = document.getElementById('mobileDeviceToken');
+      const qrBox = document.getElementById('mobileDeviceQrBox');
+      const qrEl = document.getElementById('mobileDeviceQr');
       const copyBtn = document.getElementById('mobileDeviceCopyBtn');
       const copyStatus = document.getElementById('mobileDeviceCopyStatus');
       if (!createBtn || !statusEl || !tokenBox || !tokenEl) return;
@@ -694,6 +700,8 @@
         statusEl.className = 'row';
         tokenBox.style.display = 'none';
         tokenEl.value = '';
+        if (qrBox) qrBox.style.display = 'none';
+        if (qrEl) qrEl.innerHTML = '';
         if (copyStatus) copyStatus.textContent = '';
         try {
           const payload = { name: (nameInput && nameInput.value) ? String(nameInput.value).trim() : '' };
@@ -708,6 +716,10 @@
           if (!data || !data.token) throw new Error('Server did not return a token');
           tokenEl.value = String(data.token);
           tokenBox.style.display = 'block';
+          if (qrBox && qrEl && data.qrSvg) {
+            qrEl.innerHTML = String(data.qrSvg);
+            qrBox.style.display = 'block';
+          }
           statusEl.textContent = 'Device token created.';
           statusEl.className = 'row status-ok';
           await loadMobileDevices();
