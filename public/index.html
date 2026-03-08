@@ -186,6 +186,38 @@
     .session-info-list{margin-top:6px;display:flex;flex-direction:column;gap:1px;font-size:11px;color:#cbd5f5;}
     .session-info-list div{display:grid;grid-template-columns:minmax(70px,auto) 1fr auto;align-items:center;column-gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
     .session-info-list b{display:block;font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:#9ca3af;font-weight:600;}
+    .session-platform-icon{
+      position:absolute;
+      top:10px;
+      right:10px;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:8px;
+      min-width:44px;
+      min-height:44px;
+      padding:6px 10px;
+      border-radius:10px;
+      border:1px solid rgba(255,255,255,0.16);
+      background:rgba(0,0,0,0.30);
+      z-index:2;
+      color:var(--text-main);
+      box-sizing:border-box;
+    }
+    .session-platform-icon img{width:32px;height:32px;object-fit:contain;display:block;}
+    .session-platform-icon svg{width:32px;height:32px;display:block;}
+    .session-platform-label{font-size:12px;font-weight:800;letter-spacing:0.02em;white-space:nowrap;}
+    .session-platform-icon.platform-roku{
+      background:var(--jellyfin-color);
+      border-color:transparent;
+      color:var(--btn-text-hover);
+    }
+    :root[data-theme="light"] .session-platform-icon,
+    :root[data-theme="light-borderless"] .session-platform-icon{
+      border:1px solid rgba(0,0,0,0.12);
+      background:rgba(255,255,255,0.65);
+      color:#111827;
+    }
     .badge-health-good{border-color:#4caf50;color:#c8e6c9;}
     .badge-health-warn{border-color:#ffb300;color:#ffe082;}
     .badge-health-bad{border-color:#e53935;color:#ffab91;}
@@ -261,6 +293,93 @@
       layoutMode = savedLayout === 'flex' ? 'flex' : 'grid';
       grid.className = layoutMode === 'grid' ? 'grid-layout' : 'flex-layout';
     });
+
+    function detectPlatformKey(raw) {
+      const s = String(raw || '').trim();
+      const lower = s.toLowerCase();
+      if (!lower) return { key: 'unknown', label: 'Unknown', raw: '' };
+
+      if (lower.includes('roku')) return { key: 'roku', label: 'Roku', raw: s };
+      if (lower.includes('chromecast') || (lower.includes('cast') && lower.includes('chrome'))) return { key: 'chromecast', label: 'Chromecast', raw: s };
+      if (lower.includes('android tv') || lower.includes('google tv')) return { key: 'androidtv', label: 'Android TV', raw: s };
+      if (lower.includes('android')) return { key: 'android', label: 'Android', raw: s };
+      if (lower.includes('iphone') || lower.includes('ipad') || lower.includes('ios')) return { key: 'ios', label: 'iOS', raw: s };
+      if (lower.includes('tvos') || lower.includes('apple tv')) return { key: 'tvos', label: 'tvOS', raw: s };
+      if (lower.includes('fire tv') || (lower.includes('fire') && lower.includes('tv'))) return { key: 'firetv', label: 'Fire TV', raw: s };
+      if (lower.includes('webos')) return { key: 'webos', label: 'webOS', raw: s };
+      if (lower.includes('tizen') || lower.includes('samsung')) return { key: 'tizen', label: 'Tizen', raw: s };
+      if (lower.includes('xbox')) return { key: 'xbox', label: 'Xbox', raw: s };
+      if (lower.includes('playstation') || lower.includes('ps4') || lower.includes('ps5')) return { key: 'playstation', label: 'PlayStation', raw: s };
+      if (lower.includes('shield')) return { key: 'shield', label: 'Shield', raw: s };
+      if (lower.includes('windows')) return { key: 'windows', label: 'Windows', raw: s };
+      if (lower.includes('mac') || lower.includes('os x') || lower.includes('osx')) return { key: 'mac', label: 'macOS', raw: s };
+      if (lower.includes('linux')) return { key: 'linux', label: 'Linux', raw: s };
+      if (lower.includes('chrome') || lower.includes('safari') || lower.includes('edge') || lower.includes('browser') || lower.includes('web')) return { key: 'web', label: 'Web', raw: s };
+      if (lower.includes('tv')) return { key: 'tv', label: 'TV', raw: s };
+
+      return { key: 'unknown', label: 'Unknown', raw: s };
+    }
+
+    function platformIconSvg(type) {
+      // Monochrome icons using currentColor.
+      if (type === 'tv') {
+        return '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="6" width="18" height="12" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M8 20h8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
+      }
+      if (type === 'phone') {
+        return '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="8" y="3" width="8" height="18" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M11 18h2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
+      }
+      if (type === 'monitor') {
+        return '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="12" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M9 21h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M12 17v4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
+      }
+      if (type === 'terminal') {
+        return '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M7 10l3 3-3 3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 16h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
+      }
+      return '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><path d="M3 12h18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M12 3c2.8 2.8 2.8 15.2 0 18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M12 3c-2.8 2.8-2.8 15.2 0 18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
+    }
+
+    const __rokuLogoCacheBust = Date.now();
+    function getRokuLogoUrl() {
+      // Use a relative URL so it works when OmniStream is hosted under a subpath.
+      // Add a simple cache-buster so a previously cached 404 doesn't stick.
+      return 'roku_logo.png?v=' + __rokuLogoCacheBust;
+    }
+
+    function createSessionPlatformIcon(sess) {
+      if (!sess) return null;
+      const raw = String(sess.platform || '').trim() || String(sess.product || '').trim() || String(sess.player || '').trim();
+      if (!raw) return null;
+
+      const det = detectPlatformKey(raw);
+      const el = document.createElement('div');
+      el.className = 'session-platform-icon platform-' + det.key;
+      el.title = raw;
+
+      const label = document.createElement('span');
+      label.className = 'session-platform-label';
+      label.textContent = det.label || 'Unknown';
+      el.appendChild(label);
+
+      if (det.key === 'roku') {
+        // If a custom Roku logo is present, show it (optional).
+        const img = document.createElement('img');
+        img.alt = 'Roku';
+        img.src = getRokuLogoUrl();
+        img.style.display = 'none';
+        img.onload = () => {
+          // Put logo before text when available.
+          img.style.display = '';
+          if (label.parentNode === el) {
+            el.insertBefore(img, label);
+          }
+        };
+        img.onerror = () => {
+          // Keep text-only badge.
+        };
+        el.appendChild(img);
+        return el;
+      }
+      return el;
+    }
 
     function render(data) {
       const { servers = [], statuses = {}, setup = false, poll = {}, update = {} } = data;
@@ -461,6 +580,10 @@
               isTranscoding = true;
             }
             session.className = 'session ' + (isTranscoding ? 'transcode' : 'direct');
+
+            const platformIcon = createSessionPlatformIcon(sess);
+            if (platformIcon) session.appendChild(platformIcon);
+
             // Layout: poster left, info right (horizontal) or stacked (vertical)
             const row = document.createElement('div');
             // Always use a flex row for session content so poster and text line up

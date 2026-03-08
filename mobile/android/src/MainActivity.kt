@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -352,18 +353,8 @@ private fun StatusScreen(
                                         Text(if (sess.user.isBlank()) "(unknown user)" else sess.user, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                         Text(" @ ${sess.serverName}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     }
-                                    
-                                    // Platform Icon mapping
-                                    val plat = sess.platform?.lowercase() ?: ""
-                                    when (plat) {
-                                        "roku" -> RokuBadge()
-                                        "android" -> AndroidHeadIcon(modifier = Modifier.size(16.dp))
-                                        "ios" -> AppleIcon(modifier = Modifier.size(16.dp))
-                                        "mobile" -> Icon(Icons.Default.Smartphone, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
-                                        "tv" -> Icon(Icons.Default.Tv, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
-                                        "pc" -> Icon(Icons.Default.Computer, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
-                                        else -> Icon(Icons.Default.Devices, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
-                                    }
+
+                                    PlatformBadge(platformKey = sess.platform)
                                 }
                                 
                                 Text(if (sess.title.isBlank()) "(unknown title)" else sess.title, style = MaterialTheme.typography.titleSmall)
@@ -393,7 +384,8 @@ private fun StatusScreen(
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                             )
 
-                            val isOTA = sess.mediaType?.lowercase() == "live" || !sess.channelName.isNullOrBlank()
+                            val mt = sess.mediaType?.lowercase()
+                            val isOTA = mt == "live" || mt == "channel" || mt == "track" || !sess.channelName.isNullOrBlank()
                             val bottomText = if (isOTA) {
                                 sess.channelName ?: ""
                             } else {
@@ -424,21 +416,35 @@ private fun StatusScreen(
 
 @Composable
 fun RokuBadge() {
-    Surface(
-        color = Color(0xFF662D91), // Roku Purple
-        shape = RoundedCornerShape(4.dp),
-        modifier = Modifier.padding(start = 4.dp).size(width = 38.dp, height = 18.dp)
-    ) {
-        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-            Text(
-                "Roku",
-                color = Color.White,
-                fontSize = 9.sp,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center
-            )
-        }
+    // Backwards-compat wrapper (used by older branches / previews)
+    RokuPlatformIcon(modifier = Modifier.size(16.dp))
+}
+
+@Composable
+fun RokuPlatformIcon(modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val drawableId = remember {
+        // If you add a custom logo, name it `roku_logo` under res/drawable.
+        context.resources.getIdentifier("roku_logo", "drawable", context.packageName)
     }
+
+    if (drawableId != 0) {
+        Icon(
+            painter = painterResource(drawableId),
+            contentDescription = "Roku",
+            modifier = modifier,
+            tint = Color.Unspecified
+        )
+        return
+    }
+
+    // Fallback if no custom drawable is packaged.
+    Icon(
+        imageVector = Icons.Default.Cast,
+        contentDescription = "Roku",
+        modifier = modifier,
+        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
+    )
 }
 
 @Composable

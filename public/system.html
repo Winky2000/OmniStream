@@ -25,6 +25,12 @@
     input[type="text"],input[type="number"],input[type="password"]{width:100%;max-width:420px;padding:6px 10px;border-radius:6px;border:1px solid #444;background:var(--bg);color:var(--text-main);box-sizing:border-box;}
     .config-row{margin-top:4px;}
     .config-actions{margin-top:8px;display:flex;align-items:center;gap:10px;font-size:12px;}
+    .platform-preview-grid{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px;}
+    .platform-preview-item{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid var(--btn-border);border-radius:999px;background:transparent;color:var(--text-main);font-size:12px;max-width:100%;}
+    .platform-preview-item span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .platform-icon{width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;}
+    .platform-icon img{width:18px;height:18px;object-fit:contain;display:block;}
+    .platform-icon svg{width:18px;height:18px;display:block;}
     .system-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 14px 0;}
     .system-tab{padding:4px 10px;border-radius:999px;border:1px solid var(--btn-border);background:transparent;color:var(--text-muted);font-size:12px;cursor:pointer;}
     .system-tab-active{background:var(--btn-bg);color:var(--btn-text);}
@@ -191,6 +197,21 @@
           </div>
           <div class="row" style="margin-top:12px;"><b>Paired devices</b></div>
           <div id="mobileDevicesList" class="row" style="display:block;"></div>
+        </div>
+
+        <div class="card">
+          <h2>Platform icons (preview)</h2>
+          <div class="row">Test how OmniStream detects and renders platform icons from a platform string.</div>
+          <div class="hint">Optional: add a custom Roku logo at <code>public/roku_logo.png</code> (served as <code>roku_logo.png</code>).</div>
+          <div class="config-row" style="margin-top:10px;">
+            <label>
+              Platform string
+              <input type="text" id="platformIconInput" placeholder="e.g. Roku, Android, iOS, Web, Plex for Roku">
+            </label>
+            <div class="row" id="platformIconResult" style="margin-top:6px;"></div>
+          </div>
+          <div class="row" style="margin-top:12px;"><b>Common examples</b></div>
+          <div id="platformIconExamples" class="platform-preview-grid"></div>
         </div>
 
         <div class="card">
@@ -778,6 +799,128 @@
     loadDbBackupConfig();
     loadDbBackupList();
     loadMobileDevices();
+
+    (function() {
+      const input = document.getElementById('platformIconInput');
+      const resultEl = document.getElementById('platformIconResult');
+      const examplesEl = document.getElementById('platformIconExamples');
+      if (!input || !resultEl || !examplesEl) return;
+
+      const __rokuLogoCacheBust = Date.now();
+      function getRokuLogoUrl() {
+        return 'roku_logo.png?v=' + __rokuLogoCacheBust;
+      }
+
+      function detectPlatform(raw) {
+        const s = String(raw || '').trim();
+        const lower = s.toLowerCase();
+        if (!lower) return { key: 'unknown', label: 'Unknown', raw: s };
+
+        if (lower.includes('roku')) return { key: 'roku', label: 'Roku', raw: s };
+        if (lower.includes('android')) return { key: 'android', label: 'Android', raw: s };
+        if (lower.includes('iphone') || lower.includes('ipad') || lower.includes('ios')) return { key: 'ios', label: 'iOS', raw: s };
+        if (lower.includes('tvos') || lower.includes('apple tv')) return { key: 'tvos', label: 'tvOS', raw: s };
+        if (lower.includes('fire tv') || (lower.includes('fire') && lower.includes('tv'))) return { key: 'firetv', label: 'Fire TV', raw: s };
+        if (lower.includes('webos')) return { key: 'webos', label: 'webOS', raw: s };
+        if (lower.includes('windows')) return { key: 'windows', label: 'Windows', raw: s };
+        if (lower.includes('mac') || lower.includes('os x') || lower.includes('osx')) return { key: 'mac', label: 'macOS', raw: s };
+        if (lower.includes('linux')) return { key: 'linux', label: 'Linux', raw: s };
+        if (lower.includes('chrome') || lower.includes('safari') || lower.includes('edge') || lower.includes('browser') || lower.includes('web')) return { key: 'web', label: 'Web', raw: s };
+        if (lower.includes('tv')) return { key: 'tv', label: 'TV', raw: s };
+
+        return { key: 'unknown', label: 'Unknown', raw: s };
+      }
+
+      function iconSvg(type) {
+        // Monochrome icons using currentColor (no new hard-coded theme colors).
+        if (type === 'tv') {
+          return '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="6" width="18" height="12" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M8 20h8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
+        }
+        if (type === 'phone') {
+          return '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="8" y="3" width="8" height="18" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M11 18h2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
+        }
+        if (type === 'monitor') {
+          return '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="12" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M9 21h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M12 17v4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
+        }
+        if (type === 'terminal') {
+          return '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M7 10l3 3-3 3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 16h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
+        }
+        // globe
+        return '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><path d="M3 12h18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M12 3c2.8 2.8 2.8 15.2 0 18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M12 3c-2.8 2.8-2.8 15.2 0 18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
+      }
+
+      function createPlatformIcon(key) {
+        const wrap = document.createElement('span');
+        wrap.className = 'platform-icon';
+
+        if (key === 'roku') {
+          const img = document.createElement('img');
+          img.alt = 'Roku';
+          img.src = getRokuLogoUrl();
+          img.onerror = () => {
+            wrap.innerHTML = '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><path d="M9 16V8h4.3c1.6 0 2.7 1 2.7 2.5 0 1.4-1 2.3-2.6 2.3H9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+          };
+          wrap.appendChild(img);
+          return wrap;
+        }
+
+        let svgType = 'globe';
+        if (key === 'android' || key === 'ios') svgType = 'phone';
+        else if (key === 'tvos' || key === 'firetv' || key === 'webos' || key === 'tv') svgType = 'tv';
+        else if (key === 'windows' || key === 'mac') svgType = 'monitor';
+        else if (key === 'linux') svgType = 'terminal';
+        else if (key === 'web') svgType = 'globe';
+
+        wrap.innerHTML = iconSvg(svgType);
+        return wrap;
+      }
+
+      function renderResult() {
+        const det = detectPlatform(input.value);
+        const line = document.createElement('div');
+        line.className = 'platform-preview-item';
+        line.title = `key: ${det.key}`;
+        line.appendChild(createPlatformIcon(det.key));
+        const text = document.createElement('span');
+        text.textContent = `${det.label} (key: ${det.key})`;
+        line.appendChild(text);
+        resultEl.replaceChildren(line);
+      }
+
+      function renderExamples() {
+        const examples = [
+          'Roku',
+          'Plex for Roku',
+          'Android',
+          'iOS',
+          'Apple TV (tvOS)',
+          'Fire TV',
+          'webOS',
+          'Web',
+          'Windows',
+          'macOS',
+          'Linux'
+        ];
+        const frag = document.createDocumentFragment();
+        examples.forEach((ex) => {
+          const det = detectPlatform(ex);
+          const item = document.createElement('div');
+          item.className = 'platform-preview-item';
+          item.title = `"${ex}" → ${det.label} (key: ${det.key})`;
+          item.appendChild(createPlatformIcon(det.key));
+          const text = document.createElement('span');
+          text.textContent = ex;
+          item.appendChild(text);
+          frag.appendChild(item);
+        });
+        examplesEl.replaceChildren(frag);
+      }
+
+      input.value = input.value || 'Roku';
+      input.addEventListener('input', renderResult);
+      renderExamples();
+      renderResult();
+    })();
 
     function updateAuthModeUI() {
       const authModeSel = document.getElementById('cfgAuthMode');

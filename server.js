@@ -4644,6 +4644,10 @@ function summaryFromResponse(resp) {
         const sessionIdRaw = m.sessionKey ?? (m.Session && (m.Session.id ?? m.Session.key ?? m.Session.uuid)) ?? null;
         const sessionId = sessionIdRaw != null ? String(sessionIdRaw) : '';
 
+        const channelTitle = (m.channelTitle || m.ChannelTitle || '').toString();
+        const liveChannelFallback = isLive ? (m.grandparentTitle || m.parentTitle || m.title || '') : '';
+        const channel = channelTitle || liveChannelFallback || '';
+
         return {
           sessionId,
           user: userDisplay,
@@ -4654,7 +4658,7 @@ function summaryFromResponse(resp) {
           year: m.year,
           mediaType,
           isLive,
-          channel: isLive ? (m.grandparentTitle || m.parentTitle || m.title || '') : undefined,
+          channel,
           platform: m.platform || m.Player?.platform || m.Player?.product || '',
           state: m.state || m.Player?.state || '',
           poster: m.poster || normalizedPoster,
@@ -4678,13 +4682,11 @@ function summaryFromResponse(resp) {
           // Season / episode numbers when available (Plex)
           seasonNumber: typeof m.parentIndex === 'number' ? m.parentIndex : undefined,
           episodeNumber: typeof m.index === 'number' ? m.index : undefined,
-          channel: m.channelTitle || '',
           episodeTitle: m.episodeTitle || '',
           userName: userName || userDisplay,
           userId: plexUserId,
           userKey: stableUserKey || userName || userDisplay,
           userAvatar,
-          isLive: m.type === 'live',
           transcoding
         };
       });

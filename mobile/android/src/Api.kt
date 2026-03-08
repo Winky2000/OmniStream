@@ -20,6 +20,7 @@ class Api(private val client: OkHttpClient = OkHttpClient()) {
             .url("$baseUrl/api/status")
             .get()
             .header("Authorization", "Bearer $token")
+            .header("X-Omnistream-Token", token)
             .build()
 
         client.newCall(req).execute().use { resp ->
@@ -95,19 +96,7 @@ class Api(private val client: OkHttpClient = OkHttpClient()) {
 
             val lastChecked = st?.get("lastChecked")?.asString()
 
-            serverRows.add(
-                StatusServerRow(
-                    id = id,
-                    name = name,
-                    type = type,
-                    online = online,
-                    latencyMs = latency,
-                    sessionCount = sessionCount,
-                    transcodes = transcodes,
-                    directPlays = directPlays,
-                    lastCheckedIso = lastChecked
-                )
-            )
+            serverRows.add(StatusServerRow(id, name, type, online, latency, sessionCount, transcodes, directPlays, lastChecked))
 
             val sessionsArr = st?.get("sessions") as? JsonArray
             if (sessionsArr != null) {
@@ -130,51 +119,44 @@ class Api(private val client: OkHttpClient = OkHttpClient()) {
                     }
 
                     val mediaType = sess["mediaType"].asString() ?: sess["type"].asString()
-                    val channel = sess["channelTitle"].asString() ?: sess["channelName"].asString() ?: sess["channel"].asString()
-                    val isLive = (sess["isLive"].asBoolean() == true) || (mediaType?.lowercase() == "live") || !channel.isNullOrBlank()
+                    val mediaTypeLower = mediaType?.lowercase()
+
+                    val channel =
+                        sess["channelTitle"].asString()
+                            ?: sess["channel_title"].asString()
+                            ?: sess["channelName"].asString()
+                            ?: sess["channel"].asString()
+                            ?: sess["station"].asString()
+                            ?: sess["stationName"].asString()
+                            ?: sess["network"].asString()
+                            ?: sess["callSign"].asString()
+                            ?: sess["callsign"].asString()
+
+                    val isLive = (sess["isLive"].asBoolean() == true)
+                        || (mediaTypeLower == "live" || mediaTypeLower == "channel" || mediaTypeLower == "track")
+                        || !channel.isNullOrBlank()
                     
                     // SUPPRESS YEAR FOR LIVE TV OR PLACEHOLDER >= 2025
-                    var year = sess["year"].asInt()
-                    if (isLive || (year != null && year >= 2025)) year = null
+                    var yearValue = sess["year"].asInt()
+                    if (isLive || (yearValue != null && yearValue >= 2025)) yearValue = null
 
                     val duration = sess["duration"].asLong() ?: sess["durationMs"].asLong()
                     val viewOffset = sess["viewOffset"].asLong() ?: sess["view_offset"].asLong() ?: sess["progress"].asLong()
+                    val sid = sess["sessionId"].asString() ?: sess["sessionKey"].asString() ?: sess["id"].asString() ?: ""
                     
                     val rawPlatform = sess["platform"].asString()?.lowercase() ?: ""
                     val rawProduct = sess["product"].asString()?.lowercase() ?: ""
                     val rawPlayer = sess["player"].asString()?.lowercase() ?: ""
-                    
-                    // Explicit categorization for icon mapping (Apple priority)
-                    val platformCat = when {
-                        rawPlatform.contains("ios") || rawPlatform.contains("iphone") || rawPlatform.contains("ipad") || rawPlatform.contains("apple") || rawProduct.contains("apple") -> "ios"
-                        rawPlatform.contains("roku") || rawProduct.contains("roku") || rawPlayer.contains("roku") -> "roku"
-                        rawProduct.contains("tv") || rawPlatform.contains("tv") || rawPlayer.contains("tv") || rawProduct.contains("fire") || rawPlatform.contains("fire") -> "tv"
-                        rawPlatform.contains("android") -> "android"
-                        rawPlatform.contains("mobile") -> "mobile"
-                        rawPlatform.contains("web") || rawPlatform.contains("chrome") || rawPlatform.contains("firefox") || rawPlatform.contains("windows") || rawPlatform.contains("pc") || rawPlatform.contains("safari") -> "pc"
-                        else -> "other"
-                    }
+
+                    val platformCat = detectPlatformKey(rawPlatform, rawProduct, rawPlayer)
 
                     val transcoding = isTranscoding(sess)
                     val bw = sess["bandwidth"].asDouble()
 
-                    val sid = sess["sessionId"].asString() ?: sess["sessionKey"].asString() ?: sess["id"].asString() ?: ""
                     val rowId = listOf(id, sid, user, displayTitle).joinToString("|")
 
                     // Resolve Poster URL
-                    val posterPath = sess["seriesPoster"].asString() 
-                        ?: sess["series_poster"].asString()
-                        ?: sess["grandparentThumb"].asString()
-                        ?: sess["grandparent_thumb"].asString()
-                        ?: sess["channelThumb"].asString()
-                        ?: sess["channel_thumb"].asString()
-                        ?: sess["networkThumb"].asString()
-                        ?: sess["network_thumb"].asString()
-                        ?: sess["parentThumb"].asString()
-                        ?: sess["parent_thumb"].asString()
-                        ?: sess["poster"].asString() 
-                        ?: sess["thumb"].asString()
-                        ?: sess["image"].asString()
+                    val posterPath = sess["seriesPoster"].asString() ?: sess["series_poster"].asString() ?: sess["grandparentThumb"].asString() ?: sess["grandparent_thumb"].asString() ?: sess["channelThumb"].asString() ?: sess["channel_thumb"].asString() ?: sess["networkThumb"].asString() ?: sess["network_thumb"].asString() ?: sess["parentThumb"].asString() ?: sess["parent_thumb"].asString() ?: sess["poster"].asString() ?: sess["thumb"].asString() ?: sess["image"].asString()
                     
                     val posterUrl = posterPath?.let { path ->
                         val isExternal = path.startsWith("http")
@@ -182,23 +164,20 @@ class Api(private val client: OkHttpClient = OkHttpClient()) {
                         
                         if (!isExternal) {
                             val connector = if (full.contains("?")) "&" else "?"
-                            "$full${connector}token=$token&X-Plex-Token=$token&X-Omnistream-Token=$token"
+                            // Include ALL token variants for maximum proxy compatibility
+                            var finalUrl = "$full${connector}X-Omnistream-Token=$token&token=$token&X-Plex-Token=$token"
+                            // If the path doesn't already identify the server, add it
+                            if (!full.contains("serverId=") && !full.contains("machineIdentifier=") && !full.contains("server=")) {
+                                finalUrl += "&server=$id&machineIdentifier=$id"
+                            }
+                            finalUrl
                         } else {
                             full
                         }
                     }
 
                     // Resolve Background Art URL
-                    val backPath = sess["background"].asString()
-                        ?: sess["art"].asString() 
-                        ?: sess["backdrop"].asString() 
-                        ?: sess["seriesArt"].asString() 
-                        ?: sess["series_art"].asString()
-                        ?: sess["channelArt"].asString()
-                        ?: sess["channel_art"].asString()
-                        ?: sess["parentArt"].asString()
-                        ?: sess["parent_art"].asString()
-                        ?: sess["fanart"].asString()
+                    val backPath = sess["background"].asString() ?: sess["art"].asString() ?: sess["backdrop"].asString() ?: sess["seriesArt"].asString() ?: sess["series_art"].asString() ?: sess["channelArt"].asString() ?: sess["channel_art"].asString() ?: sess["parentArt"].asString() ?: sess["parent_art"].asString() ?: sess["fanart"].asString()
                         
                     val backgroundUrl = backPath?.let { path ->
                         val isExternal = path.startsWith("http")
@@ -206,7 +185,11 @@ class Api(private val client: OkHttpClient = OkHttpClient()) {
                         
                         if (!isExternal) {
                             val connector = if (full.contains("?")) "&" else "?"
-                            "$full${connector}token=$token&X-Plex-Token=$token&X-Omnistream-Token=$token"
+                            var finalUrl = "$full${connector}X-Omnistream-Token=$token&token=$token&X-Plex-Token=$token"
+                            if (!full.contains("serverId=") && !full.contains("machineIdentifier=") && !full.contains("server=")) {
+                                finalUrl += "&server=$id&machineIdentifier=$id"
+                            }
+                            finalUrl
                         } else {
                             full
                         }
@@ -223,7 +206,7 @@ class Api(private val client: OkHttpClient = OkHttpClient()) {
                             bandwidthMbps = bw,
                             posterUrl = posterUrl,
                             backgroundUrl = backgroundUrl,
-                            year = year,
+                            year = yearValue,
                             mediaType = mediaType,
                             duration = duration,
                             viewOffset = viewOffset,
@@ -299,5 +282,34 @@ class Api(private val client: OkHttpClient = OkHttpClient()) {
             .replace("\n", "\\n")
             .replace("\r", "\\r")
             .replace("\t", "\\t")
+    }
+
+    private fun detectPlatformKey(rawPlatform: String, rawProduct: String, rawPlayer: String): String {
+        val s = listOf(rawPlatform, rawProduct, rawPlayer)
+            .joinToString(" ")
+            .trim()
+            .lowercase()
+
+        if (s.isBlank()) return "unknown"
+
+        if (s.contains("roku")) return "roku"
+        if (s.contains("chromecast") || (s.contains("cast") && s.contains("chrome"))) return "chromecast"
+        if (s.contains("android tv") || s.contains("google tv")) return "androidtv"
+        if (s.contains("android")) return "android"
+        if (s.contains("iphone") || s.contains("ipad") || s.contains("ios")) return "ios"
+        if (s.contains("tvos") || s.contains("apple tv")) return "tvos"
+        if (s.contains("fire tv") || (s.contains("fire") && s.contains("tv"))) return "firetv"
+        if (s.contains("webos")) return "webos"
+        if (s.contains("tizen") || s.contains("samsung")) return "tizen"
+        if (s.contains("xbox")) return "xbox"
+        if (s.contains("playstation") || s.contains("ps4") || s.contains("ps5")) return "playstation"
+        if (s.contains("shield")) return "shield"
+        if (s.contains("windows")) return "windows"
+        if (s.contains("mac") || s.contains("os x") || s.contains("osx")) return "mac"
+        if (s.contains("linux")) return "linux"
+        if (s.contains("chrome") || s.contains("safari") || s.contains("edge") || s.contains("browser") || s.contains("web")) return "web"
+        if (s.contains("tv")) return "tv"
+
+        return "unknown"
     }
 }

@@ -48,3 +48,17 @@ The app prompts you for the OmniStream base URL on first launch (or via Settings
 To get a device token, log into the OmniStream web UI and go to:
 
 - Settings → System → Tools → Mobile devices
+
+## Platform badges
+
+The Live Sessions cards show a top-right **platform badge** (Tautulli-style label tile) like: Roku / Android / iOS / Web / Windows / etc.
+
+- Roku uses the app theme `primary` color with `onPrimary` text (typically a purple tile with white text).
+- Other platforms use a neutral surface with a subtle outline.
+
+## Preview platform badges locally
+
+If you use Android Studio, you can preview the platform badges without running the app:
+
+- Open `PlatformIconPreview.kt`
+- Use the Compose Preview for `PlatformBadgeRowPreview`
