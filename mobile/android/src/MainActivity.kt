@@ -78,6 +78,17 @@ private fun OmniStreamApp(settingsStore: SettingsStore, api: Api) {
         return true
     }
 
+    var screen by remember {
+        mutableStateOf(
+            if (baseUrl == null) "setup"
+            else if (!isLikelyDeviceToken(token)) "pair"
+            else "status"
+        )
+    }
+
+    var deviceTokenInput by remember { mutableStateOf("") }
+    var errorText by remember { mutableStateOf<String?>(null) }
+
     data class PairingPayload(val baseUrl: String?, val token: String)
 
     fun parsePairingPayload(input: String?): PairingPayload? {
@@ -121,17 +132,6 @@ private fun OmniStreamApp(settingsStore: SettingsStore, api: Api) {
         return true
     }
     
-    var screen by remember {
-        mutableStateOf(
-            if (baseUrl == null) "setup"
-            else if (!isLikelyDeviceToken(token)) "pair"
-            else "status"
-        )
-    }
-    
-    var deviceTokenInput by remember { mutableStateOf("") }
-    var errorText by remember { mutableStateOf<String?>(null) }
-
     var snapshot by remember { mutableStateOf<StatusSnapshot?>(null) }
     var showRaw by remember { mutableStateOf(false) }
 
