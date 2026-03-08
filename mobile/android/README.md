@@ -28,11 +28,23 @@ If you want true in-app QR scanning (instead of using an external camera app and
 - Camera permission in `AndroidManifest.xml`:
 	- `android.permission.CAMERA`
 
-- Dependencies in `app/build.gradle`:
+- Make sure your project has `google()` and `mavenCentral()` repositories enabled (usually in `settings.gradle` / `build.gradle`).
 
-Suggested versions (adjust to your project template if needed):
-- CameraX: `androidx.camera:camera-core:1.3.4`, `androidx.camera:camera-camera2:1.3.4`, `androidx.camera:camera-lifecycle:1.3.4`, `androidx.camera:camera-view:1.3.4`
-- ML Kit barcode scanning: `com.google.mlkit:barcode-scanning:17.3.0`
+- Dependencies in `app/build.gradle` (Module):
+
+```gradle
+dependencies {
+	// CameraX
+	def camerax_version = "1.3.4"
+	implementation "androidx.camera:camera-core:${camerax_version}"
+	implementation "androidx.camera:camera-camera2:${camerax_version}"
+	implementation "androidx.camera:camera-lifecycle:${camerax_version}"
+	implementation "androidx.camera:camera-view:${camerax_version}"
+
+	// ML Kit (QR)
+	implementation "com.google.mlkit:barcode-scanning:17.3.0"
+}
+```
 
 ## Add the source files
 
