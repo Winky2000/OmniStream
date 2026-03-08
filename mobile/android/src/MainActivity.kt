@@ -1,5 +1,6 @@
 package com.winkys.omnistreammobile
 
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -75,6 +76,31 @@ private fun OmniStreamApp(settingsStore: SettingsStore, api: Api) {
         if (!t.all { it.isDigit() || (it.lowercaseChar() in 'a'..'f') }) return false
         return true
     }
+
+    data class PairingPayload(val baseUrl: String?, val token: String)
+
+    fun parsePairingPayload(input: String?): PairingPayload? {
+        val s = input?.trim().orEmpty()
+        if (s.isBlank()) return null
+        if (isLikelyDeviceToken(s)) return PairingPayload(baseUrl = null, token = s)
+
+        return try {
+            val u = Uri.parse(s)
+            val scheme = u.scheme?.lowercase()
+            val host = u.host?.lowercase()
+            if (scheme != "omnistream" || host != "pair") return null
+
+            val rawToken = (u.getQueryParameter("token") ?: u.getQueryParameter("deviceToken"))?.trim().orEmpty()
+            if (!isLikelyDeviceToken(rawToken)) return null
+
+            val rawBaseUrl = u.getQueryParameter("baseUrl")?.trim()
+            val normalizedBaseUrl = rawBaseUrl?.trimEnd('/')?.takeIf { it.isNotBlank() }
+
+            PairingPayload(baseUrl = normalizedBaseUrl, token = rawToken)
+        } catch (_: Exception) {
+            null
+        }
+    }
     
     var screen by remember {
         mutableStateOf(
@@ -145,10 +171,17 @@ private fun OmniStreamApp(settingsStore: SettingsStore, api: Api) {
                 onDeviceTokenChange = { deviceTokenInput = it },
                 errorText = errorText,
                 onLink = {
-                    val t = deviceTokenInput.trim()
-                    if (t.isBlank()) return@PairScreen
-                    settingsStore.saveToken(t)
-                    token = t
+                    val parsed = parsePairingPayload(deviceTokenInput)
+                    if (parsed == null) {
+                        errorText = "Invalid device token (or QR payload)"
+                        return@PairScreen
+                    }
+                    if (!parsed.baseUrl.isNullOrBlank()) {
+                        settingsStore.saveBaseUrl(parsed.baseUrl)
+                        baseUrl = settingsStore.loadBaseUrl()
+                    }
+                    settingsStore.saveToken(parsed.token)
+                    token = parsed.token
                     deviceTokenInput = ""
                     errorText = null
                     screen = "status"

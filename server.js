@@ -878,7 +878,11 @@ app.post('/api/auth/token', (req, res) => {
     fs.writeFileSync(CONFIG_FILE, JSON.stringify(appConfig, null, 2));
 
     // QR code is best-effort (helps mobile pairing without copy/paste).
-    return QRCode.toString(token, { type: 'svg', margin: 1, width: 192 }, (err, svg) => {
+    const pairingBaseUrl = buildPairingBaseUrl(req);
+    const qrText = pairingBaseUrl
+      ? `omnistream://pair?baseUrl=${encodeURIComponent(pairingBaseUrl)}&token=${encodeURIComponent(token)}`
+      : `omnistream://pair?token=${encodeURIComponent(token)}`;
+    return QRCode.toString(qrText, { type: 'svg', margin: 1, width: 192 }, (err, svg) => {
       return res.json({
         ok: true,
         device: sanitizeMobileDeviceForClient(device),
@@ -916,7 +920,11 @@ app.post('/api/mobile/devices', (req, res) => {
     fs.writeFileSync(CONFIG_FILE, JSON.stringify(appConfig, null, 2));
 
     // QR code is best-effort (helps mobile pairing without copy/paste).
-    return QRCode.toString(token, { type: 'svg', margin: 1, width: 192 }, (err, svg) => {
+    const pairingBaseUrl = buildPairingBaseUrl(req);
+    const qrText = pairingBaseUrl
+      ? `omnistream://pair?baseUrl=${encodeURIComponent(pairingBaseUrl)}&token=${encodeURIComponent(token)}`
+      : `omnistream://pair?token=${encodeURIComponent(token)}`;
+    return QRCode.toString(qrText, { type: 'svg', margin: 1, width: 192 }, (err, svg) => {
       return res.json({
         ok: true,
         device: sanitizeMobileDeviceForClient(device),
@@ -1874,6 +1882,28 @@ function buildPublicBaseUrl(req) {
     if (hostLower.startsWith('localhost') || hostLower.startsWith('127.0.0.1') || hostLower.startsWith('[::1]')) {
       return '';
     }
+    if (host) return `${proto}://${host}`;
+  } catch (_) {
+    // ignore
+  }
+  return '';
+}
+
+// Pairing QR codes should use the exact base URL the admin is using in the browser,
+// including local/private hosts.
+function buildPairingBaseUrl(req) {
+  try {
+    const cfg = appConfig || {};
+    const configured = String(cfg.publicBaseUrl || cfg.httpBaseUrl || '').trim();
+    if (configured) return configured.replace(/\/$/, '');
+  } catch (_) {
+    // ignore
+  }
+  try {
+    const proto = (req && req.headers && req.headers['x-forwarded-proto'])
+      ? String(req.headers['x-forwarded-proto']).split(',')[0].trim()
+      : (req && req.protocol ? req.protocol : 'http');
+    const host = req && typeof req.get === 'function' ? req.get('host') : '';
     if (host) return `${proto}://${host}`;
   } catch (_) {
     // ignore
