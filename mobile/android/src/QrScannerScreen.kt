@@ -1,6 +1,13 @@
 package com.winkys.omnistreammobile
 
 import android.Manifest
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
@@ -34,12 +41,30 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.google.mlkit.vision.barcode.BarcodeScannerOptions
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
 import java.util.concurrent.atomic.AtomicBoolean
+
+private fun Context.findActivity(): Activity? {
+    var current = this
+    while (current is ContextWrapper) {
+        if (current is Activity) return current
+        current = current.baseContext
+    }
+    return null
+}
+
+private fun Context.openAppSettings() {
+    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+        data = Uri.fromParts("package", packageName, null)
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    startActivity(intent)
+}
 
 @Composable
 fun QrScannerScreen(
@@ -48,8 +73,13 @@ fun QrScannerScreen(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val activity = context.findActivity()
 
-    var hasCameraPermission by remember { mutableStateOf(false) }
+    var hasCameraPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+        )
+    }
     var permissionAsked by remember { mutableStateOf(false) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -62,7 +92,9 @@ fun QrScannerScreen(
 
     LaunchedEffect(Unit) {
         // Always request at runtime; if already granted the callback returns true immediately.
-        permissionLauncher.launch(Manifest.permission.CAMERA)
+        if (!hasCameraPermission) {
+            permissionLauncher.launch(Manifest.permission.CAMERA)
+        }
     }
 
     Surface(modifier = Modifier.fillMaxSize()) {
@@ -77,6 +109,11 @@ fun QrScannerScreen(
             }
 
             if (!hasCameraPermission) {
+                val shouldShowRationale = activity?.let {
+                    ActivityCompat.shouldShowRequestPermissionRationale(it, Manifest.permission.CAMERA)
+                } ?: false
+                val isPermanentlyDenied = permissionAsked && !shouldShowRationale
+
                 Column(
                     modifier = Modifier.fillMaxSize().padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -92,8 +129,19 @@ fun QrScannerScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    Button(onClick = { permissionLauncher.launch(Manifest.permission.CAMERA) }) {
-                        Text("Grant camera permission")
+                    if (isPermanentlyDenied) {
+                        Text(
+                            "Camera permission is blocked for this app. Enable it in system settings.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Button(onClick = { context.openAppSettings() }) {
+                            Text("Open settings")
+                        }
+                    } else {
+                        Button(onClick = { permissionLauncher.launch(Manifest.permission.CAMERA) }) {
+                            Text("Grant camera permission")
+                        }
                     }
                     Button(onClick = onCancel) {
                         Text("Cancel")
