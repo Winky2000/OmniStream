@@ -28,6 +28,8 @@ If you want true in-app QR scanning (instead of using an external camera app and
 - Camera permission in `AndroidManifest.xml`:
 	- `android.permission.CAMERA`
 
+If this permission is missing, the in-app scanner cannot work and tapping “Grant camera permission” will appear to do nothing (Android will immediately deny the request).
+
 - Make sure your project has `google()` and `mavenCentral()` repositories enabled (usually in `settings.gradle` / `build.gradle`).
 
 - Dependencies in `app/build.gradle` (Module):
