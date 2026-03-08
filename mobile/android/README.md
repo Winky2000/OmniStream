@@ -21,6 +21,19 @@ Suggested versions (adjust to your project template if needed):
 
 Also enable Kotlin serialization plugin.
 
+### Optional: in-app QR scanning (CameraX + ML Kit)
+
+If you want true in-app QR scanning (instead of using an external camera app and pasting), add:
+
+- Camera permission in `AndroidManifest.xml`:
+	- `android.permission.CAMERA`
+
+- Dependencies in `app/build.gradle`:
+
+Suggested versions (adjust to your project template if needed):
+- CameraX: `androidx.camera:camera-core:1.3.4`, `androidx.camera:camera-camera2:1.3.4`, `androidx.camera:camera-lifecycle:1.3.4`, `androidx.camera:camera-view:1.3.4`
+- ML Kit barcode scanning: `com.google.mlkit:barcode-scanning:17.3.0`
+
 ## Add the source files
 
 Copy these files into your project under `app/src/main/java/.../`:
@@ -28,6 +41,9 @@ Copy these files into your project under `app/src/main/java/.../`:
 - `Api.kt`
 - `SettingsStore.kt`
 - `MainActivity.kt`
+- `PlatformBadge.kt`
+- `PlatformIconPreview.kt`
+- `QrScannerScreen.kt`
 
 They are located in this repo under:
 - `mobile/android/src/`

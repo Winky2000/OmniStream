@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cast
 import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Devices
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Settings
@@ -101,6 +102,24 @@ private fun OmniStreamApp(settingsStore: SettingsStore, api: Api) {
             null
         }
     }
+
+    fun linkFromInput(input: String): Boolean {
+        val parsed = parsePairingPayload(input)
+        if (parsed == null) {
+            errorText = "Invalid device token (or QR payload)"
+            return false
+        }
+        if (!parsed.baseUrl.isNullOrBlank()) {
+            settingsStore.saveBaseUrl(parsed.baseUrl)
+            baseUrl = settingsStore.loadBaseUrl()
+        }
+        settingsStore.saveToken(parsed.token)
+        token = parsed.token
+        deviceTokenInput = ""
+        errorText = null
+        screen = "status"
+        return true
+    }
     
     var screen by remember {
         mutableStateOf(
@@ -171,22 +190,22 @@ private fun OmniStreamApp(settingsStore: SettingsStore, api: Api) {
                 onDeviceTokenChange = { deviceTokenInput = it },
                 errorText = errorText,
                 onLink = {
-                    val parsed = parsePairingPayload(deviceTokenInput)
-                    if (parsed == null) {
-                        errorText = "Invalid device token (or QR payload)"
-                        return@PairScreen
-                    }
-                    if (!parsed.baseUrl.isNullOrBlank()) {
-                        settingsStore.saveBaseUrl(parsed.baseUrl)
-                        baseUrl = settingsStore.loadBaseUrl()
-                    }
-                    settingsStore.saveToken(parsed.token)
-                    token = parsed.token
-                    deviceTokenInput = ""
-                    errorText = null
-                    screen = "status"
+                    val t = deviceTokenInput.trim()
+                    if (t.isBlank()) return@PairScreen
+                    linkFromInput(t)
                 },
+                onScanQr = { screen = "scan" },
                 onEditUrl = { screen = "setup" }
+            )
+        }
+        "scan" -> {
+            QrScannerScreen(
+                onScan = { value ->
+                    // Auto-link when scan succeeds.
+                    val ok = linkFromInput(value)
+                    if (!ok) screen = "pair"
+                },
+                onCancel = { screen = "pair" }
             )
         }
         "status" -> {
@@ -236,6 +255,7 @@ private fun PairScreen(
     onDeviceTokenChange: (String) -> Unit,
     errorText: String?,
     onLink: () -> Unit,
+    onScanQr: () -> Unit,
     onEditUrl: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -258,12 +278,19 @@ private fun PairScreen(
             modifier = Modifier.fillMaxWidth()
         )
         if (errorText != null) Text(errorText, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-        Button(
-            onClick = { if (deviceToken.trim().isNotBlank()) onLink() },
-            enabled = deviceToken.trim().isNotBlank(),
-            modifier = Modifier.align(Alignment.End)
-        ) {
-            Text("Link device")
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            OutlinedButton(onClick = onScanQr) {
+                Icon(Icons.Default.QrCodeScanner, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Scan QR")
+            }
+            Spacer(modifier = Modifier.weight(1f))
+            Button(
+                onClick = { if (deviceToken.trim().isNotBlank()) onLink() },
+                enabled = deviceToken.trim().isNotBlank()
+            ) {
+                Text("Link device")
+            }
         }
     }
 }
