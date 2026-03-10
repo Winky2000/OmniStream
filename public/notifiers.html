@@ -24,54 +24,6 @@
     .notifier-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 14px 0;}
     .notifier-tab{padding:4px 10px;border-radius:999px;border:1px solid var(--btn-border);background:transparent;color:var(--text-muted);font-size:12px;cursor:pointer;}
     .notifier-tab-active{background:var(--btn-bg);color:var(--btn-text);}
-
-    .agent-list{display:flex;flex-direction:column;gap:8px;margin-top:10px;}
-    .agent-row{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:10px 12px;border-radius:10px;border:1px solid #2f3a52;background:rgba(0,0,0,0.10);cursor:pointer;}
-    .agent-row:hover{background:rgba(255,255,255,0.04);}
-    .agent-row-title{font-size:13px;font-weight:600;}
-    .agent-row-meta{font-size:12px;color:var(--text-muted);}
-    .agent-pill{font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid var(--btn-border);color:var(--text-muted);}
-    .agent-pill-on{background:var(--btn-bg);color:var(--btn-text);}
-
-    .agent-modal-overlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);z-index:20001;padding:18px;}
-    .agent-modal{width:min(860px, 98vw);max-height:90vh;display:flex;flex-direction:column;background:var(--card-bg);border:1px solid #2f3a52;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,0.55);overflow:hidden;}
-    .agent-modal-header{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid #2f3a52;}
-    .agent-modal-title{font-size:14px;font-weight:700;color:var(--text-main);}
-    .agent-modal-close{border:none;background:transparent;color:var(--text-muted);font-size:22px;line-height:1;cursor:pointer;padding:0 6px;}
-    .agent-modal-close:hover{color:var(--text-main);}
-    .agent-modal-tabs{display:flex;gap:0;border-bottom:1px solid #2f3a52;}
-    .agent-modal-tab{padding:10px 12px;border:none;background:transparent;color:var(--text-muted);cursor:pointer;font-size:13px;}
-    .agent-modal-tab.active{color:var(--text-main);border-bottom:2px solid var(--btn-bg);}
-    .agent-modal-body{padding:14px;overflow:auto;}
-    .agent-tab{display:none;}
-    .agent-tab.active{display:block;}
-    .agent-actions{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-top:1px solid #2f3a52;background:rgba(0,0,0,0.12);}
-    .agent-actions-left{display:flex;gap:10px;}
-    .agent-actions-right{display:flex;gap:10px;align-items:center;}
-    .agent-inline-2{display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:720px;}
-    @media (max-width:720px){
-      .agent-inline-2{grid-template-columns:1fr;}
-    }
-
-    .tag-input{max-width:720px;min-height:38px;padding:6px 8px;border-radius:6px;border:1px solid #444;background:var(--bg);display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
-    .tag-chip{display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:999px;border:1px solid var(--btn-border);background:rgba(255,255,255,0.04);color:var(--text-main);font-size:12px;}
-    .tag-chip button{border:none;background:transparent;color:var(--text-muted);cursor:pointer;font-size:14px;line-height:1;padding:0;}
-    .tag-chip button:hover{color:var(--text-main);}
-    .tag-input input{border:none;outline:none;background:transparent;color:var(--text-main);min-width:180px;max-width:100%;padding:4px 6px;}
-
-    .picker-modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);z-index:20000;padding:18px;}
-    .picker-box{width:min(520px, 96vw);max-height:80vh;display:flex;flex-direction:column;background:var(--card-bg);border:1px solid #2f3a52;border-radius:12px;overflow:hidden;}
-    .picker-header{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid #2f3a52;}
-    .picker-title{font-size:14px;font-weight:700;color:var(--text-main);}
-    .picker-close{border:none;background:transparent;color:var(--text-muted);font-size:22px;line-height:1;cursor:pointer;padding:0 6px;}
-    .picker-close:hover{color:var(--text-main);}
-    .picker-list{overflow:auto;flex:1;}
-    .picker-item{padding:12px 14px;border-bottom:1px solid rgba(148,163,184,0.10);cursor:pointer;color:var(--text-main);}
-    .picker-item:hover{background:rgba(255,255,255,0.04);}
-    .picker-item.disabled{opacity:0.5;cursor:not-allowed;}
-    .picker-footer{display:flex;justify-content:flex-end;gap:10px;padding:12px 14px;background:rgba(0,0,0,0.12);border-top:1px solid #2f3a52;}
-
-    #addAgentBtn{position:relative;z-index:1;}
   </style>
 </head>
 <body>
@@ -114,49 +66,6 @@
   <h1>Settings</h1>
   <h2 style="margin:10px 0 12px 0;font-size:16px;color:var(--text-main);">Notifier settings</h2>
 
-  <div class="section">
-    <h2>Notification rules</h2>
-    <label class="inline">
-      <input type="checkbox" id="ruleOffline"> Notify when a server goes offline
-    </label>
-    <label class="inline">
-      <input type="checkbox" id="ruleWanTranscodes"> Notify on WAN transcodes
-    </label>
-    <label class="inline">
-      <input type="checkbox" id="ruleHistoryDbBackups"> Notify on History DB backups (success/failure)
-    </label>
-    <label class="inline">
-      <input type="checkbox" id="ruleAnyWan"> Notify when any WAN stream is active
-    </label>
-    <label class="inline">
-      <span style="flex:1;min-width:0;">
-        Notify on high total bandwidth above (Mbps)
-        <input type="number" id="ruleHighBandwidthThreshold" value="50" style="max-width:120px;">
-      </span>
-      <span class="inline" style="gap:4px;">
-        <input type="checkbox" id="ruleHighBandwidth"> Enable high-bandwidth alerts
-      </span>
-    </label>
-    <label class="inline">
-      <span style="flex:1;min-width:0;">
-        Notify on high WAN bandwidth above (Mbps)
-        <input type="number" id="ruleHighWanThreshold" value="30" style="max-width:120px;">
-      </span>
-      <span class="inline" style="gap:4px;">
-        <input type="checkbox" id="ruleHighWan"> Enable high-WAN-bandwidth alerts
-      </span>
-    </label>
-    <div class="hint">These rules control when OmniStream generates alerts that are sent to your notifiers. Defaults are: offline, WAN transcodes, and bandwidth above 50 Mbps.</div>
-  </div>
-
-  <div class="section">
-    <h2>Notification agents</h2>
-    <div class="hint">Agents are the new notification system (Tautulli-like). Use an Email agent for full control over recipients, triggers, and tests.</div>
-    <button type="button" id="addAgentBtn" class="btn">Add notification agent</button>
-    <span id="agentStatus" class="status"></span>
-    <div id="agentList" class="agent-list"></div>
-  </div>
-
   <div class="notifier-tabs">
     <button type="button" class="notifier-tab" data-panel="email">Email</button>
     <button type="button" class="notifier-tab" data-panel="discord">Discord</button>
@@ -170,6 +79,9 @@
 
   <div class="section notifier-panel" data-panel="discord">
     <h2>Discord</h2>
+    <label class="inline">
+      <input type="checkbox" id="discordEnabled"> Enable Discord notifications
+    </label>
     <label>
       Webhook URL
       <input type="text" id="discordWebhook" placeholder="https://discord.com/api/webhooks/...">
@@ -189,6 +101,9 @@
 
   <div class="section notifier-panel" data-panel="webhook">
     <h2>Generic Webhook</h2>
+    <label class="inline">
+      <input type="checkbox" id="webhookEnabled"> Enable webhook notifications
+    </label>
     <label>
       Webhook URL
       <input type="text" id="webhookUrl" placeholder="https://your-service.example.com/webhook">
@@ -208,6 +123,9 @@
 
   <div class="section notifier-panel" data-panel="slack">
     <h2>Slack</h2>
+    <label class="inline">
+      <input type="checkbox" id="slackEnabled"> Enable Slack notifications
+    </label>
     <label>
       Incoming Webhook URL
       <input type="text" id="slackWebhook" placeholder="https://hooks.slack.com/services/...">
@@ -227,6 +145,9 @@
 
   <div class="section notifier-panel" data-panel="telegram">
     <h2>Telegram</h2>
+    <label class="inline">
+      <input type="checkbox" id="telegramEnabled"> Enable Telegram notifications
+    </label>
     <label>
       Bot token
       <input type="text" id="telegramToken" placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11">
@@ -250,6 +171,9 @@
 
   <div class="section notifier-panel" data-panel="twilio">
     <h2>SMS (Twilio)</h2>
+    <label class="inline">
+      <input type="checkbox" id="twilioEnabled"> Enable SMS (Twilio) notifications
+    </label>
     <label>
       Account SID
       <input type="text" id="twilioSid" placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
@@ -281,6 +205,9 @@
 
   <div class="section notifier-panel" data-panel="pushover">
     <h2>Pushover</h2>
+    <label class="inline">
+      <input type="checkbox" id="pushoverEnabled"> Enable Pushover notifications
+    </label>
     <label>
       User key
       <input type="text" id="pushoverUser" placeholder="your Pushover user key">
@@ -307,6 +234,9 @@
 
   <div class="section notifier-panel" data-panel="gotify">
     <h2>Gotify</h2>
+    <label class="inline">
+      <input type="checkbox" id="gotifyEnabled"> Enable Gotify notifications
+    </label>
     <label>
       Server URL
       <input type="text" id="gotifyServer" placeholder="https://gotify.example.com">
@@ -384,229 +314,9 @@
   <span id="testStatus" class="status"></span>
   <button id="backBtn" class="btn" style="margin-left:8px;">Back to Settings</button>
 
-  <div id="agentModal" class="agent-modal-overlay" role="dialog" aria-modal="true">
-    <div class="agent-modal">
-      <div class="agent-modal-header">
-        <div id="agentModalTitle" class="agent-modal-title">Email Settings</div>
-        <button id="agentModalClose" class="agent-modal-close" aria-label="Close">×</button>
-      </div>
-      <div class="agent-modal-tabs">
-        <button type="button" class="agent-modal-tab" data-tab="configuration">Configuration</button>
-        <button type="button" class="agent-modal-tab" data-tab="triggers">Triggers</button>
-        <button type="button" class="agent-modal-tab" data-tab="conditions">Conditions</button>
-        <button type="button" class="agent-modal-tab" data-tab="text">Text</button>
-        <button type="button" class="agent-modal-tab" data-tab="test">Test Notifications</button>
-      </div>
-      <div class="agent-modal-body">
-        <div class="agent-tab" data-tab="configuration">
-          <label class="inline">
-            <input type="checkbox" id="agentEmailEnabled"> Enable email notifications
-          </label>
-          <label>
-            From Name
-            <input type="text" id="agentEmailFromName" placeholder="OmniStream">
-            <div class="hint">The name of the sender.</div>
-          </label>
-          <div class="agent-inline-2">
-            <label>
-              From address
-              <input type="email" id="agentEmailFrom" placeholder="omnistream@example.com">
-            </label>
-            <div>
-              <label>To</label>
-              <div id="tagTo" class="tag-input"><input id="tagToInput" type="text" placeholder="Add email and press Enter"></div>
-              <div class="hint">The email address(es) of the recipients.</div>
-            </div>
-          </div>
-          <div class="agent-inline-2" style="margin-top:6px;">
-            <div>
-              <label>CC</label>
-              <div id="tagCc" class="tag-input"><input id="tagCcInput" type="text" placeholder="Optional"></div>
-              <div class="hint">The email address(es) to CC.</div>
-            </div>
-            <div>
-              <label>BCC</label>
-              <div id="tagBcc" class="tag-input"><input id="tagBccInput" type="text" placeholder="Optional"></div>
-              <div class="hint">The email address(es) to BCC.</div>
-            </div>
-          </div>
-          <div class="agent-inline-2" style="margin-top:6px;">
-            <label>
-              SMTP host
-              <input type="text" id="agentSmtpHost" placeholder="smtp.example.com">
-            </label>
-            <label>
-              Port
-              <input type="number" id="agentSmtpPort" value="587" style="max-width:160px;">
-            </label>
-          </div>
-          <label class="inline" style="margin-top:8px;">
-            <input type="checkbox" id="agentSmtpSecure"> Use TLS (secure)
-          </label>
-          <div class="agent-inline-2" style="margin-top:6px;">
-            <label>
-              SMTP username
-              <input type="text" id="agentSmtpUser" placeholder="smtp user">
-            </label>
-            <label>
-              SMTP password
-              <input type="password" id="agentSmtpPass" placeholder="smtp password">
-            </label>
-          </div>
-          <div class="agent-inline-2" style="margin-top:6px;">
-            <label>
-              Encryption
-              <select id="agentSmtpEncryption">
-                <option value="starttls">TLS/STARTTLS (Typically port 587)</option>
-                <option value="ssl">SSL/TLS (Typically port 465)</option>
-                <option value="none">None</option>
-              </select>
-              <div class="hint">Send emails encrypted using SSL or TLS.</div>
-            </label>
-            <label class="inline" style="margin-top:26px;">
-              <input type="checkbox" id="agentAllowHtml">
-              Enable HTML Support
-            </label>
-          </div>
-          <div class="hint">This agent is used for alert emails (offline servers, WAN streams, high bandwidth, backups).</div>
-        </div>
-
-        <div class="agent-tab" data-tab="triggers">
-          <div style="font-size:13px;font-weight:600;margin-bottom:6px;">Notification Triggers</div>
-          <div class="hint" style="margin-bottom:10px;">Select items that will trigger a notification for this Email notification agent.</div>
-
-          <label class="inline" style="align-items:flex-start;gap:8px;margin:10px 0;">
-            <input type="checkbox" id="agentTrigOffline" style="margin-top:3px;">
-            <span>
-              <div style="font-weight:600;">Offline servers</div>
-              <div class="hint">Trigger a notification when a server goes offline.</div>
-            </span>
-          </label>
-
-          <label class="inline" style="align-items:flex-start;gap:8px;margin:10px 0;">
-            <input type="checkbox" id="agentTrigServerBackUp" style="margin-top:3px;">
-            <span>
-              <div style="font-weight:600;">Server back up</div>
-              <div class="hint">Trigger a notification when a server can be reached again after being down.</div>
-            </span>
-          </label>
-
-          <label class="inline" style="align-items:flex-start;gap:8px;margin:10px 0;">
-            <input type="checkbox" id="agentTrigWan" style="margin-top:3px;">
-            <span>
-              <div style="font-weight:600;">WAN transcodes</div>
-              <div class="hint">Trigger a notification when a WAN transcode becomes active.</div>
-            </span>
-          </label>
-
-          <label class="inline" style="align-items:flex-start;gap:8px;margin:10px 0;">
-            <input type="checkbox" id="agentTrigAnyWan" style="margin-top:3px;">
-            <span>
-              <div style="font-weight:600;">Any WAN streams</div>
-              <div class="hint">Trigger a notification when any WAN stream becomes active.</div>
-            </span>
-          </label>
-
-          <label class="inline" style="align-items:flex-start;gap:8px;margin:10px 0;">
-            <input type="checkbox" id="agentTrigHigh" style="margin-top:3px;">
-            <span>
-              <div style="font-weight:600;">High total bandwidth</div>
-              <div class="hint">Trigger a notification when total bandwidth exceeds the configured threshold.</div>
-            </span>
-          </label>
-
-          <label class="inline" style="align-items:flex-start;gap:8px;margin:10px 0;">
-            <input type="checkbox" id="agentTrigHighWan" style="margin-top:3px;">
-            <span>
-              <div style="font-weight:600;">High WAN bandwidth</div>
-              <div class="hint">Trigger a notification when WAN bandwidth exceeds the configured threshold.</div>
-            </span>
-          </label>
-
-          <label class="inline" style="align-items:flex-start;gap:8px;margin:10px 0;">
-            <input type="checkbox" id="agentTrigHistoryDbBackups" style="margin-top:3px;">
-            <span>
-              <div style="font-weight:600;">History DB backups</div>
-              <div class="hint">Trigger a notification on History DB backup success/failure.</div>
-            </span>
-          </label>
-
-          <label class="inline" style="align-items:flex-start;gap:8px;margin:10px 0;">
-            <input type="checkbox" id="agentTrigPlaybackStart" style="margin-top:3px;">
-            <span>
-              <div style="font-weight:600;">Playback start</div>
-              <div class="hint">Trigger a notification when a stream is started.</div>
-            </span>
-          </label>
-
-          <label class="inline" style="align-items:flex-start;gap:8px;margin:10px 0;">
-            <input type="checkbox" id="agentTrigPlaybackStop" style="margin-top:3px;">
-            <span>
-              <div style="font-weight:600;">Playback stop</div>
-              <div class="hint">Trigger a notification when a stream ends.</div>
-            </span>
-          </label>
-        </div>
-
-        <div class="agent-tab" data-tab="conditions">
-          <div class="hint">Conditions are not currently supported for OmniStream notifiers.</div>
-        </div>
-
-        <div class="agent-tab" data-tab="text">
-          <div class="hint">Optional defaults for real alerts (not the test). Leave blank to use OmniStream defaults.</div>
-          <label>
-            Subject Line
-            <input type="text" id="agentTextSubject" placeholder="[OmniStream] ALERT">
-          </label>
-          <label>
-            Message Body
-            <textarea id="agentTextBody" placeholder="Custom body (optional)"></textarea>
-          </label>
-        </div>
-
-        <div class="agent-tab" data-tab="test">
-          <div class="hint">Test if Email notifications are working. Check the logs for troubleshooting.</div>
-          <div class="hint" style="margin-top:6px;">Note: Test with the real values since parameters will not be substituted.</div>
-          <label style="margin-top:10px;">
-            Subject Line
-            <input type="text" id="agentTestSubject" placeholder="Tautulli">
-          </label>
-          <label>
-            Message Body
-            <textarea id="agentTestBody" placeholder="Test Notification"></textarea>
-          </label>
-          <button type="button" id="agentTestBtn" class="btn" style="margin-top:10px;">Test Email</button>
-          <span id="agentTestStatus" class="status"></span>
-        </div>
-      </div>
-
-      <div class="agent-actions">
-        <div class="agent-actions-left">
-          <button type="button" id="agentDeleteBtn" class="btn danger">Delete</button>
-          <button type="button" id="agentDuplicateBtn" class="btn">Duplicate</button>
-        </div>
-        <div class="agent-actions-right">
-          <span id="agentSaveStatus" class="status"></span>
-          <button type="button" id="agentSaveBtn" class="btn">Save</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div id="agentPicker" class="picker-modal" role="dialog" aria-modal="true">
-    <div class="picker-box">
-      <div class="picker-header">
-        <div class="picker-title">Add a Notification Agent</div>
-        <button type="button" id="pickerClose" class="picker-close" aria-label="Close">×</button>
-      </div>
-      <div class="picker-list" id="pickerList"></div>
-      <div class="picker-footer">
-        <button type="button" id="pickerCancel" class="btn">Cancel</button>
-      </div>
-    </div>
-  </div>
-
   <script>
+    let legacyNotifiersConfig = null;
+
     (function() {
       const tabs = document.querySelectorAll('.notifier-tab');
       const panels = document.querySelectorAll('.notifier-panel');
@@ -626,15 +336,6 @@
           tab.addEventListener('click', () => showPanel(tab.dataset.panel));
         });
       }
-
-      // Expose panel switching for the agent list.
-      window.omnistreamShowNotifierPanel = (name) => {
-        showPanel(name);
-        try {
-          const panel = document.querySelector(`.notifier-panel[data-panel="${name}"]`);
-          if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        } catch (e) {}
-      };
     })();
 
     async function loadConfig() {
@@ -643,22 +344,18 @@
         const data = await r.json();
         const n = data.notifiers || {};
         legacyNotifiersConfig = n;
-        const rules = n.rules || {};
         const discord = n.discord || {};
         const email = n.email || {};
-        document.getElementById('ruleOffline').checked = rules.offline ? rules.offline.enabled !== false : true;
-        document.getElementById('ruleWanTranscodes').checked = rules.wanTranscodes ? rules.wanTranscodes.enabled !== false : true;
-        document.getElementById('ruleHistoryDbBackups').checked = rules.historyDbBackups ? rules.historyDbBackups.enabled !== false : true;
-        const highRule = rules.highBandwidth || {};
-        document.getElementById('ruleHighBandwidth').checked = highRule.enabled !== false;
-        document.getElementById('ruleHighBandwidthThreshold').value = highRule.thresholdMbps != null ? highRule.thresholdMbps : 50;
-        const anyWanRule = rules.anyWan || {};
-        document.getElementById('ruleAnyWan').checked = anyWanRule.enabled === true; // opt-in, default off
-        const highWanRule = rules.highWanBandwidth || {};
-        document.getElementById('ruleHighWan').checked = highWanRule.enabled !== false;
-        document.getElementById('ruleHighWanThreshold').value = highWanRule.thresholdMbps != null ? highWanRule.thresholdMbps : 30;
+        const webhook = n.webhook || {};
+        const slack = n.slack || {};
+        const telegram = n.telegram || {};
+        const twilio = n.twilio || {};
+        const pushover = n.pushover || {};
+        const gotify = n.gotify || {};
+
+        document.getElementById('discordEnabled').checked = discord.enabled !== false;
         document.getElementById('discordWebhook').value = discord.webhookUrl || '';
-        document.getElementById('emailEnabled').checked = email.enabled === true;
+        document.getElementById('emailEnabled').checked = email.enabled !== false;
         document.getElementById('emailFrom').value = email.from || '';
         document.getElementById('emailTo').value = email.to || '';
         const smtp = email.smtp || {};
@@ -668,23 +365,23 @@
         const auth = smtp.auth || {};
         document.getElementById('smtpUser').value = auth.user || '';
         document.getElementById('smtpPass').value = auth.pass || '';
-        const webhook = n.webhook || {};
+        document.getElementById('webhookEnabled').checked = webhook.enabled !== false;
         document.getElementById('webhookUrl').value = webhook.url || '';
-        const slack = n.slack || {};
+        document.getElementById('slackEnabled').checked = slack.enabled !== false;
         document.getElementById('slackWebhook').value = slack.webhookUrl || '';
-        const telegram = n.telegram || {};
+        document.getElementById('telegramEnabled').checked = telegram.enabled !== false;
         document.getElementById('telegramToken').value = telegram.botToken || '';
         document.getElementById('telegramChat').value = telegram.chatId || '';
-        const twilio = n.twilio || {};
+        document.getElementById('twilioEnabled').checked = twilio.enabled !== false;
         document.getElementById('twilioSid').value = twilio.accountSid || '';
         document.getElementById('twilioToken').value = twilio.authToken || '';
         document.getElementById('twilioFrom').value = twilio.from || '';
         document.getElementById('twilioTo').value = twilio.to || '';
-        const pushover = n.pushover || {};
+        document.getElementById('pushoverEnabled').checked = pushover.enabled !== false;
         document.getElementById('pushoverUser').value = pushover.user || '';
         document.getElementById('pushoverToken').value = pushover.token || '';
         document.getElementById('pushoverPriority').value = pushover.priority != null ? pushover.priority : 0;
-        const gotify = n.gotify || {};
+        document.getElementById('gotifyEnabled').checked = gotify.enabled !== false;
         document.getElementById('gotifyServer').value = gotify.serverUrl || '';
         document.getElementById('gotifyToken').value = gotify.token || '';
         document.getElementById('gotifyPriority').value = gotify.priority != null ? gotify.priority : 5;
@@ -785,24 +482,16 @@
       const statusEl = document.getElementById('saveStatus');
       statusEl.textContent = 'Saving...';
       try {
+        // Rules UI removed; preserve whatever the server has.
+        if (!legacyNotifiersConfig) {
+          statusEl.textContent = 'Cannot save yet. Please wait for settings to finish loading.';
+          statusEl.style.color = '#ff8a80';
+          return;
+        }
         const body = {
-          rules: {
-            offline: { enabled: document.getElementById('ruleOffline').checked },
-            wanTranscodes: { enabled: document.getElementById('ruleWanTranscodes').checked },
-            historyDbBackups: { enabled: document.getElementById('ruleHistoryDbBackups').checked },
-            highBandwidth: {
-              enabled: document.getElementById('ruleHighBandwidth').checked,
-              thresholdMbps: Number(document.getElementById('ruleHighBandwidthThreshold').value) || 50
-            },
-            anyWan: {
-              enabled: document.getElementById('ruleAnyWan').checked
-            },
-            highWanBandwidth: {
-              enabled: document.getElementById('ruleHighWan').checked,
-              thresholdMbps: Number(document.getElementById('ruleHighWanThreshold').value) || 30
-            }
-          },
+          rules: legacyNotifiersConfig.rules || {},
           discord: {
+            enabled: document.getElementById('discordEnabled').checked,
             webhookUrl: document.getElementById('discordWebhook').value.trim() || undefined,
             triggers: {
               offline: document.getElementById('discordTrigOffline').checked,
@@ -842,6 +531,7 @@
             }
           },
           webhook: {
+            enabled: document.getElementById('webhookEnabled').checked,
             url: document.getElementById('webhookUrl').value.trim() || undefined,
             triggers: {
               offline: document.getElementById('webhookTrigOffline').checked,
@@ -856,6 +546,7 @@
             }
           },
           slack: {
+            enabled: document.getElementById('slackEnabled').checked,
             webhookUrl: document.getElementById('slackWebhook').value.trim() || undefined,
             triggers: {
               offline: document.getElementById('slackTrigOffline').checked,
@@ -870,6 +561,7 @@
             }
           },
           telegram: {
+            enabled: document.getElementById('telegramEnabled').checked,
             botToken: document.getElementById('telegramToken').value.trim() || undefined,
             chatId: document.getElementById('telegramChat').value.trim() || undefined,
             triggers: {
@@ -885,6 +577,7 @@
             }
           },
           twilio: {
+            enabled: document.getElementById('twilioEnabled').checked,
             accountSid: document.getElementById('twilioSid').value.trim() || undefined,
             authToken: document.getElementById('twilioToken').value || undefined,
             from: document.getElementById('twilioFrom').value.trim() || undefined,
@@ -902,6 +595,7 @@
             }
           },
           pushover: {
+            enabled: document.getElementById('pushoverEnabled').checked,
             user: document.getElementById('pushoverUser').value.trim() || undefined,
             token: document.getElementById('pushoverToken').value.trim() || undefined,
             priority: Number(document.getElementById('pushoverPriority').value),
@@ -918,6 +612,7 @@
             }
           },
           gotify: {
+            enabled: document.getElementById('gotifyEnabled').checked,
             serverUrl: document.getElementById('gotifyServer').value.trim() || undefined,
             token: document.getElementById('gotifyToken').value.trim() || undefined,
             priority: Number(document.getElementById('gotifyPriority').value),
@@ -967,567 +662,6 @@
       }
     }
 
-    // ------------------------------------------------------------------
-    // Notifier Agents UI
-    // ------------------------------------------------------------------
-    let notifierAgents = [];
-    let activeAgentId = null;
-    let legacyNotifiersConfig = null;
-
-    const tagState = { to: [], cc: [], bcc: [] };
-
-    function parseRecipientList(v) {
-      if (Array.isArray(v)) return v.map(x => String(x || '').trim()).filter(Boolean);
-      const s = v != null ? String(v) : '';
-      return s.split(/[;,\n]+/g).map(x => x.trim()).filter(Boolean);
-    }
-
-    function renderTags(kind) {
-      const container = document.getElementById(kind === 'to' ? 'tagTo' : kind === 'cc' ? 'tagCc' : 'tagBcc');
-      const input = document.getElementById(kind === 'to' ? 'tagToInput' : kind === 'cc' ? 'tagCcInput' : 'tagBccInput');
-      if (!container || !input) return;
-
-      Array.from(container.querySelectorAll('.tag-chip')).forEach(n => n.remove());
-      const vals = Array.isArray(tagState[kind]) ? tagState[kind] : [];
-      vals.forEach((val, idx) => {
-        const chip = document.createElement('span');
-        chip.className = 'tag-chip';
-        chip.textContent = val;
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.textContent = '×';
-        btn.addEventListener('click', (e) => {
-          e.preventDefault();
-          tagState[kind].splice(idx, 1);
-          renderTags(kind);
-        });
-        chip.appendChild(btn);
-        container.insertBefore(chip, input);
-      });
-    }
-
-    function addTag(kind, raw) {
-      const value = String(raw || '').trim();
-      if (!value) return;
-      if (!Array.isArray(tagState[kind])) tagState[kind] = [];
-      if (tagState[kind].includes(value)) return;
-      tagState[kind].push(value);
-      if (tagState[kind].length > 200) tagState[kind] = tagState[kind].slice(0, 200);
-      renderTags(kind);
-    }
-
-    function wireTagInput(kind) {
-      const input = document.getElementById(kind === 'to' ? 'tagToInput' : kind === 'cc' ? 'tagCcInput' : 'tagBccInput');
-      if (!input) return;
-      input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ',') {
-          e.preventDefault();
-          addTag(kind, input.value);
-          input.value = '';
-        }
-      });
-      input.addEventListener('blur', () => {
-        if (input.value.trim()) {
-          addTag(kind, input.value);
-          input.value = '';
-        }
-      });
-    }
-
-    function setAgentStatus(msg, ok) {
-      const el = document.getElementById('agentStatus');
-      if (!el) return;
-      el.textContent = msg || '';
-      if (!msg) {
-        el.style.color = '';
-        return;
-      }
-      el.style.color = ok ? '#a5d6a7' : '#ff8a80';
-    }
-
-    // Surface runtime errors in the UI (helps when the console isn't open).
-    window.addEventListener('error', (e) => {
-      try {
-        const msg = e && e.message ? String(e.message) : 'Unknown error';
-        setAgentStatus('UI error: ' + msg, false);
-      } catch (_) {}
-    });
-    window.addEventListener('unhandledrejection', (e) => {
-      try {
-        const msg = e && e.reason && e.reason.message ? String(e.reason.message) : (e && e.reason ? String(e.reason) : 'Unknown rejection');
-        setAgentStatus('UI error: ' + msg, false);
-      } catch (_) {}
-    });
-
-    function renderAgentList() {
-      const list = document.getElementById('agentList');
-      if (!list) return;
-      list.innerHTML = '';
-      const agents = Array.isArray(notifierAgents) ? notifierAgents : [];
-
-      const legacy = legacyNotifiersConfig && typeof legacyNotifiersConfig === 'object' ? legacyNotifiersConfig : {};
-      const legacyEntries = [
-        { key: 'email', label: 'Legacy: Email', isConfigured: (cfg) => !!(cfg && cfg.enabled && cfg.from && cfg.to) },
-        { key: 'discord', label: 'Legacy: Discord', isConfigured: (cfg) => !!(cfg && cfg.webhookUrl) },
-        { key: 'webhook', label: 'Legacy: Webhook', isConfigured: (cfg) => !!(cfg && cfg.url) },
-        { key: 'slack', label: 'Legacy: Slack', isConfigured: (cfg) => !!(cfg && cfg.webhookUrl) },
-        { key: 'telegram', label: 'Legacy: Telegram', isConfigured: (cfg) => !!(cfg && cfg.botToken && cfg.chatId) },
-        { key: 'twilio', label: 'Legacy: SMS (Twilio)', isConfigured: (cfg) => !!(cfg && cfg.accountSid && cfg.authToken && cfg.from && cfg.to) },
-        { key: 'pushover', label: 'Legacy: Pushover', isConfigured: (cfg) => !!(cfg && cfg.user && cfg.token) },
-        { key: 'gotify', label: 'Legacy: Gotify', isConfigured: (cfg) => !!(cfg && cfg.serverUrl && cfg.token) }
-      ];
-
-      if (!agents.length) {
-        const empty = document.createElement('div');
-        empty.className = 'agent-row';
-        empty.style.cursor = 'default';
-        empty.innerHTML = '<div><div class="agent-row-title">No agents</div><div class="agent-row-meta">Add an Email Agent, or use one of the legacy notifiers below.</div></div>';
-        list.appendChild(empty);
-      }
-
-      // Agent list (new)
-      agents.forEach(agent => {
-        const row = document.createElement('div');
-        row.className = 'agent-row';
-        row.addEventListener('click', () => openAgentModal(agent.id));
-        const left = document.createElement('div');
-        const title = document.createElement('div');
-        title.className = 'agent-row-title';
-        title.textContent = `Email (Notifier ID: ${agent.id})`;
-        const meta = document.createElement('div');
-        meta.className = 'agent-row-meta';
-        const toList = agent && agent.config ? parseRecipientList(agent.config.to) : [];
-        meta.textContent = toList.length ? `To: ${toList.slice(0, 2).join(', ')}${toList.length > 2 ? ` (+${toList.length - 2})` : ''}` : 'Not configured';
-        left.appendChild(title);
-        left.appendChild(meta);
-
-        const right = document.createElement('div');
-        const pill = document.createElement('span');
-        pill.className = 'agent-pill ' + ((agent.enabled !== false) ? 'agent-pill-on' : '');
-        pill.textContent = (agent.enabled !== false) ? 'Enabled' : 'Disabled';
-        right.appendChild(pill);
-
-        row.appendChild(left);
-        row.appendChild(right);
-        list.appendChild(row);
-      });
-
-      // Legacy notifiers (channels)
-      legacyEntries.forEach(entry => {
-        const cfg = legacy[entry.key] || {};
-        const configured = entry.isConfigured ? entry.isConfigured(cfg) : true;
-        const row = document.createElement('div');
-        row.className = 'agent-row';
-        row.addEventListener('click', () => {
-          if (typeof window.omnistreamShowNotifierPanel === 'function') {
-            window.omnistreamShowNotifierPanel(entry.key);
-          }
-        });
-
-        const left = document.createElement('div');
-        const title = document.createElement('div');
-        title.className = 'agent-row-title';
-        title.textContent = entry.label;
-
-        const meta = document.createElement('div');
-        meta.className = 'agent-row-meta';
-        meta.textContent = configured ? 'Configured' : 'Not configured';
-
-        left.appendChild(title);
-        left.appendChild(meta);
-
-        const right = document.createElement('div');
-        const pill = document.createElement('span');
-        pill.className = 'agent-pill ' + (configured ? 'agent-pill-on' : '');
-        pill.textContent = 'Legacy';
-        right.appendChild(pill);
-
-        row.appendChild(left);
-        row.appendChild(right);
-        list.appendChild(row);
-      });
-    }
-
-    async function loadNotifierAgents() {
-      try {
-        const r = await fetch('/api/notifier-agents');
-        const data = await r.json().catch(() => ({}));
-        notifierAgents = Array.isArray(data.agents) ? data.agents : [];
-        renderAgentList();
-      } catch (e) {
-        console.error(e);
-        setAgentStatus('Failed to load agents. Check server logs.', false);
-      }
-    }
-
-    function showAgentTab(name) {
-      document.querySelectorAll('.agent-modal-tab').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.tab === name);
-      });
-      document.querySelectorAll('.agent-tab').forEach(panel => {
-        panel.classList.toggle('active', panel.dataset.tab === name);
-      });
-    }
-
-    function openAgentModal(id) {
-      const agent = (Array.isArray(notifierAgents) ? notifierAgents : []).find(a => a && a.id === id);
-      if (!agent) return false;
-      activeAgentId = id;
-
-      document.getElementById('agentModalTitle').textContent = `Email Settings (Notifier ID: ${id})`;
-
-      document.getElementById('agentEmailEnabled').checked = agent.enabled !== false;
-      document.getElementById('agentEmailFromName').value = (agent.config && agent.config.fromName) ? agent.config.fromName : '';
-      document.getElementById('agentEmailFrom').value = (agent.config && agent.config.from) ? agent.config.from : '';
-      tagState.to = parseRecipientList(agent.config && agent.config.to);
-      tagState.cc = parseRecipientList(agent.config && agent.config.cc);
-      tagState.bcc = parseRecipientList(agent.config && agent.config.bcc);
-      renderTags('to');
-      renderTags('cc');
-      renderTags('bcc');
-      const smtp = (agent.config && agent.config.smtp) ? agent.config.smtp : {};
-      const auth = smtp.auth || {};
-      document.getElementById('agentSmtpHost').value = smtp.host || '';
-      document.getElementById('agentSmtpPort').value = smtp.port != null ? smtp.port : 587;
-      document.getElementById('agentSmtpSecure').checked = smtp.secure === true;
-      document.getElementById('agentSmtpUser').value = auth.user || '';
-      document.getElementById('agentSmtpPass').value = auth.pass || '';
-      const inferredEnc = (agent.config && agent.config.encryption)
-        ? agent.config.encryption
-        : (smtp && smtp.secure === true)
-          ? 'ssl'
-          : (smtp && smtp.requireTLS === true)
-            ? 'starttls'
-            : 'starttls';
-      document.getElementById('agentSmtpEncryption').value = inferredEnc;
-      document.getElementById('agentAllowHtml').checked = (agent.config && agent.config.allowHtml) === true;
-
-      const trig = agent.triggers || {};
-      document.getElementById('agentTrigOffline').checked = trig.offline !== false;
-      document.getElementById('agentTrigServerBackUp').checked = trig.serverBackUp === true;
-      document.getElementById('agentTrigWan').checked = trig.wanTranscodes !== false;
-      document.getElementById('agentTrigAnyWan').checked = trig.anyWan !== false;
-      document.getElementById('agentTrigHigh').checked = trig.highBandwidth !== false;
-      document.getElementById('agentTrigHighWan').checked = trig.highWanBandwidth !== false;
-      document.getElementById('agentTrigHistoryDbBackups').checked = trig.historyDbBackups !== false;
-      document.getElementById('agentTrigPlaybackStart').checked = trig.playbackStart === true;
-      document.getElementById('agentTrigPlaybackStop').checked = trig.playbackStop === true;
-
-      const text = agent.text || {};
-      document.getElementById('agentTextSubject').value = text.subject || '';
-      document.getElementById('agentTextBody').value = text.body || '';
-
-      document.getElementById('agentTestSubject').value = 'Tautulli';
-      document.getElementById('agentTestBody').value = 'Test Notification';
-      document.getElementById('agentTestStatus').textContent = '';
-      document.getElementById('agentSaveStatus').textContent = '';
-
-      document.getElementById('agentModal').style.display = 'flex';
-      showAgentTab('configuration');
-      return true;
-    }
-
-    function closeAgentModal() {
-      document.getElementById('agentModal').style.display = 'none';
-      activeAgentId = null;
-    }
-
-    async function createEmailAgent() {
-      setAgentStatus('Creating agent...', true);
-      try {
-        const r = await fetch('/api/notifier-agents', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'email' }) });
-        if (!r.ok) {
-          const t = await r.text().catch(() => '');
-          setAgentStatus('Create failed: ' + (t || r.statusText), false);
-          return;
-        }
-        const data = await r.json().catch(() => ({}));
-        await loadNotifierAgents();
-        let opened = false;
-        if (data && data.agent && data.agent.id != null) {
-          opened = openAgentModal(data.agent.id) === true;
-        }
-        if (!opened) {
-          // Fallback: open the newest agent (highest id).
-          const agents = Array.isArray(notifierAgents) ? notifierAgents : [];
-          const newest = agents
-            .map(a => (a && a.id != null ? Number(a.id) : null))
-            .filter(x => Number.isFinite(x))
-            .sort((a, b) => b - a)[0];
-          if (newest != null) opened = openAgentModal(newest) === true;
-        }
-        if (!opened) {
-          setAgentStatus('Agent created, but editor failed to open. Click the agent in the list to edit.', false);
-        } else {
-          setAgentStatus('', true);
-        }
-      } catch (e) {
-        console.error(e);
-        setAgentStatus('Create failed. Check server logs.', false);
-      }
-    }
-
-    async function saveActiveAgent() {
-      const id = activeAgentId;
-      if (!id) return;
-      const statusEl = document.getElementById('agentSaveStatus');
-      statusEl.textContent = 'Saving...';
-      statusEl.style.color = '';
-
-      const encryption = document.getElementById('agentSmtpEncryption').value;
-      const agent = {
-        id,
-        type: 'email',
-        enabled: document.getElementById('agentEmailEnabled').checked,
-        config: {
-          fromName: document.getElementById('agentEmailFromName').value.trim(),
-          from: document.getElementById('agentEmailFrom').value.trim(),
-          to: Array.isArray(tagState.to) ? tagState.to.slice() : [],
-          cc: Array.isArray(tagState.cc) ? tagState.cc.slice() : [],
-          bcc: Array.isArray(tagState.bcc) ? tagState.bcc.slice() : [],
-          encryption,
-          allowHtml: document.getElementById('agentAllowHtml').checked,
-          smtp: {
-            host: document.getElementById('agentSmtpHost').value.trim(),
-            port: Number(document.getElementById('agentSmtpPort').value) || 587,
-            secure: encryption === 'ssl',
-            auth: {
-              user: document.getElementById('agentSmtpUser').value.trim(),
-              pass: document.getElementById('agentSmtpPass').value
-            }
-          }
-        },
-        triggers: {
-          offline: document.getElementById('agentTrigOffline').checked,
-          serverBackUp: document.getElementById('agentTrigServerBackUp').checked,
-          wanTranscodes: document.getElementById('agentTrigWan').checked,
-          anyWan: document.getElementById('agentTrigAnyWan').checked,
-          highBandwidth: document.getElementById('agentTrigHigh').checked,
-          highWanBandwidth: document.getElementById('agentTrigHighWan').checked,
-          historyDbBackups: document.getElementById('agentTrigHistoryDbBackups').checked,
-          playbackStart: document.getElementById('agentTrigPlaybackStart').checked,
-          playbackStop: document.getElementById('agentTrigPlaybackStop').checked
-        },
-        text: {
-          subject: document.getElementById('agentTextSubject').value,
-          body: document.getElementById('agentTextBody').value
-        }
-      };
-
-      try {
-        const r = await fetch(`/api/notifier-agents/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agent }) });
-        if (!r.ok) {
-          const t = await r.text().catch(() => '');
-          statusEl.textContent = 'Save failed: ' + (t || r.statusText);
-          statusEl.style.color = '#ff8a80';
-          return;
-        }
-        statusEl.textContent = 'Saved.';
-        statusEl.style.color = '#a5d6a7';
-        await loadNotifierAgents();
-      } catch (e) {
-        console.error(e);
-        statusEl.textContent = 'Save failed. Check server logs.';
-        statusEl.style.color = '#ff8a80';
-      }
-    }
-
-    async function duplicateActiveAgent() {
-      const id = activeAgentId;
-      if (!id) return;
-      try {
-        const r = await fetch(`/api/notifier-agents/${id}/duplicate`, { method: 'POST' });
-        if (!r.ok) return;
-        const data = await r.json().catch(() => ({}));
-        await loadNotifierAgents();
-        if (data && data.agent && data.agent.id) openAgentModal(data.agent.id);
-      } catch (e) {
-        console.error(e);
-      }
-    }
-
-    async function deleteActiveAgent() {
-      const id = activeAgentId;
-      if (!id) return;
-      if (!confirm(`Delete notifier agent ${id}?`)) return;
-      try {
-        const r = await fetch(`/api/notifier-agents/${id}`, { method: 'DELETE' });
-        if (!r.ok) return;
-        closeAgentModal();
-        await loadNotifierAgents();
-      } catch (e) {
-        console.error(e);
-      }
-    }
-
-    async function testActiveAgentEmail() {
-      const id = activeAgentId;
-      if (!id) return;
-      const statusEl = document.getElementById('agentTestStatus');
-      statusEl.textContent = 'Sending test email...';
-      statusEl.style.color = '';
-      try {
-        const resp = await fetch(`/api/notifier-agents/${id}/test`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            subjectLine: document.getElementById('agentTestSubject').value,
-            messageBody: document.getElementById('agentTestBody').value
-          })
-        });
-        if (!resp.ok) {
-          const text = await resp.text().catch(() => '');
-          statusEl.textContent = 'Test failed: ' + (text || resp.status + ' ' + resp.statusText);
-          statusEl.style.color = '#ff8a80';
-          return;
-        }
-        const data = await resp.json().catch(() => ({}));
-        statusEl.textContent = 'Test email sent.' + (data.messageId ? ` (messageId: ${data.messageId})` : '');
-        statusEl.style.color = '#a5d6a7';
-      } catch (e) {
-        console.error(e);
-        statusEl.textContent = 'Test failed. Check server logs.';
-        statusEl.style.color = '#ff8a80';
-      }
-    }
-
-    wireTagInput('to');
-    wireTagInput('cc');
-    wireTagInput('bcc');
-
-    // Agent picker
-    const supportedAgentTypes = [
-      { id: 'boxcar', label: 'Boxcar', supported: false },
-      { id: 'browser', label: 'Browser', supported: false },
-      { id: 'discord', label: 'Discord', supported: false },
-      { id: 'email', label: 'Email', supported: true },
-      { id: 'facebook', label: 'Facebook', supported: false },
-      { id: 'gotify', label: 'Gotify', supported: false },
-      { id: 'groupme', label: 'GroupMe', supported: false },
-      { id: 'growl', label: 'Growl', supported: false },
-      { id: 'ifttt', label: 'IFTTT', supported: false },
-      { id: 'join', label: 'Join', supported: false },
-      { id: 'kodi', label: 'Kodi', supported: false },
-      { id: 'lunasea', label: 'LunaSea', supported: false },
-      { id: 'msteams', label: 'Microsoft Teams', supported: false },
-      { id: 'mqtt', label: 'MQTT', supported: false },
-      { id: 'ntfy', label: 'ntfy', supported: false },
-      { id: 'plexapp', label: 'Plex Android / iOS App', supported: false },
-      { id: 'plextheater', label: 'Plex Home Theater', supported: false },
-      { id: 'prowl', label: 'Prowl', supported: false },
-      { id: 'pushbullet', label: 'Pushbullet', supported: false },
-      { id: 'pushover', label: 'Pushover', supported: false },
-      { id: 'script', label: 'Script', supported: false },
-      { id: 'slack', label: 'Slack', supported: false },
-      { id: 'tautulli-remote', label: 'Tautulli Remote App', supported: false },
-      { id: 'telegram', label: 'Telegram', supported: false },
-      { id: 'twitter', label: 'Twitter', supported: false },
-      { id: 'webhook', label: 'Webhook', supported: false },
-      { id: 'zapier', label: 'Zapier', supported: false }
-    ];
-
-    function openPicker() {
-      try { window.omnistreamAgentPickerOpenedAt = Date.now(); } catch (_) {}
-      setAgentStatus('Opening agent picker...', true);
-      const list = document.getElementById('pickerList');
-      if (!list) {
-        setAgentStatus('Picker UI missing (pickerList not found).', false);
-        return;
-      }
-      list.innerHTML = '';
-      supportedAgentTypes.forEach(t => {
-        const item = document.createElement('div');
-        item.className = 'picker-item' + (t.supported ? '' : ' disabled');
-        item.textContent = t.label;
-        item.addEventListener('click', () => {
-          if (!t.supported) {
-            setAgentStatus('This agent type is not supported yet.', false);
-            return;
-          }
-          closePicker(true);
-          createEmailAgent();
-        });
-        list.appendChild(item);
-      });
-      document.getElementById('agentPicker').style.display = 'flex';
-      setAgentStatus('Select an agent type.', true);
-    }
-
-    function closePicker(force) {
-      try {
-        if (!force) {
-          const openedAt = Number(window.omnistreamAgentPickerOpenedAt || 0);
-          if (openedAt && (Date.now() - openedAt) < 300) return;
-        }
-      } catch (_) {
-        // ignore
-      }
-      document.getElementById('agentPicker').style.display = 'none';
-    }
-
-    function wireAgentPickerUi() {
-      const addBtn = document.getElementById('addAgentBtn');
-      const pickerClose = document.getElementById('pickerClose');
-      const pickerCancel = document.getElementById('pickerCancel');
-      const pickerOverlay = document.getElementById('agentPicker');
-
-      if (!addBtn) {
-        setAgentStatus('UI error: Add Agent button not found.', false);
-        return;
-      }
-      addBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        openPicker();
-      });
-
-      if (pickerClose) pickerClose.onclick = () => closePicker(true);
-      if (pickerCancel) pickerCancel.onclick = () => closePicker(true);
-      if (pickerOverlay) {
-        pickerOverlay.addEventListener('click', (e) => {
-          if (e.target && e.target.id === 'agentPicker') closePicker(false);
-        });
-      }
-    }
-
-    function wireAgentModalUi() {
-      // Keep legacy "secure" checkbox aligned with the encryption dropdown.
-      const encEl = document.getElementById('agentSmtpEncryption');
-      if (encEl) {
-        encEl.addEventListener('change', () => {
-          const enc = encEl.value;
-          const secureEl = document.getElementById('agentSmtpSecure');
-          const portEl = document.getElementById('agentSmtpPort');
-          if (secureEl) secureEl.checked = enc === 'ssl';
-          if (portEl) {
-            const current = Number(portEl.value);
-            if (!current || current === 587 || current === 465) {
-              portEl.value = enc === 'ssl' ? 465 : 587;
-            }
-          }
-        });
-      }
-
-      const closeBtn = document.getElementById('agentModalClose');
-      const modal = document.getElementById('agentModal');
-      const saveBtn = document.getElementById('agentSaveBtn');
-      const dupBtn = document.getElementById('agentDuplicateBtn');
-      const delBtn = document.getElementById('agentDeleteBtn');
-      const testBtn = document.getElementById('agentTestBtn');
-      if (closeBtn) closeBtn.onclick = closeAgentModal;
-      if (modal) {
-        modal.addEventListener('click', (e) => {
-          if (e.target && e.target.id === 'agentModal') closeAgentModal();
-        });
-      }
-      if (saveBtn) saveBtn.onclick = saveActiveAgent;
-      if (dupBtn) dupBtn.onclick = duplicateActiveAgent;
-      if (delBtn) delBtn.onclick = deleteActiveAgent;
-      if (testBtn) testBtn.onclick = testActiveAgentEmail;
-      document.querySelectorAll('.agent-modal-tab').forEach(btn => {
-        btn.addEventListener('click', () => showAgentTab(btn.dataset.tab));
-      });
-    }
-
     async function testNotifiers() {
       const statusEl = document.getElementById('testStatus');
       statusEl.textContent = 'Sending test notification...';
@@ -1558,10 +692,7 @@
     // Ensure wiring happens even if something loads slowly.
     window.addEventListener('DOMContentLoaded', async () => {
       try { wireLegacyNotifiersButtonsUi(); } catch (e) { console.error(e); }
-      try { wireAgentModalUi(); } catch (e) { setAgentStatus('UI error: ' + (e && e.message ? e.message : String(e)), false); }
-      try { wireAgentPickerUi(); } catch (e) { setAgentStatus('UI error: ' + (e && e.message ? e.message : String(e)), false); }
       try { await loadConfig(); } catch (e) { console.error(e); }
-      try { await loadNotifierAgents(); } catch (e) { console.error(e); }
     });
   </script>
     </main>

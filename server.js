@@ -2873,6 +2873,7 @@ let lastNotifierErrorChannel = null;// Channel name for last notifier error
 
 function shouldSendNotificationToChannel(notification, channelCfg) {
   if (!channelCfg) return false;
+  if (channelCfg.enabled === false) return false;
   const triggers = channelCfg.triggers;
   const kind = notification.kind;
   if (!kind || !triggers) return true;
@@ -3207,7 +3208,7 @@ function triggerNotifiers() {
 
 function sendDiscordNotification(notification) {
   const discordCfg = appConfig?.notifiers?.discord;
-  if (!discordCfg || !discordCfg.webhookUrl) return;
+  if (!discordCfg || discordCfg.enabled === false || !discordCfg.webhookUrl) return;
   try {
     const url = new URL(discordCfg.webhookUrl);
     const body = JSON.stringify({
@@ -3307,7 +3308,7 @@ function sendEmailNotification(notification) {
 
 function sendGenericWebhookNotification(notification) {
   const cfg = appConfig?.notifiers?.webhook;
-  if (!cfg || !cfg.url) return;
+  if (!cfg || cfg.enabled === false || !cfg.url) return;
   try {
     const url = new URL(cfg.url);
     const body = JSON.stringify({
@@ -3344,7 +3345,7 @@ function sendGenericWebhookNotification(notification) {
 
 function sendSlackNotification(notification) {
   const cfg = appConfig?.notifiers?.slack;
-  if (!cfg || !cfg.webhookUrl) return;
+  if (!cfg || cfg.enabled === false || !cfg.webhookUrl) return;
   try {
     const url = new URL(cfg.webhookUrl);
     const text = formatDiscordMessage(notification); // Reuse same human text
@@ -3375,7 +3376,7 @@ function sendSlackNotification(notification) {
 
 function sendTelegramNotification(notification) {
   const cfg = appConfig?.notifiers?.telegram;
-  if (!cfg || !cfg.botToken || !cfg.chatId) return;
+  if (!cfg || cfg.enabled === false || !cfg.botToken || !cfg.chatId) return;
   try {
     const text = formatDiscordMessage(notification);
     const path = `/bot${encodeURIComponent(cfg.botToken)}/sendMessage?chat_id=${encodeURIComponent(cfg.chatId)}&text=${encodeURIComponent(text)}`;
@@ -3400,7 +3401,7 @@ function sendTelegramNotification(notification) {
 
 function sendTwilioSmsNotification(notification) {
   const cfg = appConfig?.notifiers?.twilio;
-  if (!cfg || !cfg.accountSid || !cfg.authToken || !cfg.from || !cfg.to) return;
+  if (!cfg || cfg.enabled === false || !cfg.accountSid || !cfg.authToken || !cfg.from || !cfg.to) return;
   try {
     const payload = new URLSearchParams({
       From: cfg.from,
@@ -3435,7 +3436,7 @@ function sendTwilioSmsNotification(notification) {
 
 function sendPushoverNotification(notification) {
   const cfg = appConfig?.notifiers?.pushover;
-  if (!cfg || !cfg.user || !cfg.token) return;
+  if (!cfg || cfg.enabled === false || !cfg.user || !cfg.token) return;
   try {
     const payload = new URLSearchParams({
       token: cfg.token,
@@ -3470,7 +3471,7 @@ function sendPushoverNotification(notification) {
 
 function sendGotifyNotification(notification) {
   const cfg = appConfig?.notifiers?.gotify;
-  if (!cfg || !cfg.serverUrl || !cfg.token) return;
+  if (!cfg || cfg.enabled === false || !cfg.serverUrl || !cfg.token) return;
   try {
     const baseUrl = new URL(cfg.serverUrl);
     const body = JSON.stringify({
@@ -8848,7 +8849,7 @@ app.post('/api/notifiers/test', (req, res) => {
 
     const shouldUse = (name) => !requested || requested.includes(name);
 
-    if (shouldUse('discord') && notifierCfg.discord && notifierCfg.discord.webhookUrl) {
+    if (shouldUse('discord') && notifierCfg.discord && notifierCfg.discord.enabled !== false && notifierCfg.discord.webhookUrl) {
       sendDiscordNotification(notification);
       sent.push('discord');
     }
@@ -8859,27 +8860,27 @@ app.post('/api/notifiers/test', (req, res) => {
       });
       sent.push('email');
     }
-    if (shouldUse('webhook') && notifierCfg.webhook && notifierCfg.webhook.url) {
+    if (shouldUse('webhook') && notifierCfg.webhook && notifierCfg.webhook.enabled !== false && notifierCfg.webhook.url) {
       sendGenericWebhookNotification(notification);
       sent.push('webhook');
     }
-    if (shouldUse('slack') && notifierCfg.slack && notifierCfg.slack.webhookUrl) {
+    if (shouldUse('slack') && notifierCfg.slack && notifierCfg.slack.enabled !== false && notifierCfg.slack.webhookUrl) {
       sendSlackNotification(notification);
       sent.push('slack');
     }
-    if (shouldUse('telegram') && notifierCfg.telegram && notifierCfg.telegram.botToken && notifierCfg.telegram.chatId) {
+    if (shouldUse('telegram') && notifierCfg.telegram && notifierCfg.telegram.enabled !== false && notifierCfg.telegram.botToken && notifierCfg.telegram.chatId) {
       sendTelegramNotification(notification);
       sent.push('telegram');
     }
-    if (shouldUse('twilio') && notifierCfg.twilio && notifierCfg.twilio.accountSid && notifierCfg.twilio.authToken && notifierCfg.twilio.from && notifierCfg.twilio.to) {
+    if (shouldUse('twilio') && notifierCfg.twilio && notifierCfg.twilio.enabled !== false && notifierCfg.twilio.accountSid && notifierCfg.twilio.authToken && notifierCfg.twilio.from && notifierCfg.twilio.to) {
       sendTwilioSmsNotification(notification);
       sent.push('twilio');
     }
-    if (shouldUse('pushover') && notifierCfg.pushover && notifierCfg.pushover.user && notifierCfg.pushover.token) {
+    if (shouldUse('pushover') && notifierCfg.pushover && notifierCfg.pushover.enabled !== false && notifierCfg.pushover.user && notifierCfg.pushover.token) {
       sendPushoverNotification(notification);
       sent.push('pushover');
     }
-    if (shouldUse('gotify') && notifierCfg.gotify && notifierCfg.gotify.serverUrl && notifierCfg.gotify.token) {
+    if (shouldUse('gotify') && notifierCfg.gotify && notifierCfg.gotify.enabled !== false && notifierCfg.gotify.serverUrl && notifierCfg.gotify.token) {
       sendGotifyNotification(notification);
       sent.push('gotify');
     }

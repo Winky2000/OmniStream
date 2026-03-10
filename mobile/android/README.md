@@ -77,7 +77,7 @@ The app prompts you for the OmniStream base URL on first launch (or via Settings
 
 To get a device token, log into the OmniStream web UI and go to:
 
-- Settings → System → Tools → Mobile devices
+- System → Mobile devices
 
 ## Platform badges
 

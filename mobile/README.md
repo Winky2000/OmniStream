@@ -12,7 +12,7 @@ No actions/controls are implemented.
 
 - OmniStream must be reachable over HTTPS (recommended) from your phone.
 - Create a **mobile device token** in the OmniStream web UI after login:
-  - Settings → System → Tools → Mobile devices
+  - System → Mobile devices
 - Paste that token into the mobile app.
 - Call APIs with header: `Authorization: Bearer <deviceToken>`
 

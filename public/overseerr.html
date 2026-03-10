@@ -108,6 +108,30 @@
     </main>
   </div>
   <script>
+    function applyHashScroll(){
+      try{
+        const h = String(window.location.hash || '').replace(/^#/, '').trim();
+        if (!h) return;
+
+        if (h === 'config') {
+          const el = document.getElementById('ovConfigCard');
+          if (el) el.scrollIntoView({behavior:'smooth', block:'start'});
+          return;
+        }
+
+        if (h === 'users') {
+          const el = document.getElementById('ovUsersCard');
+          if (el) el.scrollIntoView({behavior:'smooth', block:'start'});
+        }
+      } catch (_) {
+        // ignore
+      }
+    }
+
+    // Apply on load + when hash changes
+    applyHashScroll();
+    window.addEventListener('hashchange', applyHashScroll);
+
     async function loadOverseerrConfig() {
       try {
         const r = await fetch('/api/config/app');

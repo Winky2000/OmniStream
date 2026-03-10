@@ -61,7 +61,7 @@ OmniStream is a dashboard to monitor multiple Plex, Jellyfin, and Emby servers o
 	- Start OmniStream once with `OMNISTREAM_RESET_INTERNAL_AUTH=1` (forces `admin/omnistream` and sets `passwordChangeRequired=true`), or
 	- Stop OmniStream and delete `auth.passwordHash` from `config.json` (or delete the whole `auth` block), then start OmniStream again.
 - If you are running OmniStream in Docker and your password **keeps reverting after restarts/updates**, you are likely not persisting `config.json`. Bind-mount it into the container (see Docker section below).
-- If you are running OmniStream behind Nginx + Basic Auth / 2FA, set **Authentication mode** to **Nginx** in **Settings → System** to disable internal auth completely.
+- If you are running OmniStream behind Nginx + Basic Auth / 2FA, set **Authentication mode** to **Nginx** in **System** to disable internal auth completely.
 - Regardless of auth mode, treat OmniStream like an admin panel: keep it on a **trusted network** (LAN/VPN) and/or restrict inbound access so only your reverse proxy can reach it.
 - As of recent builds, **CORS is disabled by default**. If you intentionally need cross-origin API access, set `OMNISTREAM_CORS_ORIGINS` to a comma-separated allowlist (for example: `http://YOUR_UI_HOST_1:3000,http://YOUR_UI_HOST_2:8080`).
 
@@ -69,7 +69,7 @@ OmniStream is a dashboard to monitor multiple Plex, Jellyfin, and Emby servers o
 
 This repo includes native iOS and Android client source under [mobile/](mobile/README.md).
 
-- Create a device token in the web UI: **Settings → System → Tools → Mobile devices**
+- Create a device token in the web UI: **System → Mobile devices**
 - API calls: `Authorization: Bearer <deviceToken>`
 
 The mobile apps are intentionally read-only (no playback controls or admin actions).
@@ -216,7 +216,7 @@ docker run -d \
 
 OmniStream can create backups of `history.db` and keep them under `./backups` (container path: `/usr/src/app/backups`).
 
-- Manage backups in **Settings → System → History DB backups**.
+- Manage backups in **System → History DB backups**.
 - If you run via Docker and want backups to persist across container rebuilds, bind-mount the backups folder (see examples above).
 ```
 
@@ -227,7 +227,7 @@ OmniStream can create backups of `history.db` and keep them under `./backups` (c
 1. Start the container.
 2. Open http://YOUR_OMNISTREAM_HOST:3000.
 3. You will see a welcome card if no servers are configured.
-4. Click **Start Setup (Servers)** or go to the **Admin → Servers** tab.
+4. Click **Start Setup (Servers)** or go to the **Servers** tab.
 5. Add your servers:
 	 - **Name**: Friendly name.
 	 - **Base URL**:
@@ -436,7 +436,7 @@ Optional fields (normally filled in by the app):
 - `tokenLocation` — defaults to `query` for Plex, `header` for Jellyfin/Emby.
 - `apiPath` — defaults to `/status/sessions` (Plex) or `/Sessions` (Jellyfin/Emby).
 
-You can edit servers via the Admin → Servers UI rather than hand-editing `servers.json`.
+You can edit servers via the **Servers** UI rather than hand-editing `servers.json`.
 
 ---
 

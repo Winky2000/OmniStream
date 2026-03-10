@@ -168,17 +168,32 @@
       const tabs = document.querySelectorAll('.newsletter-tab');
       const panels = document.querySelectorAll('.newsletter-panel');
       function showPanel(name) {
+        const next = String(name || '').trim();
+        if (!next) return;
         tabs.forEach(tab => {
-          tab.classList.toggle('newsletter-tab-active', tab.dataset.panel === name);
+          tab.classList.toggle('newsletter-tab-active', tab.dataset.panel === next);
         });
         panels.forEach(panel => {
-          panel.style.display = panel.dataset.panel === name ? 'block' : 'none';
+          panel.style.display = panel.dataset.panel === next ? 'block' : 'none';
         });
-        localStorage.setItem('omnistreamNewsletterTab', name);
+        localStorage.setItem('omnistreamNewsletterTab', next);
       }
       if (tabs.length && panels.length) {
-        const saved = localStorage.getItem('omnistreamNewsletterTab') || 'email';
-        showPanel(saved);
+        function readHashPanel() {
+          const h = String(window.location.hash || '').replace(/^#/, '').trim();
+          return h;
+        }
+
+        const hashPanel = readHashPanel();
+        const saved = localStorage.getItem('omnistreamNewsletterTab') || 'send';
+        const initial = hashPanel || saved;
+        showPanel(initial);
+
+        window.addEventListener('hashchange', () => {
+          const p = readHashPanel();
+          if (p) showPanel(p);
+        });
+
         tabs.forEach(tab => {
           tab.addEventListener('click', () => showPanel(tab.dataset.panel));
         });

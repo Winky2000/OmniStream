@@ -36,4 +36,4 @@ Edit `baseURL` in `Config.swift`.
 
 To get a device token, log into the OmniStream web UI and go to:
 
-- Settings → System → Tools → Mobile devices
+- System → Mobile devices

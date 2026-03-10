@@ -6,8 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-03-09
+
+### Added
+- UI: fully tab-based navigation (top-level tabs and subtabs) across pages.
+- Notifiers: per-channel enable toggles for all notifier types.
+
+### Changed
+- Notifiers page: simplified legacy configuration UI (rules/agents management removed from the UI).
+- System/Settings IA: streamlined navigation (removed unused/duplicative items; kept change-password page for forced first-login redirects).
+
 ### Fixed
 - Mobile clients: allow `/api/poster` access using a registered device token (paired mobile device).
+- Notifiers: `enabled: false` is honored consistently across channels (including test sends).
 
 ## [0.6.0] - 2026-03-06
 
@@ -209,4 +220,5 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 [0.4.0]: https://github.com/Winky2000/OmniStream/releases/tag/v0.4.0
 [0.5.0]: https://github.com/Winky2000/OmniStream/releases/tag/v0.5.0
 [0.6.0]: https://github.com/Winky2000/OmniStream/releases/tag/v0.6.0
-[Unreleased]: https://github.com/Winky2000/OmniStream/compare/v0.6.0...HEAD
+[0.7.0]: https://github.com/Winky2000/OmniStream/releases/tag/v0.7.0
+[Unreleased]: https://github.com/Winky2000/OmniStream/compare/v0.7.0...HEAD
