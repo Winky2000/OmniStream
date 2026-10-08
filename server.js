@@ -392,6 +392,7 @@ try {
 const defaultPathForType = (t) => {
   if (t === 'plex') return '/status/sessions';
   if (t === 'jellyfin') return '/Sessions';
+  if (t === 'silo') return '/Sessions';
   if (t === 'emby') return '/Sessions';
   return '/';
 };
@@ -848,8 +849,8 @@ function summaryFromResponse(resp) {
 async function pollServer(s) {
   const base = (s.baseUrl || '').replace(/\/$/, '');
   let pathSuffix = s.apiPath || defaultPathForType(s.type) || '/';
-  // For Jellyfin/Emby, override legacy /System/Info path to use /Sessions so we actually get active sessions
-  if ((s.type === 'jellyfin' || s.type === 'emby') && (!s.apiPath || s.apiPath === '/System/Info')) {
+  // For Jellyfin/Emby/Silo, override legacy /System/Info path to use /Sessions so we actually get active sessions
+  if ((s.type === 'jellyfin' || s.type === 'emby' || s.type === 'silo') && (!s.apiPath || s.apiPath === '/System/Info')) {
     pathSuffix = defaultPathForType(s.type);
   }
   let finalUrl = base + pathSuffix;
@@ -862,7 +863,7 @@ async function pollServer(s) {
     if (tokenLoc === 'header') {
       if (s.type === 'plex') {
         headers['X-Plex-Token'] = s.token;
-      } else if (s.type === 'jellyfin') {
+      } else if (s.type === 'jellyfin' || s.type === 'silo') {
         headers['X-MediaBrowser-Token'] = s.token;
       } else {
         headers['X-Emby-Token'] = s.token;
@@ -871,8 +872,8 @@ async function pollServer(s) {
       const sep = finalUrl.includes('?') ? '&' : '?';
       if (s.type === 'plex') {
         finalUrl += `${sep}X-Plex-Token=${encodeURIComponent(s.token)}`;
-      } else if (s.type === 'jellyfin') {
-        // Jellyfin accepts api_key in query
+      } else if (s.type === 'jellyfin' || s.type === 'silo') {
+        // Jellyfin / Silo accept api_key in query
         finalUrl += `${sep}api_key=${encodeURIComponent(s.token)}`;
       } else {
         finalUrl += `${sep}X-Emby-Token=${encodeURIComponent(s.token)}`;
@@ -1123,7 +1124,7 @@ app.get('/api/history/query', (req, res) => {
 // Import watch history from supported backends (currently Jellyfin only)
 app.post('/api/import-history', async (req, res) => {
   if (!historyDb) return res.status(500).json({ error: 'history DB not available' });
-  const enabledServers = servers.filter(s => !s.disabled && s.type === 'jellyfin');
+  const enabledServers = servers.filter(s => !s.disabled && (s.type === 'jellyfin' || s.type === 'silo'));
   const results = [];
   for (const s of enabledServers) {
     const r = await importJellyfinHistory(s, { limitPerUser: 100 });

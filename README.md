@@ -1,11 +1,12 @@
 
 # OmniStream
 
-OmniStream is a dashboard to monitor multiple Plex, Jellyfin, and Emby servers on one screen. It shows active sessions, direct play vs transcoding, bandwidth usage, history, reports, and basic notifications.
+OmniStream is a dashboard to monitor multiple Plex, Jellyfin, Emby, and Silo servers on one screen. It shows active sessions, direct play vs transcoding, bandwidth usage, history, reports, and basic notifications.
 
 ## Features
 
 - Monitor multiple media servers (Plex, Jellyfin, Emby)
+ - Monitor multiple media servers (Plex, Jellyfin, Emby, Silo)
 - Per-server status (online/offline, latency)
 - Live sessions with posters, media details, and progress
 - Direct Play vs Transcoding highlighting
@@ -82,14 +83,15 @@ docker run -d \
 4. Click **Start Setup (Servers)** or go to the **Admin → Servers** tab.
 5. Add your servers:
 	 - **Name**: Friendly name.
-	 - **Base URL**:
-		 - Plex: e.g. `http://192.168.1.138:32400`
-		 - Jellyfin: e.g. `http://192.168.1.138:8096`
-		 - Emby: your Emby URL + port.
-	 - **Type**: `plex`, `jellyfin`, or `emby`.
-	 - **Token**:
-		 - Plex: X-Plex token.
-		 - Jellyfin/Emby: API key from the server dashboard.
+	- **Base URL**:
+		- Plex: e.g. `http://192.168.1.138:32400`
+		- Jellyfin: e.g. `http://192.168.1.138:8096`
+		- Silo: e.g. `http://192.168.1.138:8080` (Silo implements Jellyfin-compatible APIs)
+		- Emby: your Emby URL + port.
+	- **Type**: `plex`, `jellyfin`, `silo`, or `emby`.
+	- **Token**:
+		- Plex: X-Plex token.
+		- Jellyfin/Emby/Silo: API key from the server dashboard.
 
 OmniStream writes your server changes back to `servers.json` inside the container. With a bind mount, that updates the host file as well.
 
@@ -129,7 +131,7 @@ Each server entry uses this shape (fields with defaults are optional):
 {
 	"id": "plex-1",
 	"name": "Gold Tower",
-	"type": "plex",        // "plex" | "jellyfin" | "emby"
+	"type": "plex",        // "plex" | "jellyfin" | "silo" | "emby"
 	"baseUrl": "http://192.168.1.138:32400",
 	"token": "...",
 	"enabled": true

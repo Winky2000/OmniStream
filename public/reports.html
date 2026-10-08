@@ -66,6 +66,20 @@
           }
         });
 
+        // Build simple daily activity for the last 7 days based on history timestamps
+        const activityCounts = new Map(); // key: YYYY-MM-DD, value: count
+        const now = new Date();
+        const msPerDay = 24 * 60 * 60 * 1000;
+        history.forEach(h => {
+          if (!h.time) return;
+          const d = new Date(h.time);
+          if (isNaN(d.getTime())) return;
+          const diffDays = Math.floor((now - d) / msPerDay);
+          if (diffDays < 0 || diffDays > 6) return; // keep last 7 days (0..6)
+          const key = d.toISOString().slice(0, 10);
+          activityCounts.set(key, (activityCounts.get(key) || 0) + 1);
+        });
+
         const topTitles = Array.from(titles.entries())
           .sort((a,b) => b[1]-a[1])
           .slice(0,5);
@@ -80,6 +94,23 @@
         html += `<div class="metric"><b>Current streams:</b> ${totalCurrentStreams}</div>`;
         html += `<div class="metric"><b>History entries (recent):</b> ${totalHistoryEntries}</div>`;
         html += `<div class="metric"><b>Unique users seen:</b> ${users.size}</div>`;
+        html += '</div>';
+
+        // Daily/weekly activity card (last 7 days)
+        html += '<div class="card">';
+        html += '<h2>Activity (last 7 days)</h2>';
+        let hasActivity = false;
+        for (let offset = 6; offset >= 0; offset--) {
+          const d = new Date(now.getTime() - offset * msPerDay);
+          const key = d.toISOString().slice(0, 10);
+          const count = activityCounts.get(key) || 0;
+          if (count > 0) hasActivity = true;
+          const label = d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+          html += `<div class="list-item">${label}: ${count} event${count === 1 ? '' : 's'}</div>`;
+        }
+        if (!hasActivity) {
+          html += '<div class="list-item">No activity in the last 7 days.</div>';
+        }
         html += '</div>';
 
         html += '<div class="card">';
