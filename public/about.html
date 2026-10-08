@@ -1,0 +1,154 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>OmniStream About</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="theme.css">
+  <link rel="stylesheet" href="shell.css">
+  <script src="shell.js" defer></script>
+  <style>
+    body{font-family:Segoe UI,Arial;background:var(--bg);color:var(--text-main);margin:0;padding:0}
+    h1{margin:0 0 8px 0;color:var(--text-main);letter-spacing:0.5px;font-size:1.8em;font-weight:600;}
+    .card{background:var(--card-bg);border-radius:14px;padding:16px 18px;box-shadow:0 12px 30px rgba(15,23,42,0.85);border:1px solid rgba(148,163,184,0.35);max-width:760px;margin-bottom:18px;}
+    .card h2{margin:0 0 8px 0;font-size:16px;color:var(--text-main);}
+    .row{font-size:13px;margin:6px 0;color:var(--text-muted);}
+    .row b{color:var(--text-main);}
+    .status-ok{color:#a5d6a7;}
+    .status-warn{color:#ffd180;}
+    .status-error{color:#ff8a80;}
+    a{color:var(--link);text-decoration:none;}
+    a:hover{text-decoration:underline;}
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="sidebar-brand">OmniStream</div>
+      <nav class="sidebar-nav">
+        <a href="index.html" class="nav-link">Dashboard</a>
+        <a href="glance.html" class="nav-link">At a glance</a>
+        <a href="history.html" class="nav-link">History</a>
+        <a href="reports.html" class="nav-link">Reports</a>
+        <a href="libraries.html" class="nav-link">Libraries</a>
+        <a href="notifications.html" class="nav-link">Notifications</a>
+        <div class="settings-group">
+          <button type="button" class="nav-group-toggle newsletter-toggle">Newsletter</button>
+          <div class="settings-submenu newsletter-submenu">
+            <a href="overseerr.html" class="submenu-link">Overseerr</a>
+            <a href="subscribers.html" class="submenu-link">Subscribers</a>
+            <a href="templates.html" class="submenu-link">Templates</a>
+            <a href="custom-header.html" class="submenu-link">Custom header</a>
+            <a href="sent-newsletters.html" class="submenu-link">Sent history</a>
+          </div>
+        </div>
+        <div class="settings-group">
+          <button type="button" class="nav-group-toggle settings-toggle">Settings</button>
+          <div class="settings-submenu open">
+            <a href="admin.html" class="submenu-link">Connected servers</a>
+            <a href="servers.html" class="submenu-link">Servers</a>
+            <a href="display.html" class="submenu-link">Themes &amp; layout</a>
+            <a href="notifiers.html" class="submenu-link">Notifiers</a>
+            <a href="system.html" class="submenu-link">System</a>
+            <a href="about.html" class="submenu-link submenu-link-active">About</a>
+          </div>
+        </div>
+        <a href="/logout" class="nav-link">Logout</a>
+      </nav>
+    </aside>
+    <main class="main-content">
+      <button class="sidebar-toggle" id="sidebarToggle">Hide menu</button>
+      <h1>About</h1>
+
+      <div class="card">
+        <h2>Version</h2>
+        <div class="row"><b>OmniStream:</b> <span id="aboutVersion">Loading…</span></div>
+        <div class="row"><b>Server time:</b> <span id="aboutServerTime">-</span></div>
+      </div>
+
+      <div class="card">
+        <h2>Project</h2>
+        <div class="row"><b>GitHub:</b> <a id="aboutGitHub" href="#" target="_blank" rel="noreferrer">Loading…</a></div>
+        <div class="row"><b>Releases:</b> <a id="aboutReleases" href="#" target="_blank" rel="noreferrer">Loading…</a></div>
+      </div>
+
+      <div class="card">
+        <h2>Update status</h2>
+        <div class="row" id="aboutUpdateLine">Checking…</div>
+        <div class="row"><b>Last checked:</b> <span id="aboutCheckedAt">-</span></div>
+        <div class="row" id="aboutUpdateError" style="display:none;"></div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    async function loadAbout() {
+      try {
+        const r = await fetch('/api/about', { headers: { 'Cache-Control': 'no-cache' } });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const data = await r.json();
+
+        document.getElementById('aboutVersion').textContent = data.version || 'dev';
+        document.getElementById('aboutServerTime').textContent = data.serverTime || '-';
+
+        const githubUrl = data.githubUrl || '#';
+        const releasesUrl = data.releasesUrl || githubUrl;
+        const gh = document.getElementById('aboutGitHub');
+        gh.href = githubUrl;
+        gh.textContent = githubUrl;
+        const rel = document.getElementById('aboutReleases');
+        rel.href = releasesUrl;
+        rel.textContent = releasesUrl;
+
+        const upd = data.update || {};
+        const checkedAt = upd.checkedAt || null;
+        document.getElementById('aboutCheckedAt').textContent = checkedAt ? checkedAt : 'Not checked yet';
+
+        const updateLine = document.getElementById('aboutUpdateLine');
+        const latest = upd.latestVersion || null;
+        const available = upd.updateAvailable;
+
+        if (available === true && latest) {
+          updateLine.textContent = '';
+          updateLine.appendChild(document.createTextNode('Update available: '));
+          const b = document.createElement('b');
+          b.textContent = String(latest);
+          updateLine.appendChild(b);
+          updateLine.appendChild(document.createTextNode(' — see '));
+          const a = document.createElement('a');
+          a.href = releasesUrl;
+          a.target = '_blank';
+          a.rel = 'noreferrer';
+          a.textContent = 'GitHub releases';
+          updateLine.appendChild(a);
+          updateLine.className = 'row status-warn';
+        } else if (available === false) {
+          updateLine.textContent = latest ? `Up to date (latest: ${latest})` : 'Up to date';
+          updateLine.className = 'row status-ok';
+        } else {
+          updateLine.textContent = latest ? `Latest release: ${latest}` : 'Update status not available yet';
+          updateLine.className = 'row';
+        }
+
+        const err = upd.error || '';
+        const errEl = document.getElementById('aboutUpdateError');
+        if (err) {
+          errEl.style.display = 'block';
+          errEl.textContent = 'Update check error: ' + err;
+          errEl.className = 'row status-error';
+        } else {
+          errEl.style.display = 'none';
+        }
+      } catch (e) {
+        console.error('Failed to load about:', e);
+        document.getElementById('aboutVersion').textContent = 'Unknown';
+        const updateLine = document.getElementById('aboutUpdateLine');
+        updateLine.textContent = 'Failed to load update status.';
+        updateLine.className = 'row status-error';
+      }
+    }
+
+    loadAbout();
+  </script>
+</body>
+</html>

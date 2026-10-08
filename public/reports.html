@@ -2,156 +2,1071 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>OmniStream Reports</title>
+  <title>OmniStream Watch Statistics</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link rel="stylesheet" href="theme.css">
+  <link rel="stylesheet" href="shell.css">
+  <script src="shell.js" defer></script>
   <style>
-    body{font-family:Segoe UI,Arial;background:var(--bg);color:var(--text-main);margin:0;padding:20px}
-    h1{margin:0 0 12px 0;color:var(--text-main);letter-spacing:1px;font-size:2em}
-    .tabs{display:flex;gap:10px;margin-bottom:20px;border-bottom:1px solid #333;padding-bottom:8px;}
-    .tab-link{padding:6px 14px;border-radius:999px;border:1px solid #444;background:#232837;color:#e0e3e8;text-decoration:none;font-size:13px;cursor:pointer;}
-    .tab-link.active{border-color:#00bfff;background:#00bfff;color:#000;}
-    .placeholder{margin-top:16px;font-size:14px;color:#b0b3b8;}
-    .back-btn{margin-top:16px;padding:6px 14px;border-radius:8px;border:1px solid #555;background:#232837;color:#e0e3e8;cursor:pointer;}
-    .back-btn:hover{background:#2b3040;}
-    .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px;margin-top:18px;}
-    .card{background:var(--card-bg);border-radius:14px;padding:16px 18px;box-shadow:0 2px 10px #0006;border:1px solid #2f3a52;}
-    .card h2{margin:0 0 8px 0;font-size:15px;color:#fff;}
-    .metric{font-size:13px;margin:3px 0;}
-    .list-item{font-size:13px;margin:2px 0;}
-    .user-link{color:#4fc3f7;text-decoration:none;}
+    body{font-family:Segoe UI,Arial;background:var(--bg);color:var(--text-main);margin:0;padding:0}
+
+    h1{margin:0 0 10px 0;color:var(--text-main);letter-spacing:0.14em;font-size:14px;text-transform:uppercase;}
+
+    .pill-row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:10px 0 10px 0;}
+    .pill-group{display:inline-flex;gap:0;border:1px solid rgba(148,163,184,0.22);border-radius:999px;overflow:hidden;background:rgba(0,0,0,0.18);}
+    :root[data-theme="light-borderless"] .pill-group{background:rgba(0,0,0,0.03);border-color:#dddddd;}
+    .pill{appearance:none;border:0;background:transparent;color:var(--text-muted);font-size:12px;padding:7px 12px;cursor:pointer;}
+    .pill:hover{background:rgba(148,163,184,0.14);color:var(--text-main);}
+    .pill-active{background:rgba(59,130,246,0.18);color:var(--text-main);}
+
+    .custom-range{display:none;align-items:center;gap:8px;color:var(--text-muted);font-size:12px;}
+    .custom-range input{width:140px;padding:6px 10px;border-radius:10px;border:1px solid rgba(148,163,184,0.22);background:rgba(0,0,0,0.18);color:var(--text-main);}
+    :root[data-theme="light-borderless"] .custom-range input{background:rgba(0,0,0,0.03);border-color:#dddddd;color:#111111;}
+
+    .toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:8px 0 12px 0;}
+    .control{display:inline-flex;align-items:center;gap:8px;padding:6px;border-radius:12px;background:rgba(0,0,0,0.18);border:1px solid rgba(148,163,184,0.22);}
+    :root[data-theme="light-borderless"] .control{background:rgba(0,0,0,0.03);border-color:#dddddd;}
+    .field{padding:7px 10px;border-radius:10px;border:1px solid rgba(148,163,184,0.22);background:rgba(0,0,0,0.10);color:var(--text-main);font-size:12px;min-width:220px;outline:none;}
+    .field::placeholder{color:var(--text-faint);}
+    :root[data-theme="light-borderless"] .field{background:#ffffff;border-color:#dddddd;color:#111111;}
+    .btn{margin-top:0;padding:7px 12px;border-radius:10px;border:1px solid var(--btn-border);background:var(--btn-bg);color:var(--btn-text);cursor:pointer;font-size:12px;}
+    .btn:hover{background:var(--btn-bg-hover);color:var(--btn-text-hover);}
+    .menu{position:relative;display:inline-block;}
+    .menu-panel{display:none;position:absolute;right:0;top:42px;min-width:240px;z-index:30;background:var(--card-bg);border:1px solid rgba(148,163,184,0.22);border-radius:12px;padding:10px;box-shadow:0 8px 24px rgba(0,0,0,0.35);}
+    :root[data-theme="light-borderless"] .menu-panel{box-shadow:0 8px 24px rgba(0,0,0,0.12);}
+    .menu-panel.open{display:block;}
+    .menu-title{font-size:12px;color:var(--text-main);font-weight:600;margin-bottom:6px;}
+    .menu-item{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-muted);padding:6px 4px;border-radius:10px;}
+    .menu-item:hover{background:rgba(148,163,184,0.14);color:var(--text-main);}
+    .menu-item input{accent-color:var(--btn-border);}
+
+    .placeholder{margin-top:16px;font-size:14px;color:var(--text-muted);}
+
+    .main-content .grid{display:grid !important;grid-template-columns:repeat(2,minmax(0,1fr)) !important;gap:18px;}
+    @media (max-width: 700px){.main-content .grid{grid-template-columns:1fr !important;}}
+
+    .panel{position:relative;overflow:hidden;border-radius:12px;border:1px solid rgba(148,163,184,0.22);background:rgba(0,0,0,0.18);min-height:138px;}
+    :root[data-theme="light-borderless"] .panel{background:rgba(0,0,0,0.03);border-color:#dddddd;}
+    .panel-bg{position:absolute;inset:-18px;background-size:cover;background-position:center;filter:blur(14px);opacity:0.35;}
+    .panel-bg.fallback{
+      background-image:
+        radial-gradient(circle at 14% 18%, var(--btn-border), rgba(0,0,0,0) 60%),
+        radial-gradient(circle at 82% 52%, var(--text-muted), rgba(0,0,0,0) 58%),
+        radial-gradient(circle at 42% 92%, var(--btn-text), rgba(0,0,0,0) 62%),
+        linear-gradient(135deg, rgba(0,0,0,0.55), rgba(0,0,0,0.25));
+      filter: blur(14px) saturate(1.25) hue-rotate(var(--hue, 0deg));
+      opacity:0.42;
+    }
+    .panel-overlay{position:absolute;inset:0;background:linear-gradient(90deg,rgba(0,0,0,0.65),rgba(0,0,0,0.28) 60%,rgba(0,0,0,0.20));}
+    :root[data-theme="light-borderless"] .panel-overlay{background:linear-gradient(90deg,rgba(255,255,255,0.92),rgba(255,255,255,0.72) 60%,rgba(255,255,255,0.60));}
+    .panel-inner{position:relative;z-index:1;display:flex;gap:12px;padding:12px;}
+    .thumb{width:84px;height:120px;border-radius:6px;object-fit:cover;border:1px solid rgba(148,163,184,0.18);background:rgba(0,0,0,0.10);flex:0 0 auto;}
+    .panel-body{flex:1;min-width:0;}
+    .panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px;}
+    .panel-title{font-size:13px;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-main);opacity:0.95;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .panel-right{font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-muted);white-space:nowrap;}
+    .list{display:flex;flex-direction:column;gap:6px;margin-top:6px;}
+    .row{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px;color:var(--text-main);}
+    .row-left{display:flex;align-items:center;gap:10px;min-width:0;}
+    .rank{width:14px;text-align:right;color:var(--text-muted);font-size:12px;flex:0 0 auto;}
+    .name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .avatar{width:18px;height:18px;border-radius:999px;object-fit:cover;border:1px solid rgba(148,163,184,0.22);flex:0 0 auto;background:rgba(0,0,0,0.10);}
+    .name-link{color:var(--btn-border);text-decoration:none;}
+    .name-link:hover{text-decoration:underline;}
+    .user-link{color:var(--btn-border);text-decoration:none;}
     .user-link:hover{text-decoration:underline;}
+    .value{color:var(--btn-border);font-variant-numeric:tabular-nums;}
+    .muted{color:var(--text-muted);}
+
+    .panel-concurrent .panel-inner{gap:14px;}
+    .concurrent-icon{width:44px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;opacity:0.95;}
+    .concurrent-icon svg{display:block;width:42px;height:42px;}
+    .concurrent-icon .arrow-a{fill:var(--text-muted);}
+    .concurrent-icon .arrow-b{fill:var(--btn-border);}
+    .panel-concurrent .list{margin-top:4px;gap:4px;}
+    .panel-concurrent .row{font-size:13px;}
+    .panel-concurrent .value{font-weight:700;}
+
+    .kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:4px 0 14px 0;}
+    @media (max-width: 960px){.kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
+    @media (max-width: 520px){.kpi-grid{grid-template-columns:1fr;}}
+    .kpi-card{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:12px;border:1px solid rgba(148,163,184,0.22);background:rgba(0,0,0,0.18);min-height:56px;}
+    :root[data-theme="light-borderless"] .kpi-card{background:rgba(0,0,0,0.03);border-color:#dddddd;}
+    .kpi-icon{width:30px;height:30px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;border-radius:10px;border:1px solid rgba(148,163,184,0.22);background:rgba(0,0,0,0.10);color:var(--btn-border);}
+    :root[data-theme="light-borderless"] .kpi-icon{background:rgba(0,0,0,0.02);}
+    .kpi-icon svg{width:18px;height:18px;display:block;fill:currentColor;}
+    .kpi-meta{min-width:0;}
+    .kpi-value{font-size:18px;font-weight:800;letter-spacing:0.01em;font-variant-numeric:tabular-nums;color:var(--text-main);line-height:1.15;}
+    .kpi-label{font-size:12px;color:var(--text-muted);letter-spacing:0.08em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;}
   </style>
 </head>
 <body>
-  <h1>Reports</h1>
-  <div class="tabs">
-    <a href="admin.html" class="tab-link">Overview</a>
-    <a href="servers.html" class="tab-link">Servers</a>
-    <a href="reports.html" class="tab-link active">Reports</a>
-    <a href="notifications.html" class="tab-link">Notifications</a>
-    <a href="notifiers.html" class="tab-link">Notifiers</a>
-    <a href="history.html" class="tab-link">History</a>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="sidebar-brand">OmniStream</div>
+      <nav class="sidebar-nav">
+        <a href="index.html" class="nav-link">Dashboard</a>
+        <a href="glance.html" class="nav-link">At a glance</a>
+        <a href="history.html" class="nav-link">History</a>
+        <a href="reports.html" class="nav-link nav-link-active">Reports</a>
+        <a href="libraries.html" class="nav-link">Libraries</a>
+        <a href="notifications.html" class="nav-link">Notifications</a>
+        <div class="settings-group">
+          <button type="button" class="nav-group-toggle newsletter-toggle">Newsletter</button>
+          <div class="settings-submenu newsletter-submenu">
+            <a href="overseerr.html" class="submenu-link">Overseerr</a>
+            <a href="subscribers.html" class="submenu-link">Subscribers</a>
+            <a href="templates.html" class="submenu-link">Templates</a>
+            <a href="custom-header.html" class="submenu-link">Custom header</a>
+            <a href="sent-newsletters.html" class="submenu-link">Sent history</a>
+          </div>
+        </div>
+        <div class="settings-group">
+          <button type="button" class="nav-group-toggle settings-toggle">Settings</button>
+          <div class="settings-submenu">
+            <a href="admin.html" class="submenu-link">Connected servers</a>
+            <a href="servers.html" class="submenu-link">Servers</a>
+            <a href="display.html" class="submenu-link">Themes &amp; layout</a>
+            <a href="notifiers.html" class="submenu-link">Notifiers</a>
+            <a href="system.html" class="submenu-link">System</a>
+            <a href="about.html" class="submenu-link">About</a>
+          </div>
+        </div>
+        <a href="/logout" class="nav-link">Logout</a>
+      </nav>
+    </aside>
+    <main class="main-content">
+      <button class="sidebar-toggle" id="sidebarToggle">Hide menu</button>
+      <h1>WATCH STATISTICS</h1>
+
+      <div id="kpi"></div>
+
+      <div class="pill-row" aria-label="Date range">
+        <div class="pill-group" role="group" aria-label="Date range">
+          <button id="pill7d" class="pill" data-range="7d" type="button">7d</button>
+          <button id="pill30d" class="pill" data-range="30d" type="button">30d</button>
+          <button id="pill1y" class="pill" data-range="1y" type="button">1y</button>
+          <button id="pillAll" class="pill" data-range="all" type="button">All</button>
+          <button id="pillCustom" class="pill" data-range="custom" type="button">Custom</button>
+        </div>
+        <div id="customRange" class="custom-range">
+          <input id="fromDate" type="date" aria-label="From date">
+          <input id="toDate" type="date" aria-label="To date">
+        </div>
+      </div>
+
+      <div class="toolbar" aria-label="Reports controls">
+        <div class="control" style="flex:1;min-width:260px;">
+          <input id="searchText" class="field" type="text" placeholder="Search titles, users, locations, IPs..." aria-label="Search reports">
+        </div>
+
+        <div class="menu">
+          <button id="filtersBtn" class="btn" type="button">Filters</button>
+          <div id="filtersMenu" class="menu-panel" role="menu" aria-label="Filters">
+            <div class="menu-title">Metric</div>
+            <label class="menu-item"><input type="radio" name="metric" value="count" checked> Plays</label>
+            <label class="menu-item"><input type="radio" name="metric" value="duration"> Watch time</label>
+          </div>
+        </div>
+
+        <div class="menu">
+          <button id="columnsBtn" class="btn" type="button">Columns</button>
+          <div id="columnsMenu" class="menu-panel" role="menu" aria-label="Columns">
+            <div class="menu-title">Show panels</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="content" class="placeholder">Loading watch statistics...</div>
+
+      <h1 style="margin-top:18px;">LIBRARY REPORTS</h1>
+
+      <div class="toolbar" aria-label="Library reports controls">
+        <div class="control" style="gap:10px;flex-wrap:wrap;">
+          <div class="muted" style="font-size:12px;letter-spacing:0.08em;text-transform:uppercase;">Server</div>
+          <select id="libServer" class="field" aria-label="Library reports server" style="min-width:260px;"></select>
+          <div class="muted" style="font-size:12px;letter-spacing:0.08em;text-transform:uppercase;">Window</div>
+          <select id="libDays" class="field" aria-label="Library reports window" style="min-width:160px;">
+            <option value="7" selected>Last 7 days</option>
+            <option value="30">Last 30 days</option>
+            <option value="90">Last 90 days</option>
+          </select>
+          <label class="menu-item" style="padding:0 6px;">
+            <input id="libFullScan" type="checkbox"> Full scan (slow)
+          </label>
+          <button id="libRefresh" class="btn" type="button">Refresh</button>
+        </div>
+      </div>
+
+      <div id="libraryContent" class="placeholder">Loading library reports...</div>
+    </main>
   </div>
-  <div id="summary" class="placeholder">Loading summary...</div>
-  <button class="back-btn" onclick="window.location.href='admin.html'">Back to Overview</button>
 
   <script>
-    async function fetchStatus() {
-      const r = await fetch('/api/status');
+    function escapeHtml(s) {
+      return String(s ?? '').replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      }[c]));
+    }
+
+    function hashHue(input) {
+      const str = String(input ?? '');
+      let h = 0;
+      for (let i = 0; i < str.length; i++) {
+        h = ((h << 5) - h) + str.charCodeAt(i);
+        h |= 0;
+      }
+      return Math.abs(h) % 360;
+    }
+
+    function formatSeconds(sec) {
+      const s = Math.max(0, Number(sec) || 0);
+      if (s < 60) return Math.round(s) + 's';
+      const m = Math.floor(s / 60);
+      if (m < 60) return m + 'm';
+      const h = Math.floor(m / 60);
+      if (h < 48) return h + 'h';
+      const d = Math.floor(h / 24);
+      return d + 'd';
+    }
+
+    function fmtInt(n) {
+      const v = Number(n);
+      const i = Number.isFinite(v) ? Math.floor(v) : 0;
+      return new Intl.NumberFormat(undefined).format(Math.max(0, i));
+    }
+
+    function formatWatchTime(sec) {
+      const s = Math.max(0, Math.floor(Number(sec) || 0));
+      const days = Math.floor(s / 86400);
+      const hours = Math.floor((s % 86400) / 3600);
+      const mins = Math.floor((s % 3600) / 60);
+      if (days > 0) return `${days}d ${hours}h`;
+      if (hours > 0) return `${hours}h ${mins}m`;
+      return `${Math.max(0, mins)}m`;
+    }
+
+    function renderSummaryCards(summary) {
+      const s = summary || {};
+      const totalPlays = fmtInt(s.totalPlays);
+      const watchTime = formatWatchTime(s.watchTimeSeconds);
+      const uniqueUsers = fmtInt(s.uniqueUsers);
+      const uniqueTitles = fmtInt(s.uniqueTitles);
+
+      const card = ({ icon, value, label }) => {
+        return `
+          <div class="kpi-card">
+            <div class="kpi-icon" aria-hidden="true">${icon}</div>
+            <div class="kpi-meta">
+              <div class="kpi-value">${escapeHtml(value)}</div>
+              <div class="kpi-label">${escapeHtml(label)}</div>
+            </div>
+          </div>`;
+      };
+
+      const iconPlay = '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M9 7.5v9l8-4.5-8-4.5z"/></svg>';
+      const iconClock = '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 11h4v-2h-3V6h-2v7z"/></svg>';
+      const iconUsers = '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M16 11c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3zM8 11c1.66 0 3-1.34 3-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.67 0-8 1.34-8 4v2h10v-2c0-1.54.78-2.88 2.03-3.83C10.88 13.07 9.43 13 8 13zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 2.08 1.97 3.95v2h7v-2c0-2.66-5.33-4-8-4z"/></svg>';
+      const iconGrid = '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M3 3h8v8H3V3zm10 0h8v8h-8V3zM3 13h8v8H3v-8zm10 0h8v8h-8v-8z"/></svg>';
+
+      return `
+        <div class="kpi-grid">
+          ${card({ icon: iconPlay, value: totalPlays, label: 'Total Plays' })}
+          ${card({ icon: iconClock, value: watchTime, label: 'Watch Time' })}
+          ${card({ icon: iconUsers, value: uniqueUsers, label: 'Unique Users' })}
+          ${card({ icon: iconGrid, value: uniqueTitles, label: 'Unique Titles' })}
+        </div>`;
+    }
+
+    function hrefToUserHistory(user) {
+      const u = String(user || '').trim();
+      if (!u) return 'history.html';
+      return 'history.html?user=' + encodeURIComponent(u);
+    }
+
+    function firstArtworkItem(items) {
+      if (!Array.isArray(items) || !items.length) return null;
+      for (const it of items) {
+        if (!it) continue;
+        const p = it.poster && it.poster !== '/live_tv_placeholder.svg' ? it.poster : '';
+        const b = it.background && it.background !== '/live_tv_placeholder.svg' ? it.background : '';
+        if (p || b) return it;
+      }
+      return null;
+    }
+
+    function topThumb(items) {
+      const it = firstArtworkItem(items) || (Array.isArray(items) && items[0] ? items[0] : null);
+      if (!it) return null;
+      return it.poster || it.background || null;
+    }
+
+    function panelBgUrl(items) {
+      const it = firstArtworkItem(items) || (Array.isArray(items) && items[0] ? items[0] : null);
+      if (!it) return '/live_tv_placeholder.svg';
+      return (it.background || it.poster || '/live_tv_placeholder.svg');
+    }
+
+    function hasArtwork(items) {
+      return !!firstArtworkItem(items);
+    }
+
+    function renderPanel(opts) {
+      const title = opts.title;
+      const right = opts.right;
+      const items = opts.items || [];
+      const valueLabel = opts.valueLabel;
+      const showThumb = !!opts.showThumb;
+      const showAvatars = !!opts.showAvatars;
+      const linkUsers = !!opts.linkUsers;
+
+      const thumbUrl = showThumb ? topThumb(items) : null;
+      const bgUrl = panelBgUrl(items);
+      const useFallbackBg = !hasArtwork(items) || bgUrl === '/live_tv_placeholder.svg';
+      const hueItem = firstArtworkItem(items) || (items[0] || {});
+      const hue = useFallbackBg ? hashHue(title + '|' + (hueItem?.name || hueItem?.title || '')) : 0;
+
+      let html = '<div class="panel">';
+      if (useFallbackBg) {
+        html += `<div class="panel-bg fallback" style="--hue:${hue}deg;"></div>`;
+      } else {
+        html += `<div class="panel-bg" style="background-image:url('${escapeHtml(bgUrl)}');"></div>`;
+      }
+      html += '<div class="panel-overlay"></div>';
+      html += '<div class="panel-inner">';
+      if (showThumb) {
+        const t = thumbUrl || '/live_tv_placeholder.svg';
+        html += `<img class="thumb" src="${escapeHtml(t)}" alt="" onerror="this.style.display='none'"/>`;
+      }
+      html += '<div class="panel-body">';
+      html += '<div class="panel-head">';
+      html += `<div class="panel-title">${escapeHtml(title)}</div>`;
+      html += `<div class="panel-right">${escapeHtml(right)}</div>`;
+      html += '</div>';
+      html += '<div class="list">';
+      if (!items.length) {
+        html += '<div class="row"><span class="muted">No data yet.</span></div>';
+      } else {
+        items.forEach((it, idx) => {
+          const name = it.name || it.title || 'Unknown';
+          const year = it.year ? ` (${it.year})` : '';
+          const avatar = (it.avatar || it.userAvatar || '').toString();
+          const val = (valueLabel === 'duration') ? formatSeconds(it.value) : String(it.value ?? '');
+          const userKey = it && typeof it.userKey === 'string' ? it.userKey : '';
+          html += '<div class="row">';
+          html += '<div class="row-left">';
+          html += `<div class="rank">${idx + 1}</div>`;
+          if (showAvatars && avatar) {
+            html += `<img class="avatar" src="${escapeHtml(avatar)}" alt="" onerror="this.style.display='none'"/>`;
+          }
+          if (linkUsers) {
+            html += `<a class="name name-link" href="${escapeHtml(hrefToUserHistory(userKey || name))}">${escapeHtml(name + year)}</a>`;
+          } else {
+            html += `<div class="name">${escapeHtml(name + year)}</div>`;
+          }
+          html += '</div>';
+          html += `<div class="value">${escapeHtml(val)}</div>`;
+          html += '</div>';
+        });
+      }
+      html += '</div>';
+      html += '</div>';
+      html += '</div>';
+      html += '</div>';
+      return html;
+    }
+
+    function renderRecently(items) {
+      const thumbUrl = topThumb(items);
+      const bgUrl = panelBgUrl(items);
+      const recentUser = items && items[0] && items[0].user ? String(items[0].user).toUpperCase() : 'USER';
+      const useFallbackBg = !hasArtwork(items) || bgUrl === '/live_tv_placeholder.svg';
+      const hue = useFallbackBg ? hashHue('Recently Watched|' + (items[0]?.title || items[0]?.name || '')) : 0;
+
+      let html = '<div class="panel">';
+      if (useFallbackBg) {
+        html += `<div class="panel-bg fallback" style="--hue:${hue}deg;"></div>`;
+      } else {
+        html += `<div class="panel-bg" style="background-image:url('${escapeHtml(bgUrl)}');"></div>`;
+      }
+      html += '<div class="panel-overlay"></div>';
+      html += '<div class="panel-inner">';
+      html += `<img class="thumb" src="${escapeHtml(thumbUrl || '/live_tv_placeholder.svg')}" alt="" onerror="this.style.display='none'"/>`;
+      html += '<div class="panel-body">';
+      html += '<div class="panel-head">';
+      html += '<div class="panel-title">Recently Watched</div>';
+      html += `<div class="panel-right">${escapeHtml(recentUser)}</div>`;
+      html += '</div>';
+      html += '<div class="list">';
+      if (!items || !items.length) {
+        html += '<div class="row"><span class="muted">No data yet.</span></div>';
+      } else {
+        items.forEach((it, idx) => {
+          const title = it.title || 'Unknown';
+          const userRaw = it.user ? String(it.user) : '';
+          const user = userRaw ? userRaw.toUpperCase() : '';
+          const avatar = (it.userAvatar || it.avatar || '').toString();
+          html += '<div class="row">';
+          html += '<div class="row-left">';
+          html += `<div class="rank">${idx + 1}</div>`;
+          html += `<div class="name">${escapeHtml(title)}</div>`;
+          html += '</div>';
+          if (userRaw) {
+            html += '<div class="value">';
+            html += `<a class="user-link" href="${escapeHtml(hrefToUserHistory(userRaw))}" style="display:inline-flex;align-items:center;gap:8px;">`;
+            if (avatar) {
+              html += `<img class="avatar" src="${escapeHtml(avatar)}" alt="" onerror="this.style.display='none'"/>`;
+            }
+            html += `<span>${escapeHtml(user)}</span>`;
+            html += '</a>';
+            html += '</div>';
+          } else {
+            html += `<div class="value">${escapeHtml(user)}</div>`;
+          }
+          html += '</div>';
+        });
+      }
+      html += '</div>';
+      html += '</div>';
+      html += '</div>';
+      html += '</div>';
+      return html;
+    }
+
+    function renderConcurrent(concurrent) {
+      const c = concurrent || { streams: 0, transcodes: 0, directStreams: 0, directPlays: 0 };
+      const items = [
+        { name: 'STREAMS', value: c.streams ?? 0 },
+        { name: 'TRANSCODES', value: c.transcodes ?? 0 },
+        { name: 'DIRECT STREAMS', value: c.directStreams ?? 0 },
+        { name: 'DIRECT PLAYS', value: c.directPlays ?? 0 }
+      ];
+
+      // Custom layout for this panel (matches the compact style in the screenshot)
+      const hue = hashHue('Peak Concurrent Streams');
+      let html = '<div class="panel panel-concurrent">';
+      html += `<div class="panel-bg fallback" style="--hue:${hue}deg;"></div>`;
+      html += '<div class="panel-overlay"></div>';
+      html += '<div class="panel-inner">';
+      html += '<div class="concurrent-icon" aria-hidden="true">';
+      html += `
+        <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" focusable="false">
+          <path class="arrow-a" d="M7 14h22v-6l14 10-14 10v-6H7z"/>
+          <path class="arrow-b" d="M7 32h30v-6l14 10-14 10v-6H7z"/>
+          <path class="arrow-a" d="M7 50h18v-6l14 10-14 10v-6H7z" transform="translate(0,-12)"/>
+        </svg>`;
+      html += '</div>';
+      html += '<div class="panel-body">';
+      html += '<div class="panel-head">';
+      html += '<div class="panel-title">MOST CONCURRENT STREAMS</div>';
+      html += '<div class="panel-right">STREAMS</div>';
+      html += '</div>';
+      html += '<div class="list">';
+      items.forEach((it) => {
+        html += '<div class="row">';
+        html += '<div class="row-left">';
+        html += `<div class="name">${escapeHtml(it.name)}</div>`;
+        html += '</div>';
+        html += `<div class="value">${escapeHtml(String(it.value ?? 0))}</div>`;
+        html += '</div>';
+      });
+      html += '</div>';
+      html += '</div>';
+      html += '</div>';
+      html += '</div>';
+      return html;
+    }
+
+    async function fetchWatchStats({ metric, days, from, to } = {}) {
+      const q = new URLSearchParams();
+      q.set('metric', String(metric || 'count'));
+      if (from && to) {
+        q.set('from', String(from));
+        q.set('to', String(to));
+      } else {
+        q.set('days', String(days || 30));
+      }
+      const url = `/api/reports/watch-statistics?${q.toString()}`;
+      const r = await fetch(url);
+      if (!r.ok) throw new Error('Failed to load reports');
       return await r.json();
     }
-    async function fetchHistory() {
-      const r = await fetch('/api/history');
-      return await r.json();
-    }
-    async function renderReports() {
+
+    const content = document.getElementById('content');
+    const kpi = document.getElementById('kpi');
+    const searchText = document.getElementById('searchText');
+    const filtersBtn = document.getElementById('filtersBtn');
+    const filtersMenu = document.getElementById('filtersMenu');
+    const columnsBtn = document.getElementById('columnsBtn');
+    const columnsMenu = document.getElementById('columnsMenu');
+    const customRange = document.getElementById('customRange');
+    const fromDate = document.getElementById('fromDate');
+    const toDate = document.getElementById('toDate');
+
+    const libServer = document.getElementById('libServer');
+    const libDays = document.getElementById('libDays');
+    const libFullScan = document.getElementById('libFullScan');
+    const libRefresh = document.getElementById('libRefresh');
+    const libraryContent = document.getElementById('libraryContent');
+
+    const REPORT_PANELS = [
+      { key: 'mostWatchedMovies', label: 'Most Watched Movies' },
+      { key: 'mostPopularMovies', label: 'Most Popular Movies' },
+      { key: 'mostWatchedTvShows', label: 'Most Watched TV Shows' },
+      { key: 'mostPopularTvShows', label: 'Most Popular TV Shows' },
+      { key: 'mostPlayedArtists', label: 'Most Played Artists' },
+      { key: 'mostPopularArtists', label: 'Most Popular Artists' },
+      { key: 'recentlyWatched', label: 'Recently Watched' },
+      { key: 'mostActiveLibraries', label: 'Most Active Libraries' },
+      { key: 'mostActiveUsers', label: 'Most Active Users' },
+      { key: 'mostActivePlatforms', label: 'Most Active Platforms' },
+      { key: 'mostConcurrentStreams', label: 'Most Concurrent Streams' }
+    ];
+
+    const COL_PREF_KEY = 'omnistream_reports_panels';
+    let panelPrefs = (() => {
       try {
-        const [statusData, historyData] = await Promise.all([fetchStatus(), fetchHistory()]);
-        const { servers = [], statuses = {} } = statusData;
-        const { history = [] } = historyData;
-        const summaryDiv = document.getElementById('summary');
+        const raw = localStorage.getItem(COL_PREF_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object') return null;
+        return parsed;
+      } catch (_) { return null; }
+    })() || Object.fromEntries(REPORT_PANELS.map(p => [p.key, true]));
 
-        const totalCurrentStreams = Object.values(statuses).reduce((sum, st) => sum + (Array.isArray(st.sessions) ? st.sessions.length : 0), 0);
-        const totalHistoryEntries = history.length;
+    let state = {
+      metric: 'count',
+      range: '30d',
+      from: '',
+      to: '',
+      search: ''
+    };
 
-        const users = new Map();
-        const titles = new Map();
-        history.forEach(h => {
-          if (h.user) {
-            users.set(h.user, (users.get(h.user) || 0) + 1);
-          }
-          if (h.title) {
-            titles.set(h.title, (titles.get(h.title) || 0) + 1);
-          }
+    let lastData = null;
+
+    function formatBytes(bytes) {
+      const b = Number(bytes);
+      if (!Number.isFinite(b) || b <= 0) return '0 B';
+      const units = ['B','KB','MB','GB','TB','PB'];
+      let v = b;
+      let i = 0;
+      while (v >= 1024 && i < units.length - 1) {
+        v /= 1024;
+        i++;
+      }
+      const dp = v >= 100 ? 0 : (v >= 10 ? 1 : 2);
+      return `${v.toFixed(dp)} ${units[i]}`;
+    }
+
+    function renderKvPanel({ title, right, rows }) {
+      const items = Array.isArray(rows) ? rows : [];
+      const hue = hashHue(title);
+      let html = '<div class="panel">';
+      html += `<div class="panel-bg fallback" style="--hue:${hue}deg;"></div>`;
+      html += '<div class="panel-overlay"></div>';
+      html += '<div class="panel-inner">';
+      html += '<div class="panel-body">';
+      html += '<div class="panel-head">';
+      html += `<div class="panel-title">${escapeHtml(title)}</div>`;
+      html += `<div class="panel-right">${escapeHtml(right || '')}</div>`;
+      html += '</div>';
+      html += '<div class="list">';
+      if (!items.length) {
+        html += '<div class="row"><span class="muted">No data yet.</span></div>';
+      } else {
+        items.forEach((it) => {
+          html += '<div class="row">';
+          html += '<div class="row-left">';
+          html += `<div class="name">${escapeHtml(it.name || '')}</div>`;
+          html += '</div>';
+          html += `<div class="value">${escapeHtml(String(it.value ?? ''))}</div>`;
+          html += '</div>';
         });
+      }
+      html += '</div>';
+      html += '</div>';
+      html += '</div>';
+      html += '</div>';
+      return html;
+    }
 
-        // Build simple daily activity for the last 7 days based on history timestamps
-        const activityCounts = new Map(); // key: YYYY-MM-DD, value: count
-        const now = new Date();
-        const msPerDay = 24 * 60 * 60 * 1000;
-        history.forEach(h => {
-          if (!h.time) return;
-          const d = new Date(h.time);
-          if (isNaN(d.getTime())) return;
-          const diffDays = Math.floor((now - d) / msPerDay);
-          if (diffDays < 0 || diffDays > 6) return; // keep last 7 days (0..6)
-          const key = d.toISOString().slice(0, 10);
-          activityCounts.set(key, (activityCounts.get(key) || 0) + 1);
-        });
+    async function fetchServers() {
+      const r = await fetch('/api/servers');
+      if (!r.ok) throw new Error('Failed to load servers');
+      const arr = await r.json();
+      return Array.isArray(arr) ? arr : [];
+    }
 
-        const topTitles = Array.from(titles.entries())
-          .sort((a,b) => b[1]-a[1])
-          .slice(0,5);
+    async function readFetchError(r) {
+      const status = r && typeof r.status === 'number' ? r.status : 0;
+      let text = '';
+      try { text = await r.text(); } catch (_) {}
 
-        const topUsers = Array.from(users.entries())
-          .sort((a,b) => b[1]-a[1])
-          .slice(0,5);
+      const looksLikeExpressCannotPost = (t) => {
+        const s = String(t || '');
+        if (!s) return false;
+        if (!s.toLowerCase().includes('cannot post')) return false;
+        return s.includes('/api/reports/library-inventory/full-scan');
+      };
 
-        let html = '<div class="cards">';
-        html += '<div class="card">';
-        html += '<h2>Overview</h2>';
-        html += `<div class="metric"><b>Current streams:</b> ${totalCurrentStreams}</div>`;
-        html += `<div class="metric"><b>History entries (recent):</b> ${totalHistoryEntries}</div>`;
-        html += `<div class="metric"><b>Unique users seen:</b> ${users.size}</div>`;
-        html += '</div>';
+      let msg = '';
+      try {
+        const j = text ? JSON.parse(text) : null;
+        msg = (j && (j.detail || j.error)) ? String(j.detail || j.error) : '';
+      } catch (_) {
+        msg = text ? String(text).trim() : '';
+      }
 
-        // Daily/weekly activity card (last 7 days)
-        html += '<div class="card">';
-        html += '<h2>Activity (last 7 days)</h2>';
-        let hasActivity = false;
-        for (let offset = 6; offset >= 0; offset--) {
-          const d = new Date(now.getTime() - offset * msPerDay);
-          const key = d.toISOString().slice(0, 10);
-          const count = activityCounts.get(key) || 0;
-          if (count > 0) hasActivity = true;
-          const label = d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-          html += `<div class="list-item">${label}: ${count} event${count === 1 ? '' : 's'}</div>`;
+      if (status === 404 && looksLikeExpressCannotPost(text)) {
+        msg = 'Full scan endpoint not available on this OmniStream server build. Update OmniStream and restart the server/container.';
+      }
+
+      msg = msg || (status ? `HTTP ${status}` : 'Request failed');
+      return status ? `HTTP ${status}: ${msg}` : msg;
+    }
+
+    async function fetchLibraryInventory({ serverId, days } = {}) {
+      const q = new URLSearchParams();
+      q.set('serverId', String(serverId || ''));
+      q.set('days', String(days || 7));
+      const r = await fetch(`/api/reports/library-inventory?${q.toString()}`);
+      if (!r.ok) throw new Error(await readFetchError(r));
+      return await r.json();
+    }
+
+    async function startLibraryFullScan({ serverId, days } = {}) {
+      const r = await fetch('/api/reports/library-inventory/full-scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ serverId, days })
+      });
+      if (r.status !== 202) throw new Error(await readFetchError(r));
+      return await r.json();
+    }
+
+    async function fetchLibraryFullScanJob(jobId) {
+      const r = await fetch(`/api/reports/library-inventory/full-scan/${encodeURIComponent(String(jobId || ''))}`);
+      if (!r.ok) throw new Error(await readFetchError(r));
+      return await r.json();
+    }
+
+    function rowsFromLibrary(lib, days, { preferFullScan = false } = {}) {
+      const rows = [];
+      const num = (v) => {
+        const n = Number(v);
+        return Number.isFinite(n) ? Math.floor(n) : null;
+      };
+
+      const movieCount = num(lib.movieCount);
+      const showCount = num(lib.showCount);
+      const episodeCount = num(lib.episodeCount);
+      const totalItems = num(lib.totalItems);
+      const totalPlayableItems = num(lib.totalPlayableItems);
+      const unwatchedItems = num(lib.unwatchedItems);
+      const watchedItems = num(lib.watchedItems);
+      const added = num(lib.recentlyAddedCount);
+
+      if (movieCount != null) rows.push({ name: 'MOVIES', value: fmtInt(movieCount) });
+      if (showCount != null) rows.push({ name: 'SHOWS', value: fmtInt(showCount) });
+      if (episodeCount != null) rows.push({ name: 'EPISODES', value: fmtInt(episodeCount) });
+      if (totalItems != null) rows.push({ name: 'TOTAL ITEMS', value: fmtInt(totalItems) });
+      if (totalPlayableItems != null && totalPlayableItems !== totalItems) rows.push({ name: 'PLAYABLE ITEMS', value: fmtInt(totalPlayableItems) });
+      if (unwatchedItems != null) rows.push({ name: 'UNWATCHED', value: fmtInt(unwatchedItems) });
+      if (watchedItems != null) rows.push({ name: 'WATCHED', value: fmtInt(watchedItems) });
+      if (added != null) rows.push({ name: `ADDED (${days}D)`, value: fmtInt(added) });
+
+      if (lib.storageBytes != null) rows.push({ name: 'STORAGE (TOTAL)', value: formatBytes(lib.storageBytes) });
+      if (lib.recentlyAdded && lib.recentlyAdded.bytes != null) rows.push({ name: `RECENT SIZE (${days}D)`, value: formatBytes(lib.recentlyAdded.bytes) });
+
+      if (lib.fullScan && preferFullScan) {
+        if (lib.fullScan.bytes != null) rows.push({ name: 'FULL SIZE (ALL)', value: formatBytes(lib.fullScan.bytes) });
+        if (lib.fullScan.scannedItems != null) rows.push({ name: 'FULL ITEMS SCANNED', value: fmtInt(lib.fullScan.scannedItems) });
+      }
+
+      const top = (arr) => Array.isArray(arr) ? arr.slice(0, 3) : [];
+
+      const genres = (preferFullScan && lib.fullScan && Array.isArray(lib.fullScan.topGenres))
+        ? lib.fullScan.topGenres
+        : (lib.recentlyAdded && lib.recentlyAdded.topGenres);
+      const codecs = (preferFullScan && lib.fullScan && Array.isArray(lib.fullScan.topVideoCodecs))
+        ? lib.fullScan.topVideoCodecs
+        : (lib.recentlyAdded && lib.recentlyAdded.topVideoCodecs);
+      const ress = (preferFullScan && lib.fullScan && Array.isArray(lib.fullScan.topResolutions))
+        ? lib.fullScan.topResolutions
+        : (lib.recentlyAdded && lib.recentlyAdded.topResolutions);
+
+      const suffix = preferFullScan ? ' (FULL)' : ` (${days}D)`;
+      top(genres).forEach(g => rows.push({ name: `GENRE${suffix}: ${String(g.name || '').toUpperCase()}`, value: fmtInt(g.count || 0) }));
+      top(codecs).forEach(c => rows.push({ name: `CODEC${suffix}: ${String(c.name || '').toUpperCase()}`, value: fmtInt(c.count || 0) }));
+      top(ress).forEach(r => rows.push({ name: `RES${suffix}: ${String(r.name || '').toUpperCase()}`, value: fmtInt(r.count || 0) }));
+
+      return rows;
+    }
+
+    async function renderLibraryReports({ refetchServers = false } = {}) {
+      if (!libraryContent) return;
+
+      const PREF_KEY = 'omnistream_library_reports_server';
+
+      try {
+        if (refetchServers || !libServer || !libServer.options.length) {
+          libraryContent.className = 'placeholder';
+          libraryContent.textContent = 'Loading library reports...';
+
+          const all = await fetchServers();
+          const eligible = all.filter(s => s && !s.disabled && ['plex','jellyfin','emby'].includes(String(s.type || '').toLowerCase()));
+          if (!eligible.length) {
+            libraryContent.className = 'placeholder';
+            libraryContent.textContent = 'No enabled Plex/Jellyfin/Emby servers found.';
+            if (libServer) libServer.innerHTML = '';
+            return;
+          }
+
+          const saved = (() => { try { return localStorage.getItem(PREF_KEY) || ''; } catch (_) { return ''; } })();
+          const selected = eligible.some(s => String(s.id) === String(saved)) ? String(saved) : String(eligible[0].id);
+
+          if (libServer) {
+            libServer.innerHTML = eligible.map(s => {
+              const label = `${String(s.name || s.baseUrl || s.id)} (${String(s.type || '').toUpperCase()})`;
+              const sel = String(s.id) === selected ? 'selected' : '';
+              return `<option value="${escapeHtml(String(s.id))}" ${sel}>${escapeHtml(label)}</option>`;
+            }).join('');
+          }
         }
-        if (!hasActivity) {
-          html += '<div class="list-item">No activity in the last 7 days.</div>';
+
+        const serverId = libServer ? String(libServer.value || '') : '';
+        const days = libDays ? Number(libDays.value || 7) : 7;
+        const doFullScan = !!(libFullScan && libFullScan.checked);
+        if (!serverId) {
+          libraryContent.className = 'placeholder';
+          libraryContent.textContent = 'Pick a server to generate library reports.';
+          return;
+        }
+
+        try { localStorage.setItem('omnistream_library_reports_server', serverId); } catch (_) {}
+
+        libraryContent.className = 'placeholder';
+        libraryContent.textContent = doFullScan ? 'Starting full scan... (this can take a while)' : 'Loading library reports...';
+
+        const data = doFullScan
+          ? await (async () => {
+            const job = await startLibraryFullScan({ serverId, days });
+            const jobId = job && job.id ? job.id : '';
+            if (!jobId) throw new Error('Full scan job did not return an id');
+
+            const startMs = Date.now();
+            const maxWaitMs = 60 * 60 * 1000; // 1 hour
+            while (true) {
+              const j = await fetchLibraryFullScanJob(jobId);
+              if (j && j.status === 'done' && j.result) return j.result;
+              if (j && j.status === 'error') throw new Error(j.error || 'Full scan failed');
+
+              const p = j && j.progress ? j.progress : {};
+              const phase = p.phase != null ? String(p.phase) : '';
+              const libName = p.libraryName ? String(p.libraryName) : '';
+              const libIdx = Number.isFinite(Number(p.libraryIndex)) ? Number(p.libraryIndex) : 0;
+              const libTotal = Number.isFinite(Number(p.librariesTotal)) ? Number(p.librariesTotal) : 0;
+              const scanned = Number.isFinite(Number(p.scanned)) ? Number(p.scanned) : 0;
+              const total = (p.total != null && Number.isFinite(Number(p.total))) ? Number(p.total) : null;
+              const pct = (total && total > 0) ? Math.min(99, Math.floor((scanned / total) * 100)) : null;
+
+              if (phase === 'building') {
+                const lineA = libTotal > 0 ? `Preparing library ${libIdx + 1}/${libTotal}` : 'Preparing libraries';
+                const lineB = libName ? `— ${libName}` : '';
+                libraryContent.textContent = `${lineA} ${lineB}`.trim();
+              } else if (phase === 'starting') {
+                libraryContent.textContent = 'Starting full scan... (this can take a while)';
+              } else {
+                const lineA = libTotal > 0 ? `Scanning library ${libIdx + 1}/${libTotal}` : 'Scanning libraries';
+                const lineB = libName ? `— ${libName}` : '';
+                const lineC = total ? ` (${fmtInt(scanned)} / ${fmtInt(total)}${pct != null ? `, ${pct}%` : ''})` : ` (${fmtInt(scanned)} scanned)`;
+                libraryContent.textContent = `${lineA} ${lineB}${lineC}`;
+              }
+
+              if ((Date.now() - startMs) > maxWaitMs) {
+                throw new Error('Full scan timed out waiting for results');
+              }
+              await new Promise(r => setTimeout(r, 1500));
+            }
+          })()
+          : await fetchLibraryInventory({ serverId, days });
+        const libs = Array.isArray(data.libraries) ? data.libraries : [];
+        const preferFull = data && data.mode === 'full';
+
+        let html = '<div class="grid">';
+        for (const lib of libs) {
+          const title = lib && lib.name ? String(lib.name) : 'Library';
+          const right = lib && lib.type ? String(lib.type).toUpperCase() : (data.server && data.server.type ? String(data.server.type).toUpperCase() : '');
+          html += renderKvPanel({ title, right, rows: rowsFromLibrary(lib || {}, days, { preferFullScan: preferFull }) });
         }
         html += '</div>';
 
-        html += '<div class="card">';
-        html += '<h2>Top titles (recent)</h2>';
-        if (topTitles.length) {
-          topTitles.forEach(([title,count]) => {
-            html += `<div class="list-item">${title} &times; ${count}</div>`;
-          });
-        } else {
-          html += '<div class="list-item">No history yet.</div>';
-        }
-        html += '</div>';
-
-        html += '<div class="card">';
-        html += '<h2>Top users (recent)</h2>';
-        if (topUsers.length) {
-          topUsers.forEach(([user,count]) => {
-            const href = 'user.html?user=' + encodeURIComponent(user);
-            html += `<div class="list-item"><a class="user-link" href="${href}">${user}</a> &times; ${count}</div>`;
-          });
-        } else {
-          html += '<div class="list-item">No users yet.</div>';
-        }
-        html += '</div>';
-
-        html += '</div>';
-
-        summaryDiv.innerHTML = html;
+        libraryContent.className = '';
+        libraryContent.innerHTML = html;
       } catch (e) {
         console.error(e);
-        document.getElementById('summary').textContent = 'Failed to load reports.';
+        libraryContent.className = 'placeholder';
+        libraryContent.textContent = (e && e.message) ? String(e.message) : 'Failed to load library reports.';
       }
     }
-    renderReports();
-    // Apply saved theme
-    (function() {
-      const savedTheme = localStorage.getItem('omnistreamTheme') || 'default';
-      if (savedTheme && savedTheme !== 'default') {
-        document.documentElement.setAttribute('data-theme', savedTheme);
+
+    function setActivePill(range) {
+      ['pill7d','pill30d','pill1y','pillAll','pillCustom'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.classList.toggle('pill-active', el.getAttribute('data-range') === range);
+      });
+      if (customRange) customRange.style.display = range === 'custom' ? 'inline-flex' : 'none';
+    }
+
+    function ymdToday() {
+      const d = new Date();
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+
+    function ymdDaysAgo(daysAgo) {
+      const d = new Date(Date.now() - (daysAgo * 24 * 60 * 60 * 1000));
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+
+    function openMenu(panel, btn) {
+      if (!panel) return;
+      panel.classList.add('open');
+      if (btn) btn.setAttribute('aria-expanded', 'true');
+    }
+    function closeMenu(panel, btn) {
+      if (!panel) return;
+      panel.classList.remove('open');
+      if (btn) btn.setAttribute('aria-expanded', 'false');
+    }
+    function toggleMenu(panel, btn) {
+      if (!panel) return;
+      if (panel.classList.contains('open')) closeMenu(panel, btn);
+      else {
+        closeMenu(filtersMenu, filtersBtn);
+        closeMenu(columnsMenu, columnsBtn);
+        openMenu(panel, btn);
       }
-    })();
+    }
+
+    function setMetric(metric) {
+      state.metric = metric === 'duration' ? 'duration' : 'count';
+      render({ refetch: true });
+    }
+
+    function setRange(range) {
+      state.range = range;
+      setActivePill(range);
+      if (range === '7d') {
+        state.from = ymdDaysAgo(7);
+        state.to = ymdToday();
+      } else if (range === '30d') {
+        state.from = ymdDaysAgo(30);
+        state.to = ymdToday();
+      } else if (range === '1y') {
+        state.from = ymdDaysAgo(365);
+        state.to = ymdToday();
+      } else if (range === 'all') {
+        state.from = '1970-01-01';
+        state.to = ymdToday();
+      } else if (range === 'custom') {
+        // keep existing from/to
+      }
+      if (fromDate && state.from) fromDate.value = state.from;
+      if (toDate && state.to) toDate.value = state.to;
+      render({ refetch: true });
+    }
+
+    function buildColumnsMenu() {
+      if (!columnsMenu) return;
+      let html = '<div class="menu-title">Show panels</div>';
+      for (const p of REPORT_PANELS) {
+        const checked = !!panelPrefs[p.key];
+        html += `<label class="menu-item"><input type="checkbox" data-panel="${escapeHtml(p.key)}" ${checked ? 'checked' : ''}> ${escapeHtml(p.label)}</label>`;
+      }
+      columnsMenu.innerHTML = html;
+      columnsMenu.querySelectorAll('input[type="checkbox"][data-panel]').forEach(cb => {
+        cb.addEventListener('change', () => {
+          const k = cb.getAttribute('data-panel');
+          if (!k) return;
+          panelPrefs[k] = cb.checked;
+          try { localStorage.setItem(COL_PREF_KEY, JSON.stringify(panelPrefs)); } catch (_) {}
+          updateColumnsButtonLabel();
+          render({ refetch: false });
+        });
+      });
+      updateColumnsButtonLabel();
+    }
+
+    function updateColumnsButtonLabel() {
+      if (!columnsBtn) return;
+      const enabled = REPORT_PANELS.filter(p => panelPrefs[p.key]).length;
+      columnsBtn.textContent = `Columns ${enabled}`;
+    }
+
+    function applySearchToSections(sections, q) {
+      const query = String(q || '').trim().toLowerCase();
+      if (!query) return sections;
+      const matches = (obj) => {
+        if (!obj || typeof obj !== 'object') return false;
+        const fields = [
+          obj.name, obj.title, obj.user, obj.userKey, obj.platform, obj.product,
+          obj.location, obj.ip, obj.channel, obj.seriesTitle, obj.episodeTitle
+        ];
+        return fields.some(v => String(v || '').toLowerCase().includes(query));
+      };
+      const filterList = (arr) => Array.isArray(arr) ? arr.filter(matches) : arr;
+      return {
+        ...sections,
+        mostWatchedMovies: filterList(sections.mostWatchedMovies),
+        mostPopularMovies: filterList(sections.mostPopularMovies),
+        mostWatchedTvShows: filterList(sections.mostWatchedTvShows),
+        mostPopularTvShows: filterList(sections.mostPopularTvShows),
+        mostPlayedArtists: filterList(sections.mostPlayedArtists),
+        mostPopularArtists: filterList(sections.mostPopularArtists),
+        recentlyWatched: filterList(sections.recentlyWatched),
+        mostActiveLibraries: filterList(sections.mostActiveLibraries),
+        mostActiveUsers: filterList(sections.mostActiveUsers),
+        mostActivePlatforms: filterList(sections.mostActivePlatforms)
+      };
+    }
+
+    async function render(opts = {}) {
+      const doFetch = !lastData || !!opts.refetch;
+      if (doFetch) {
+        content.className = 'placeholder';
+        content.textContent = 'Loading watch statistics...';
+      }
+      try {
+        const data = doFetch
+          ? await fetchWatchStats({ metric: state.metric, from: state.from, to: state.to })
+          : lastData;
+        lastData = data;
+
+        if (kpi) {
+          kpi.innerHTML = renderSummaryCards(data.summary);
+        }
+
+        const rawSections = data.sections || {};
+        const s = applySearchToSections(rawSections, state.search);
+        const valueLabel = data.metric === 'duration' ? 'duration' : 'count';
+        const playsOrDuration = data.metric === 'duration' ? 'DURATION' : 'PLAYS';
+
+        let html = '<div class="grid">';
+        if (panelPrefs.mostWatchedMovies) html += renderPanel({ title: 'Most Watched Movies', right: playsOrDuration, items: s.mostWatchedMovies || [], valueLabel, showThumb: true });
+        if (panelPrefs.mostPopularMovies) html += renderPanel({ title: 'Most Popular Movies', right: 'USERS', items: s.mostPopularMovies || [], valueLabel: 'count', showThumb: true });
+        if (panelPrefs.mostWatchedTvShows) html += renderPanel({ title: 'Most Watched TV Shows', right: playsOrDuration, items: s.mostWatchedTvShows || [], valueLabel, showThumb: true });
+        if (panelPrefs.mostPopularTvShows) html += renderPanel({ title: 'Most Popular TV Shows', right: 'USERS', items: s.mostPopularTvShows || [], valueLabel: 'count', showThumb: true });
+        if (panelPrefs.mostPlayedArtists) html += renderPanel({ title: 'Most Played Artists', right: playsOrDuration, items: s.mostPlayedArtists || [], valueLabel, showThumb: true });
+        if (panelPrefs.mostPopularArtists) html += renderPanel({ title: 'Most Popular Artists', right: 'USERS', items: s.mostPopularArtists || [], valueLabel: 'count', showThumb: true });
+        if (panelPrefs.recentlyWatched) html += renderRecently(s.recentlyWatched || []);
+        if (panelPrefs.mostActiveLibraries) html += renderPanel({ title: 'Most Active Libraries', right: playsOrDuration, items: s.mostActiveLibraries || [], valueLabel, showThumb: false });
+        if (panelPrefs.mostActiveUsers) html += renderPanel({ title: 'Most Active Users', right: playsOrDuration, items: s.mostActiveUsers || [], valueLabel, showThumb: false, showAvatars: true, linkUsers: true });
+        if (panelPrefs.mostActivePlatforms) html += renderPanel({ title: 'Most Active Platforms', right: playsOrDuration, items: s.mostActivePlatforms || [], valueLabel, showThumb: false });
+        if (panelPrefs.mostConcurrentStreams) html += renderConcurrent(s.mostConcurrentStreams);
+        html += '</div>';
+
+        content.className = '';
+        content.innerHTML = html;
+      } catch (e) {
+        console.error(e);
+        content.className = 'placeholder';
+        content.textContent = 'Failed to load watch statistics.';
+      }
+    }
+
+    if (filtersBtn) filtersBtn.addEventListener('click', () => toggleMenu(filtersMenu, filtersBtn));
+    if (columnsBtn) columnsBtn.addEventListener('click', () => toggleMenu(columnsMenu, columnsBtn));
+    document.addEventListener('click', (e) => {
+      const t = e.target;
+      const inFilters = filtersMenu && (filtersMenu.contains(t) || (filtersBtn && filtersBtn.contains(t)));
+      const inColumns = columnsMenu && (columnsMenu.contains(t) || (columnsBtn && columnsBtn.contains(t)));
+      if (!inFilters) closeMenu(filtersMenu, filtersBtn);
+      if (!inColumns) closeMenu(columnsMenu, columnsBtn);
+    });
+
+    if (filtersMenu) {
+      filtersMenu.querySelectorAll('input[type="radio"][name="metric"]').forEach(r => {
+        r.addEventListener('change', () => {
+          if (r.checked) setMetric(r.value);
+        });
+      });
+    }
+
+    let searchTimer = null;
+    if (searchText) {
+      searchText.addEventListener('input', () => {
+        state.search = String(searchText.value || '');
+        if (searchTimer) clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => render({ refetch: false }), 180);
+      });
+    }
+
+    ['pill7d','pill30d','pill1y','pillAll','pillCustom'].forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('click', () => setRange(el.getAttribute('data-range')));
+    });
+
+    if (fromDate) {
+      fromDate.addEventListener('change', () => {
+        state.range = 'custom';
+        setActivePill('custom');
+        state.from = String(fromDate.value || '').trim();
+        if (toDate && !String(toDate.value || '').trim()) {
+          state.to = ymdToday();
+          toDate.value = state.to;
+        } else {
+          state.to = String(toDate.value || '').trim();
+        }
+        render({ refetch: true });
+      });
+    }
+    if (toDate) {
+      toDate.addEventListener('change', () => {
+        state.range = 'custom';
+        setActivePill('custom');
+        state.to = String(toDate.value || '').trim();
+        if (fromDate && !String(fromDate.value || '').trim()) {
+          state.from = ymdDaysAgo(30);
+          fromDate.value = state.from;
+        } else {
+          state.from = String(fromDate.value || '').trim();
+        }
+        render({ refetch: true });
+      });
+    }
+
+    buildColumnsMenu();
+    setRange('30d');
+
+    if (libServer) {
+      libServer.addEventListener('change', () => renderLibraryReports({ refetchServers: false }));
+    }
+    if (libDays) {
+      libDays.addEventListener('change', () => renderLibraryReports({ refetchServers: false }));
+    }
+    if (libRefresh) {
+      libRefresh.addEventListener('click', () => renderLibraryReports({ refetchServers: true }));
+    }
+
+    if (libFullScan) {
+      libFullScan.addEventListener('change', () => {
+        // Only refetch on explicit refresh or server/window change.
+      });
+    }
+
+    renderLibraryReports({ refetchServers: true });
   </script>
 </body>
 </html>

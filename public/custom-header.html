@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>OmniStream - Custom template header</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="theme.css" />
+  <link rel="stylesheet" href="shell.css" />
+  <script src="shell.js" defer></script>
+  <style>
+    body{font-family:Segoe UI,Arial;background:var(--bg);color:var(--text-main);margin:0;padding:0}
+    h1{margin:0 0 8px 0;color:var(--text-main);letter-spacing:0.5px;font-size:1.8em;font-weight:600;}
+    .page-header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;}
+    .badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;background:rgba(15,23,42,0.75);border:1px solid rgba(148,163,184,0.5);font-size:11px;color:#e5e7eb;}
+
+    .card{background:var(--card-bg);border-radius:14px;padding:16px 18px;box-shadow:0 12px 30px rgba(15,23,42,0.85);border:1px solid rgba(148,163,184,0.35);max-width:980px;}
+    .card h2{margin-top:0;margin-bottom:10px;font-size:17px;}
+    .row{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+    .btn{padding:6px 11px;border-radius:999px;border:1px solid var(--btn-border);background:var(--btn-bg);color:var(--btn-text);font-size:13px;cursor:pointer;}
+    .btn-secondary{background:transparent;color:var(--text-muted);}
+    .hint{font-size:11px;color:var(--text-muted);margin-top:4px;max-width:900px;}
+    .status{font-size:12px;margin-left:8px;}
+    .status-ok{color:#22c55e;}
+    .status-error{color:#f97373;}
+    label{display:block;margin-bottom:8px;font-size:13px;}
+    input[type="text"],textarea{width:100%;box-sizing:border-box;border-radius:8px;border:1px solid rgba(75,85,99,0.9);background:rgba(15,23,42,0.8);color:var(--text-main);padding:6px 8px;font-size:13px;}
+    select{width:100%;box-sizing:border-box;border-radius:8px;border:1px solid rgba(75,85,99,0.9);background:rgba(15,23,42,0.8);color:var(--text-main);padding:6px 8px;font-size:13px;}
+    input[type="color"]{height:34px;width:60px;border-radius:8px;border:1px solid rgba(75,85,99,0.9);background:rgba(15,23,42,0.8);padding:2px;}
+    textarea{min-height:110px;resize:vertical;font-family:system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;}
+
+    .sections-list{display:flex;flex-direction:column;gap:10px;margin-top:10px;}
+    .section-item{border:1px solid rgba(51,65,85,0.8);background:rgba(15,23,42,0.45);border-radius:12px;padding:12px;}
+    .section-item-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;}
+    .section-meta{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:8px;}
+    .section-meta label{margin:0;}
+    .col-type-row{display:flex;gap:8px;align-items:center;margin-bottom:6px;}
+    .col-type-row select{max-width:120px;}
+    .section-grid{display:grid;gap:10px;}
+    .section-grid[data-cols="1"]{grid-template-columns:repeat(1,minmax(0,1fr));}
+    .section-grid[data-cols="2"]{grid-template-columns:repeat(2,minmax(0,1fr));}
+    .section-grid[data-cols="3"]{grid-template-columns:repeat(3,minmax(0,1fr));}
+    @media (max-width: 960px){.section-grid{grid-template-columns:minmax(0,1fr)!important;} }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="sidebar-brand">OmniStream</div>
+      <nav class="sidebar-nav">
+        <a href="index.html" class="nav-link">Dashboard</a>
+        <a href="glance.html" class="nav-link">At a glance</a>
+        <a href="history.html" class="nav-link">History</a>
+        <a href="reports.html" class="nav-link">Reports</a>
+        <a href="libraries.html" class="nav-link">Libraries</a>
+        <a href="notifications.html" class="nav-link">Notifications</a>
+        <div class="settings-group">
+          <button type="button" class="nav-group-toggle newsletter-toggle">Newsletter</button>
+          <div class="settings-submenu newsletter-submenu open">
+            <a href="overseerr.html" class="submenu-link">Overseerr</a>
+            <a href="subscribers.html" class="submenu-link">Subscribers</a>
+            <a href="templates.html" class="submenu-link">Templates</a>
+            <a href="custom-header.html" class="submenu-link submenu-link-active">Custom header</a>
+            <a href="sent-newsletters.html" class="submenu-link">Sent history</a>
+          </div>
+        </div>
+        <div class="settings-group">
+          <button type="button" class="nav-group-toggle settings-toggle">Settings</button>
+          <div class="settings-submenu">
+            <a href="admin.html" class="submenu-link">Connected servers</a>
+            <a href="servers.html" class="submenu-link">Servers</a>
+            <a href="display.html" class="submenu-link">Themes &amp; layout</a>
+            <a href="notifiers.html" class="submenu-link">Notifiers</a>
+            <a href="system.html" class="submenu-link">System</a>
+            <a href="about.html" class="submenu-link">About</a>
+          </div>
+        </div>
+        <a href="/logout" class="nav-link">Logout</a>
+      </nav>
+    </aside>
+
+    <main class="main-content">
+      <button class="sidebar-toggle" id="sidebarToggle">Hide menu</button>
+      <div class="page-header">
+        <h1>Custom template header</h1>
+        <span class="badge">Settings · Newsletter</span>
+      </div>
+
+      <div class="card">
+        <h2>Custom header blocks</h2>
+        <div class="hint">
+          Use this to create optional blocks that appear under the newsletter logo/header.
+          Each block is a single line (Text, Email, or URL).
+          You can add multiple rows under the same header, and each row can show 1, 2, or 3 blocks.
+          If all blocks are empty, OmniStream renders it as a header-only note (no blocks).
+          You can still place <code>{{CUSTOM_SECTIONS}}</code> manually in a template, but if you omit it, OmniStream will auto-insert these blocks near the top.
+        </div>
+
+        <div class="row" style="margin-top:10px;">
+          <button class="btn" id="csAddBtn" type="button">Add section</button>
+          <button class="btn" id="csSaveBtn" type="button">Save</button>
+          <button class="btn btn-secondary" id="csRevertBtn" type="button">Revert</button>
+          <span id="csStatus" class="status"></span>
+        </div>
+
+        <div id="customSectionsList" class="sections-list"></div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    let customSections = [];
+    let originalCustomSections = null;
+
+    function deepCopy(obj){
+      return JSON.parse(JSON.stringify(obj || null));
+    }
+
+    function firstNonEmptyLine(input){
+      const raw = String(input || '');
+      if (!raw) return '';
+      const lines = raw.split(/\r\n|\r|\n/);
+      for (const line of lines) {
+        const t = String(line || '').trim();
+        if (t) return t;
+      }
+      return '';
+    }
+
+    function normalizeCol(col){
+      if (typeof col === 'string') return { type: 'text', value: firstNonEmptyLine(col) };
+      if (col && typeof col === 'object') {
+        const t = String(col.type || col.kind || 'text').toLowerCase();
+        return {
+          type: (t === 'url' ? 'url' : (t === 'email' ? 'email' : 'text')),
+          value: firstNonEmptyLine(typeof col.value === 'string' ? col.value : '')
+        };
+      }
+      return { type: 'text', value: '' };
+    }
+
+    function normalizeRow(row, idx, fallbackColumnCount, fallbackColumns){
+      const rawCount = row && (row.columnCount != null ? row.columnCount : (row.columnsCount != null ? row.columnsCount : row.columnsToShow));
+      let columnCount = parseInt(rawCount, 10);
+      if (![1, 2, 3].includes(columnCount)) columnCount = fallbackColumnCount;
+      if (![1, 2, 3].includes(columnCount)) columnCount = 3;
+
+      const cols = row && Array.isArray(row.columns)
+        ? row.columns
+        : (Array.isArray(fallbackColumns) ? fallbackColumns : []);
+
+      return {
+        id: row && row.id != null ? String(row.id) : `row-${idx + 1}`,
+        columnCount,
+        rowColor: (row && typeof row.rowColor === 'string') ? row.rowColor : '#0b1226',
+        rowTextColor: (row && typeof row.rowTextColor === 'string') ? row.rowTextColor : '#e5e7eb',
+        boxed: !(row && row.boxed === false),
+        columns: [normalizeCol(cols[0]), normalizeCol(cols[1]), normalizeCol(cols[2])]
+      };
+    }
+
+    function normalizeSection(sec, idx){
+      const legacyCols = sec && Array.isArray(sec.columns) ? sec.columns : [];
+      const legacyRawCount = (sec && (sec.columnCount != null ? sec.columnCount : (sec.columnsCount != null ? sec.columnsCount : sec.columnsToShow)));
+      let legacyColumnCount = parseInt(legacyRawCount, 10);
+      if (![1, 2, 3].includes(legacyColumnCount)) legacyColumnCount = 3;
+
+      const rawRows = sec && Array.isArray(sec.rows) ? sec.rows : null;
+      const rows = (rawRows && rawRows.length)
+        ? rawRows.map((r, rIdx) => normalizeRow(r, rIdx, legacyColumnCount, legacyCols))
+        : [normalizeRow({ columnCount: legacyColumnCount, columns: legacyCols }, 0, legacyColumnCount, legacyCols)];
+      return {
+        id: sec && sec.id != null ? String(sec.id) : `sec-${idx + 1}`,
+        header: sec && typeof sec.header === 'string' ? sec.header : '',
+        headerSize: sec && typeof sec.headerSize === 'string' ? sec.headerSize : 'md',
+        headerColor: sec && typeof sec.headerColor === 'string' ? sec.headerColor : '#e5e7eb',
+        rows
+      };
+    }
+
+    function renderCustomSections(){
+      const host = document.getElementById('customSectionsList');
+      if (!host) return;
+      host.innerHTML = '';
+
+      if (!customSections.length){
+        const empty = document.createElement('div');
+        empty.style.padding = '10px';
+        empty.style.fontSize = '12px';
+        empty.style.color = 'var(--text-muted)';
+        empty.textContent = 'No custom sections yet. Click “Add section” to create one.';
+        host.appendChild(empty);
+        return;
+      }
+
+      customSections.forEach((sec, idx) => {
+        // Ensure shape
+        const normalized = normalizeSection(sec, idx);
+        customSections[idx] = normalized;
+        sec = normalized;
+
+        const wrap = document.createElement('div');
+        wrap.className = 'section-item';
+
+        const head = document.createElement('div');
+        head.className = 'section-item-head';
+
+        const label = document.createElement('div');
+        label.style.fontSize = '12px';
+        label.style.color = 'var(--text-muted)';
+        label.textContent = `Section ${idx + 1}`;
+
+        const del = document.createElement('button');
+        del.className = 'btn btn-secondary';
+        del.type = 'button';
+        del.textContent = 'Delete';
+        del.addEventListener('click', () => {
+          customSections.splice(idx, 1);
+          renderCustomSections();
+        });
+
+        head.appendChild(label);
+        head.appendChild(del);
+        wrap.appendChild(head);
+
+        const headerLabel = document.createElement('label');
+        headerLabel.textContent = 'Header (optional)';
+        const headerInput = document.createElement('input');
+        headerInput.type = 'text';
+        headerInput.value = sec.header || '';
+        headerInput.placeholder = 'Useful links / Announcement';
+        headerInput.addEventListener('input', () => {
+          sec.header = headerInput.value;
+        });
+        headerLabel.appendChild(headerInput);
+        wrap.appendChild(headerLabel);
+
+        const meta = document.createElement('div');
+        meta.className = 'section-meta';
+
+        const sizeLabel = document.createElement('label');
+        sizeLabel.textContent = 'Header size';
+        sizeLabel.style.minWidth = '180px';
+        const sizeSelect = document.createElement('select');
+        const sizeOptions = [
+          { v: 'sm', t: 'Small' },
+          { v: 'md', t: 'Medium' },
+          { v: 'lg', t: 'Large' }
+        ];
+        sizeOptions.forEach(o => {
+          const opt = document.createElement('option');
+          opt.value = o.v;
+          opt.textContent = o.t;
+          sizeSelect.appendChild(opt);
+        });
+        sizeSelect.value = (sec.headerSize === 'sm' || sec.headerSize === 'lg') ? sec.headerSize : 'md';
+        sizeSelect.addEventListener('change', () => {
+          sec.headerSize = sizeSelect.value;
+        });
+        sizeLabel.appendChild(sizeSelect);
+
+        const colorLabel = document.createElement('label');
+        colorLabel.textContent = 'Header color';
+        colorLabel.style.minWidth = '140px';
+        const colorInput = document.createElement('input');
+        colorInput.type = 'color';
+        colorInput.value = /^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/.test(String(sec.headerColor || '')) ? sec.headerColor : '#e5e7eb';
+        colorInput.addEventListener('input', () => {
+          sec.headerColor = colorInput.value;
+        });
+        colorLabel.appendChild(colorInput);
+
+        meta.appendChild(sizeLabel);
+        meta.appendChild(colorLabel);
+
+        const addRowBtn = document.createElement('button');
+        addRowBtn.className = 'btn btn-secondary';
+        addRowBtn.type = 'button';
+        addRowBtn.textContent = 'Add row';
+        addRowBtn.addEventListener('click', () => {
+          sec.rows = Array.isArray(sec.rows) ? sec.rows : [];
+          sec.rows.push({
+            id: 'row-' + Date.now(),
+            columnCount: 3,
+            rowColor: '#0b1226',
+            rowTextColor: '#e5e7eb',
+            boxed: true,
+            columns: [
+              { type: 'text', value: '' },
+              { type: 'text', value: '' },
+              { type: 'text', value: '' }
+            ]
+          });
+          renderCustomSections();
+        });
+        meta.appendChild(addRowBtn);
+        wrap.appendChild(meta);
+
+        sec.rows = Array.isArray(sec.rows) ? sec.rows : [];
+        if (!sec.rows.length) {
+          sec.rows.push({
+            id: 'row-' + Date.now(),
+            columnCount: 3,
+            rowColor: '#0b1226',
+            rowTextColor: '#e5e7eb',
+            boxed: true,
+            columns: [
+              { type: 'text', value: '' },
+              { type: 'text', value: '' },
+              { type: 'text', value: '' }
+            ]
+          });
+        }
+
+        sec.rows.forEach((row, rowIdx) => {
+          const rowWrap = document.createElement('div');
+          rowWrap.style.marginTop = '10px';
+          rowWrap.style.paddingTop = '10px';
+          rowWrap.style.borderTop = '1px solid rgba(51,65,85,0.55)';
+
+          const rowHead = document.createElement('div');
+          rowHead.className = 'section-item-head';
+          rowHead.style.marginBottom = '8px';
+
+          const rowLabel = document.createElement('div');
+          rowLabel.style.fontSize = '12px';
+          rowLabel.style.color = 'var(--text-muted)';
+          rowLabel.textContent = `Row ${rowIdx + 1}`;
+
+          const rowControls = document.createElement('div');
+          rowControls.style.display = 'flex';
+          rowControls.style.gap = '8px';
+          rowControls.style.alignItems = 'center';
+
+          const countLabel = document.createElement('label');
+          countLabel.textContent = 'Blocks';
+          countLabel.style.margin = '0';
+          countLabel.style.minWidth = '120px';
+
+          const countSelect = document.createElement('select');
+          [1,2,3].forEach(n => {
+            const opt = document.createElement('option');
+            opt.value = String(n);
+            opt.textContent = String(n);
+            countSelect.appendChild(opt);
+          });
+          countSelect.value = String([1,2,3].includes(row.columnCount) ? row.columnCount : 3);
+          countSelect.addEventListener('change', () => {
+            const next = parseInt(countSelect.value, 10);
+            row.columnCount = [1,2,3].includes(next) ? next : 3;
+            renderCustomSections();
+          });
+          countLabel.appendChild(countSelect);
+          rowControls.appendChild(countLabel);
+
+          const rowColorLabel = document.createElement('label');
+          rowColorLabel.textContent = 'Row color';
+          rowColorLabel.style.margin = '0';
+          rowColorLabel.style.minWidth = '140px';
+          const rowColorInput = document.createElement('input');
+          rowColorInput.type = 'color';
+          rowColorInput.value = /^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/.test(String(row.rowColor || '')) ? row.rowColor : '#0b1226';
+          rowColorInput.addEventListener('input', () => {
+            row.rowColor = rowColorInput.value;
+          });
+          rowColorLabel.appendChild(rowColorInput);
+          rowControls.appendChild(rowColorLabel);
+
+          const rowTextColorLabel = document.createElement('label');
+          rowTextColorLabel.textContent = 'Text color';
+          rowTextColorLabel.style.margin = '0';
+          rowTextColorLabel.style.minWidth = '140px';
+          const rowTextColorInput = document.createElement('input');
+          rowTextColorInput.type = 'color';
+          rowTextColorInput.value = /^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/.test(String(row.rowTextColor || '')) ? row.rowTextColor : '#e5e7eb';
+          rowTextColorInput.addEventListener('input', () => {
+            row.rowTextColor = rowTextColorInput.value;
+          });
+          rowTextColorLabel.appendChild(rowTextColorInput);
+          rowControls.appendChild(rowTextColorLabel);
+
+          const boxedLabel = document.createElement('label');
+          boxedLabel.textContent = 'Boxed';
+          boxedLabel.style.margin = '0';
+          boxedLabel.style.minWidth = '90px';
+          const boxedInput = document.createElement('input');
+          boxedInput.type = 'checkbox';
+          boxedInput.checked = row.boxed !== false;
+          boxedInput.style.marginLeft = '8px';
+          boxedInput.addEventListener('change', () => {
+            row.boxed = boxedInput.checked;
+            renderCustomSections();
+          });
+          boxedLabel.appendChild(boxedInput);
+          rowControls.appendChild(boxedLabel);
+
+          const delRowBtn = document.createElement('button');
+          delRowBtn.className = 'btn btn-secondary';
+          delRowBtn.type = 'button';
+          delRowBtn.textContent = 'Delete row';
+          delRowBtn.addEventListener('click', () => {
+            sec.rows.splice(rowIdx, 1);
+            renderCustomSections();
+          });
+          rowControls.appendChild(delRowBtn);
+
+          rowHead.appendChild(rowLabel);
+          rowHead.appendChild(rowControls);
+          rowWrap.appendChild(rowHead);
+
+          const grid = document.createElement('div');
+          grid.className = 'section-grid';
+
+          const effectiveCount = [1, 2, 3].includes(row.columnCount) ? row.columnCount : 3;
+          grid.setAttribute('data-cols', String(effectiveCount));
+
+          row.columns = Array.isArray(row.columns) ? row.columns : [];
+          while (row.columns.length < 3) row.columns.push({ type: 'text', value: '' });
+
+          for (let c = 0; c < effectiveCount; c++){
+            const colLabel = document.createElement('label');
+            colLabel.textContent = `Block ${c + 1}`;
+
+            const col = row.columns[c] || { type: 'text', value: '' };
+            row.columns[c] = col;
+
+            const typeRow = document.createElement('div');
+            typeRow.className = 'col-type-row';
+
+            const typeSelect = document.createElement('select');
+
+            const optText = document.createElement('option');
+            optText.value = 'text';
+            optText.textContent = 'Text';
+            const optEmail = document.createElement('option');
+            optEmail.value = 'email';
+            optEmail.textContent = 'Email';
+            const optUrl = document.createElement('option');
+            optUrl.value = 'url';
+            optUrl.textContent = 'URL';
+
+            typeSelect.appendChild(optText);
+            typeSelect.appendChild(optEmail);
+            typeSelect.appendChild(optUrl);
+
+            typeSelect.value = (col.type === 'url' || col.type === 'email') ? col.type : 'text';
+            typeSelect.addEventListener('change', () => {
+              col.type = typeSelect.value;
+              renderCustomSections();
+            });
+
+            typeRow.appendChild(typeSelect);
+            colLabel.appendChild(typeRow);
+
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.value = col.value || '';
+            input.placeholder = col.type === 'url'
+              ? 'https://example.com'
+              : (col.type === 'email' ? 'name@example.com' : 'One line');
+            input.addEventListener('input', () => {
+              col.value = firstNonEmptyLine(input.value);
+            });
+            colLabel.appendChild(input);
+
+            grid.appendChild(colLabel);
+          }
+
+          rowWrap.appendChild(grid);
+          wrap.appendChild(rowWrap);
+        });
+
+        host.appendChild(wrap);
+      });
+    }
+
+    async function fetchCustomSections(){
+      const status = document.getElementById('csStatus');
+      status.textContent = 'Loading...';
+      status.className = 'status';
+      try{
+        const r = await fetch('/api/config/app');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const data = await r.json();
+        const rawSections = Array.isArray(data.newsletterCustomSections) ? data.newsletterCustomSections : [];
+        customSections = rawSections.map((s, idx) => normalizeSection(s, idx));
+        originalCustomSections = deepCopy(customSections);
+        renderCustomSections();
+        status.textContent = '';
+        status.className = 'status';
+      }catch(e){
+        console.error('Failed to load custom sections', e);
+        status.textContent = 'Failed to load. See console/logs.';
+        status.className = 'status status-error';
+      }
+    }
+
+    async function saveCustomSections(){
+      const status = document.getElementById('csStatus');
+      status.textContent = 'Saving...';
+      status.className = 'status';
+      try{
+        const clean = customSections.map((s, idx) => ({
+          id: s.id || `sec-${idx + 1}`,
+          header: s.header || '',
+          headerSize: (s.headerSize === 'sm' || s.headerSize === 'lg') ? s.headerSize : 'md',
+          headerColor: typeof s.headerColor === 'string' ? s.headerColor : '#e5e7eb',
+          rows: (Array.isArray(s.rows) ? s.rows : []).map((r, rIdx) => ({
+            id: r && r.id != null ? String(r.id) : `row-${rIdx + 1}`,
+            columnCount: [1,2,3].includes(parseInt(r && r.columnCount, 10)) ? parseInt(r.columnCount, 10) : 3,
+            rowColor: (r && typeof r.rowColor === 'string') ? r.rowColor : '#0b1226',
+            rowTextColor: (r && typeof r.rowTextColor === 'string') ? r.rowTextColor : '#e5e7eb',
+            boxed: !(r && r.boxed === false),
+            columns: Array.isArray(r && r.columns)
+              ? [normalizeCol(r.columns[0]), normalizeCol(r.columns[1]), normalizeCol(r.columns[2])]
+              : [normalizeCol(''), normalizeCol(''), normalizeCol('')]
+          }))
+        }));
+        const resp = await fetch('/api/config/app', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ newsletterCustomSections: clean })
+        });
+        if (!resp.ok){
+          const text = await resp.text().catch(() => '');
+          throw new Error(text || ('HTTP ' + resp.status));
+        }
+        await resp.json().catch(() => ({}));
+        customSections = clean;
+        originalCustomSections = deepCopy(customSections);
+        renderCustomSections();
+        status.textContent = 'Saved.';
+        status.className = 'status status-ok';
+      }catch(e){
+        console.error('Failed to save custom sections', e);
+        status.textContent = 'Save failed. Check server logs.';
+        status.className = 'status status-error';
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('csAddBtn').addEventListener('click', () => {
+        customSections.push({
+          id: 'sec-' + Date.now(),
+          header: '',
+          headerSize: 'md',
+          headerColor: '#e5e7eb',
+          rows: [
+            {
+              id: 'row-' + Date.now(),
+              columnCount: 3,
+              rowColor: '#0b1226',
+              rowTextColor: '#e5e7eb',
+              boxed: true,
+              columns: [
+                { type: 'text', value: '' },
+                { type: 'text', value: '' },
+                { type: 'text', value: '' }
+              ]
+            }
+          ]
+        });
+        renderCustomSections();
+        const status = document.getElementById('csStatus');
+        status.textContent = '';
+        status.className = 'status';
+      });
+
+      document.getElementById('csSaveBtn').addEventListener('click', () => {
+        saveCustomSections();
+      });
+
+      document.getElementById('csRevertBtn').addEventListener('click', () => {
+        customSections = deepCopy(originalCustomSections) || [];
+        renderCustomSections();
+        const status = document.getElementById('csStatus');
+        status.textContent = 'Reverted.';
+        status.className = 'status';
+      });
+
+      fetchCustomSections();
+    });
+  </script>
+</body>
+</html>

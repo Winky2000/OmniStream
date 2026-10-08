@@ -1,0 +1,828 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>OmniStream Subscribers</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="theme.css">
+  <link rel="stylesheet" href="shell.css">
+  <script src="shell.js" defer></script>
+  <style>
+    body{font-family:Segoe UI,Arial;background:var(--bg);color:var(--text-main);margin:0;padding:0}
+    h1{margin:0 0 8px 0;color:var(--text-main);letter-spacing:0.5px;font-size:1.8em;font-weight:600;}
+    .card{background:var(--card-bg);border-radius:14px;padding:16px 18px;box-shadow:0 12px 30px rgba(15,23,42,0.85);border:1px solid rgba(148,163,184,0.35);max-width:760px;margin-bottom:18px;}
+    .card h2{margin:0 0 8px 0;font-size:16px;color:var(--text-main);}
+    .row{font-size:13px;margin:4px 0;color:var(--text-muted);}
+    .row b{color:var(--text-main);}
+    .hint{font-size:12px;color:var(--text-muted);margin-top:4px;}
+    .btn{margin-top:10px;padding:6px 14px;border-radius:8px;border:1px solid var(--btn-border);background:var(--btn-bg);color:var(--btn-text);cursor:pointer;font-size:13px;}
+    .btn:hover{background:var(--btn-bg-hover);color:var(--btn-text-hover);}
+    .status-ok{color:#a5d6a7;}
+    .status-error{color:#ff8a80;}
+    label{display:block;font-size:13px;margin:6px 0;color:var(--text-main);}
+    input[type="text"],textarea{width:100%;max-width:640px;padding:6px 10px;border-radius:6px;border:1px solid #444;background:var(--bg);color:var(--text-main);box-sizing:border-box;font-family:Segoe UI,Arial;font-size:13px;}
+    textarea{min-height:120px;resize:vertical;}
+    table{width:100%;border-collapse:collapse;margin-top:8px;font-size:13px;}
+    th,td{padding:6px 8px;border-bottom:1px solid rgba(148,163,184,0.25);text-align:left;}
+    th{color:var(--text-main);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:0.04em;}
+    tbody tr:nth-child(even){background:rgba(15,23,42,0.35);}
+    .newsletter-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 14px 0;}
+    .newsletter-tab{padding:4px 10px;border-radius:999px;border:1px solid var(--btn-border);background:transparent;color:var(--text-muted);font-size:12px;cursor:pointer;}
+    .newsletter-tab-active{background:var(--btn-bg);color:var(--btn-text);}
+    .newsletter-panel{display:none;}
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="sidebar-brand">OmniStream</div>
+      <nav class="sidebar-nav">
+        <a href="index.html" class="nav-link">Dashboard</a>
+        <a href="glance.html" class="nav-link">At a glance</a>
+        <a href="history.html" class="nav-link">History</a>
+        <a href="reports.html" class="nav-link">Reports</a>
+        <a href="libraries.html" class="nav-link">Libraries</a>
+        <a href="notifications.html" class="nav-link">Notifications</a>
+        <div class="settings-group">
+          <button type="button" class="nav-group-toggle newsletter-toggle">Newsletter</button>
+          <div class="settings-submenu newsletter-submenu open">
+            <a href="overseerr.html" class="submenu-link">Overseerr</a>
+            <a href="subscribers.html" class="submenu-link submenu-link-active">Subscribers</a>
+            <a href="templates.html" class="submenu-link">Templates</a>
+            <a href="custom-header.html" class="submenu-link">Custom header</a>
+            <a href="sent-newsletters.html" class="submenu-link">Sent history</a>
+          </div>
+        </div>
+        <div class="settings-group">
+          <button type="button" class="nav-group-toggle settings-toggle">Settings</button>
+          <div class="settings-submenu">
+            <a href="admin.html" class="submenu-link">Connected servers</a>
+            <a href="servers.html" class="submenu-link">Servers</a>
+            <a href="display.html" class="submenu-link">Themes &amp; layout</a>
+            <a href="notifiers.html" class="submenu-link">Notifiers</a>
+            <a href="system.html" class="submenu-link">System</a>
+            <a href="about.html" class="submenu-link">About</a>
+          </div>
+        </div>
+        <a href="/logout" class="nav-link">Logout</a>
+      </nav>
+    </aside>
+    <main class="main-content">
+      <button class="sidebar-toggle" id="sidebarToggle">Hide menu</button>
+      <h1>Subscribers</h1>
+      <div class="newsletter-tabs">
+        <button type="button" class="newsletter-tab" data-panel="email">Email settings</button>
+        <button type="button" class="newsletter-tab" data-panel="send">Send newsletter</button>
+        <button type="button" class="newsletter-tab" data-panel="subscribers">Subscriber list</button>
+      </div>
+
+      <div class="card newsletter-panel" data-panel="email">
+        <h2>Newsletter email settings</h2>
+        <div class="row"><b>Enabled:</b> <span id="nlEnabledLabel">-</span></div>
+        <label>
+          <input type="checkbox" id="nlEnabled"> Enable newsletter email
+        </label>
+        <label>
+          From address
+          <input type="text" id="nlFrom" placeholder="OmniStream &lt;omnistream@example.com&gt;">
+        </label>
+        <label>
+          To (optional, for logs)
+          <input type="text" id="nlTo" placeholder="Optional primary recipient; subscribers go in BCC.">
+        </label>
+        <label>
+          SMTP host
+          <input type="text" id="nlSmtpHost" placeholder="smtp.example.com">
+        </label>
+        <label>
+          Port
+          <input type="number" id="nlSmtpPort" placeholder="587" style="max-width:140px;">
+        </label>
+        <label>
+          <input type="checkbox" id="nlSmtpSecure"> Use TLS (secure)
+        </label>
+        <label>
+          SMTP username
+          <input type="text" id="nlSmtpUser" placeholder="smtp user">
+        </label>
+        <label>
+          SMTP password
+          <input type="password" id="nlSmtpPass" placeholder="smtp password">
+        </label>
+        <button class="btn" id="nlSaveBtn">Save email settings</button>
+        <span id="nlSaveStatus" class="row"></span>
+        <div class="hint">These settings are separate from alert notifications. Credentials are stored in config.json under <code>newsletterEmail</code>.</div>
+      </div>
+
+      <div class="card newsletter-panel" data-panel="send">
+        <h2>Send newsletter</h2>
+        <div class="row">
+          <label style="display:inline-block;margin-right:8px;">
+            Template
+            <select id="nlTemplateSelect" style="margin-left:4px;padding:4px 8px;border-radius:6px;border:1px solid #444;background:var(--bg);color:var(--text-main);font-size:13px;min-width:160px;"></select>
+          </label>
+          <label style="display:inline-block;margin-right:8px;">
+            Server
+            <select id="nlServerSelect" style="margin-left:4px;padding:4px 8px;border-radius:6px;border:1px solid #444;background:var(--bg);color:var(--text-main);font-size:13px;min-width:160px;"></select>
+          </label>
+        </div>
+        <label>
+          Subject
+          <input type="text" id="nlSubject" placeholder="Maintenance window, new content, announcements...">
+        </label>
+        <label>
+          Message
+          <textarea id="nlBody" placeholder="This message will be emailed to all active subscribers."></textarea>
+        </label>
+        <div class="row" style="gap:8px;flex-wrap:wrap;">
+          <button class="btn" id="nlPreviewBtn" type="button">Preview HTML</button>
+          <button class="btn" id="nlSendBtn" type="button">Send newsletter to active subscribers</button>
+        </div>
+        <span id="nlSendStatus" class="row"></span>
+        <div class="hint">Preview renders placeholders (like recently added) without sending. Sending uses the dedicated newsletter email settings. Recipients are BCC'd and come from the active subscribers list.</div>
+
+        <h2 style="margin-top:18px;">Weekly auto-send</h2>
+        <div class="row">Automatically send a selected newsletter template every week per server (server local time). Only subscribers tagged to that server will receive it.</div>
+        <div id="nlSchedulesWrap" class="row" style="display:block;"></div>
+        <button class="btn" id="nlScheduleSaveBtn" type="button">Save schedules</button>
+        <span id="nlScheduleStatus" class="row"></span>
+      </div>
+
+      <div class="card newsletter-panel" data-panel="subscribers">
+        <h2>Subscriber list</h2>
+        <div class="row" id="subsSummary">Loading subscriber summary...</div>
+        <button class="btn" id="subsRefreshBtn">Refresh subscribers</button>
+        <button class="btn btn-secondary" id="subsTagBtn" style="margin-left:6px;">Tag by server</button>
+        <span id="subsTagStatus" class="row"></span>
+        <table id="subsTable" style="display:none;">
+          <thead>
+            <tr><th>Name</th><th>Email</th><th>Source</th><th>Servers</th><th>Active</th></tr>
+          </thead>
+          <tbody id="subsTableBody"></tbody>
+        </table>
+        <div class="hint">Imported subscribers (for example from Overseerr) appear here. Toggle Active to include or exclude them from future newsletters.</div>
+      </div>
+    </main>
+  </div>
+  <script>
+      const tabs = document.querySelectorAll('.newsletter-tab');
+      const panels = document.querySelectorAll('.newsletter-panel');
+      function showPanel(name) {
+        const next = String(name || '').trim();
+        if (!next) return;
+        tabs.forEach(tab => {
+          tab.classList.toggle('newsletter-tab-active', tab.dataset.panel === next);
+        });
+        panels.forEach(panel => {
+          panel.style.display = panel.dataset.panel === next ? 'block' : 'none';
+        });
+        localStorage.setItem('omnistreamNewsletterTab', next);
+      }
+      if (tabs.length && panels.length) {
+        function readHashPanel() {
+          const h = String(window.location.hash || '').replace(/^#/, '').trim();
+          return h;
+        }
+
+        const hashPanel = readHashPanel();
+        const saved = localStorage.getItem('omnistreamNewsletterTab') || 'send';
+        const initial = hashPanel || saved;
+        showPanel(initial);
+
+        window.addEventListener('hashchange', () => {
+          const p = readHashPanel();
+          if (p) showPanel(p);
+        });
+
+        tabs.forEach(tab => {
+          tab.addEventListener('click', () => showPanel(tab.dataset.panel));
+        });
+      }
+    async function loadNewsletterConfig() {
+      try {
+        const r = await fetch('/api/config/app');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const data = await r.json();
+        const cfg = data.newsletterEmail || {};
+        const enabled = cfg.enabled !== false;
+        const from = cfg.from || '';
+        const to = cfg.to || '';
+        const lbl = document.getElementById('nlEnabledLabel');
+        if (lbl) lbl.textContent = enabled ? 'Yes' : 'No (disabled)';
+        const enabledInput = document.getElementById('nlEnabled');
+        const fromInput = document.getElementById('nlFrom');
+        const toInput = document.getElementById('nlTo');
+        const smtp = cfg.smtp || {};
+        const auth = smtp.auth || {};
+        if (enabledInput) enabledInput.checked = enabled;
+        if (fromInput) fromInput.value = from;
+        if (toInput) toInput.value = to;
+        const hostInput = document.getElementById('nlSmtpHost');
+        const portInput = document.getElementById('nlSmtpPort');
+        const secureInput = document.getElementById('nlSmtpSecure');
+        const userInput = document.getElementById('nlSmtpUser');
+        const passInput = document.getElementById('nlSmtpPass');
+        if (hostInput) hostInput.value = smtp.host || '';
+        if (portInput) portInput.value = smtp.port != null ? smtp.port : '';
+        if (secureInput) secureInput.checked = !!smtp.secure;
+        if (userInput) userInput.value = auth.user || '';
+        if (passInput) {
+          // The API never returns the SMTP password. If one is saved, indicate that.
+          const hasPass = auth && auth.hasPass === true;
+          passInput.value = '';
+          passInput.placeholder = hasPass ? 'Saved (leave blank to keep)' : 'smtp password';
+        }
+
+        const templates = Array.isArray(data.newsletterTemplates) ? data.newsletterTemplates : [];
+        const sel = document.getElementById('nlTemplateSelect');
+        if (sel) {
+          sel.innerHTML = '';
+          const optNone = document.createElement('option');
+          optNone.value = '';
+          optNone.textContent = 'Custom message';
+          sel.appendChild(optNone);
+          templates.forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t.id;
+            opt.textContent = t.name || t.subject || 'Template';
+            opt.dataset.subject = t.subject || '';
+            opt.dataset.body = t.body || '';
+            sel.appendChild(opt);
+          });
+        }
+
+        // Weekly schedules (per-server)
+        const wrap = document.getElementById('nlSchedulesWrap');
+        if (wrap) {
+          let serverList = [];
+          try {
+            const sr = await fetch('/api/servers');
+            const sd = sr.ok ? await sr.json() : [];
+            serverList = Array.isArray(sd) ? sd : [];
+          } catch (_) {
+            serverList = [];
+          }
+
+          const enabledServers = serverList.filter(s => s && !s.disabled);
+          const schedules = Array.isArray(data.newsletterSchedules) ? data.newsletterSchedules : [];
+          renderWeeklySchedules(wrap, enabledServers, templates, schedules);
+        }
+      } catch (e) {
+        console.error('Failed to load newsletter config:', e);
+      }
+    }
+
+    function renderWeeklySchedules(container, servers, templates, schedules) {
+      const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+      const tplList = Array.isArray(templates) ? templates : [];
+      const schedList = Array.isArray(schedules) ? schedules : [];
+      const byServerId = {};
+      schedList.forEach(s => {
+        const sid = s && s.serverId != null ? String(s.serverId) : '';
+        if (sid) byServerId[sid] = s;
+      });
+
+      if (!servers || !servers.length) {
+        container.innerHTML = '<div class="hint">No enabled servers found.</div>';
+        return;
+      }
+      if (!tplList.length) {
+        container.innerHTML = '<div class="hint">Create at least one newsletter template to enable auto-send schedules.</div>';
+        return;
+      }
+
+      const table = document.createElement('table');
+      table.style.width = '100%';
+      table.style.borderCollapse = 'collapse';
+      table.innerHTML = '<thead><tr><th style="text-align:left;">Enabled</th><th style="text-align:left;">Server</th><th style="text-align:left;">Template</th><th style="text-align:left;">Day</th><th style="text-align:left;">Time</th><th style="text-align:left;">Last sent</th></tr></thead>';
+      const tbody = document.createElement('tbody');
+
+      servers.forEach(srv => {
+        const sid = srv && srv.id != null ? String(srv.id) : '';
+        if (!sid) return;
+
+        const existing = byServerId[sid] || {};
+        const enabled = existing.enabled === true;
+        const templateId = existing.templateId != null ? String(existing.templateId) : String(tplList[0].id);
+        const dayOfWeek = Number.isFinite(Number(existing.dayOfWeek)) ? String(Number(existing.dayOfWeek)) : '0';
+        const time = (existing.time && String(existing.time).trim()) ? String(existing.time).trim() : '09:00';
+        const lastSentDate = existing.lastSentDate ? String(existing.lastSentDate) : '';
+
+        const tr = document.createElement('tr');
+        tr.dataset.serverId = sid;
+        tr.dataset.lastSentDate = lastSentDate;
+        tr.style.borderTop = '1px solid var(--divider, #2a2f33)';
+
+        const tdEnabled = document.createElement('td');
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = enabled;
+        tdEnabled.appendChild(cb);
+
+        const tdServer = document.createElement('td');
+        tdServer.textContent = (srv.name != null && String(srv.name).trim()) ? String(srv.name).trim() : sid;
+
+        const tdTpl = document.createElement('td');
+        const tplSel = document.createElement('select');
+        tplSel.style.padding = '4px 8px';
+        tplSel.style.borderRadius = '6px';
+        tplSel.style.border = '1px solid #444';
+        tplSel.style.background = 'var(--bg)';
+        tplSel.style.color = 'var(--text-main)';
+        tplSel.style.fontSize = '13px';
+        tplList.forEach(t => {
+          const opt = document.createElement('option');
+          opt.value = t.id;
+          opt.textContent = t.name || t.subject || 'Template';
+          tplSel.appendChild(opt);
+        });
+        tplSel.value = templateId;
+        tdTpl.appendChild(tplSel);
+
+        const tdDay = document.createElement('td');
+        const daySel = document.createElement('select');
+        daySel.style.padding = '4px 8px';
+        daySel.style.borderRadius = '6px';
+        daySel.style.border = '1px solid #444';
+        daySel.style.background = 'var(--bg)';
+        daySel.style.color = 'var(--text-main)';
+        daySel.style.fontSize = '13px';
+        days.forEach((name, idx) => {
+          const opt = document.createElement('option');
+          opt.value = String(idx);
+          opt.textContent = name;
+          daySel.appendChild(opt);
+        });
+        daySel.value = dayOfWeek;
+        tdDay.appendChild(daySel);
+
+        const tdTime = document.createElement('td');
+        const timeInput = document.createElement('input');
+        timeInput.type = 'time';
+        timeInput.step = '60';
+        timeInput.value = time;
+        timeInput.style.maxWidth = '140px';
+        tdTime.appendChild(timeInput);
+
+        const tdLast = document.createElement('td');
+        tdLast.textContent = lastSentDate ? lastSentDate : 'Never';
+
+        tr.appendChild(tdEnabled);
+        tr.appendChild(tdServer);
+        tr.appendChild(tdTpl);
+        tr.appendChild(tdDay);
+        tr.appendChild(tdTime);
+        tr.appendChild(tdLast);
+        tbody.appendChild(tr);
+      });
+
+      table.appendChild(tbody);
+      container.innerHTML = '';
+      container.appendChild(table);
+    }
+
+    async function loadSubscriberSummary() {
+      const el = document.getElementById('subsSummary');
+      if (!el) return;
+      try {
+        const r = await fetch('/api/subscribers/summary');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const data = await r.json();
+        const total = typeof data.total === 'number' ? data.total : 0;
+        const active = typeof data.active === 'number' ? data.active : 0;
+        const srcs = data.sources || {};
+        const ov = srcs.overseerr || { total: 0, active: 0 };
+        el.textContent = `Subscribers: ${active} active out of ${total} total (Overseerr: ${ov.active} active / ${ov.total} total).`;
+      } catch (e) {
+        console.error('Failed to load subscribers summary:', e);
+        el.textContent = 'Failed to load subscriber summary.';
+      }
+    }
+
+    async function loadSubscribers() {
+      const table = document.getElementById('subsTable');
+      const tbody = document.getElementById('subsTableBody');
+      if (!table || !tbody) return;
+      tbody.innerHTML = '';
+      table.style.display = 'none';
+      try {
+        const r = await fetch('/api/subscribers?limit=500');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const data = await r.json();
+        const items = Array.isArray(data.items) ? data.items.slice() : [];
+        items.sort((a,b) => {
+          const na = (a.name || a.email || '').toLowerCase();
+          const nb = (b.name || b.email || '').toLowerCase();
+          if (na < nb) return -1; if (na > nb) return 1; return 0;
+        });
+        items.forEach(sub => {
+          const tr = document.createElement('tr');
+          const tdName = document.createElement('td');
+          tdName.textContent = sub.name || '(no name)';
+          const tdEmail = document.createElement('td');
+          tdEmail.textContent = sub.email || '';
+          const tdSource = document.createElement('td');
+          tdSource.textContent = sub.source || '';
+          const tdServers = document.createElement('td');
+          const tags = Array.isArray(sub.serverTags) ? sub.serverTags : [];
+          const serverLabel = tags.length
+            ? tags.map(id => (window.__omnistreamServerNameById && window.__omnistreamServerNameById[id]) ? window.__omnistreamServerNameById[id] : id).join(', ')
+            : '-';
+          tdServers.textContent = serverLabel;
+          const tdActive = document.createElement('td');
+          const cb = document.createElement('input');
+          cb.type = 'checkbox';
+          cb.checked = !!sub.active;
+          cb.addEventListener('change', async () => {
+            const desired = cb.checked;
+            try {
+              const resp = await fetch('/api/subscribers/' + encodeURIComponent(sub.id), {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ active: desired })
+              });
+              if (!resp.ok) {
+                const text = await resp.text().catch(() => '');
+                console.error('Update subscriber failed:', text || resp.status);
+                cb.checked = !desired; // revert
+                return;
+              }
+              await loadSubscriberSummary();
+            } catch (e) {
+              console.error('Update subscriber failed:', e);
+              cb.checked = !desired; // revert
+            }
+          });
+          tdActive.appendChild(cb);
+          tr.appendChild(tdName);
+          tr.appendChild(tdEmail);
+          tr.appendChild(tdSource);
+          tr.appendChild(tdServers);
+          tr.appendChild(tdActive);
+          tbody.appendChild(tr);
+        });
+        if (items.length) {
+          table.style.display = 'table';
+        }
+      } catch (e) {
+        console.error('Failed to load subscribers:', e);
+      }
+    }
+
+    async function loadServersMap() {
+      try {
+        const r = await fetch('/api/servers');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const data = await r.json();
+        const map = {};
+        (Array.isArray(data) ? data : []).forEach(s => {
+          if (!s) return;
+          const id = s.id != null ? String(s.id) : '';
+          const name = s.name != null ? String(s.name) : '';
+          if (id) map[id] = name || id;
+        });
+        window.__omnistreamServerNameById = map;
+      } catch (e) {
+        window.__omnistreamServerNameById = {};
+      }
+    }
+
+    async function loadNewsletterServerSelect() {
+      const sel = document.getElementById('nlServerSelect');
+      if (!sel) return;
+      try {
+        const r = await fetch('/api/servers');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const data = await r.json();
+        const servers = Array.isArray(data) ? data : [];
+
+        const previous = localStorage.getItem('omnistreamNewsletterServerId') || '';
+        sel.innerHTML = '';
+
+        const optAll = document.createElement('option');
+        optAll.value = '';
+        optAll.textContent = 'All servers';
+        sel.appendChild(optAll);
+
+        servers
+          .filter(s => s && !s.disabled)
+          .forEach(s => {
+            const id = s.id != null ? String(s.id) : '';
+            if (!id) return;
+            const opt = document.createElement('option');
+            opt.value = id;
+            opt.textContent = (s.name != null && String(s.name).trim()) ? String(s.name).trim() : id;
+            sel.appendChild(opt);
+          });
+
+        // Restore selection if still present.
+        const values = Array.from(sel.options).map(o => o.value);
+        if (values.includes(previous)) {
+          sel.value = previous;
+        } else {
+          sel.value = '';
+        }
+      } catch (e) {
+        sel.innerHTML = '';
+        const optAll = document.createElement('option');
+        optAll.value = '';
+        optAll.textContent = 'All servers';
+        sel.appendChild(optAll);
+        sel.value = '';
+      }
+    }
+
+    document.getElementById('nlServerSelect').addEventListener('change', (ev) => {
+      const v = (ev.target && ev.target.value != null) ? String(ev.target.value) : '';
+      localStorage.setItem('omnistreamNewsletterServerId', v);
+    });
+
+    document.getElementById('subsRefreshBtn').addEventListener('click', () => {
+      loadSubscribers();
+      loadSubscriberSummary();
+    });
+
+    document.getElementById('subsTagBtn').addEventListener('click', async () => {
+      const statusEl = document.getElementById('subsTagStatus');
+      if (statusEl) {
+        statusEl.textContent = 'Tagging subscribers by server...';
+        statusEl.className = 'row';
+      }
+      try {
+        const resp = await fetch('/api/subscribers/tag-by-server', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({})
+        });
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => '');
+          if (statusEl) {
+            statusEl.textContent = 'Tagging failed: ' + (text || resp.status + ' ' + resp.statusText);
+            statusEl.className = 'row status-error';
+          }
+          return;
+        }
+        const data = await resp.json().catch(() => ({}));
+        const updated = typeof data.updated === 'number' ? data.updated : 0;
+        const unmatched = typeof data.unmatched === 'number' ? data.unmatched : 0;
+        if (statusEl) {
+          statusEl.textContent = `Tags updated for ${updated} subscriber${updated === 1 ? '' : 's'}. Unmatched: ${unmatched}.`;
+          statusEl.className = 'row status-ok';
+        }
+        await loadServersMap();
+        await loadSubscribers();
+      } catch (e) {
+        console.error('Tagging subscribers failed:', e);
+        if (statusEl) {
+          statusEl.textContent = 'Tagging failed. Check server logs.';
+          statusEl.className = 'row status-error';
+        }
+      }
+    });
+
+    document.getElementById('nlTemplateSelect').addEventListener('change', (ev) => {
+      const sel = ev.target;
+      const opt = sel.options[sel.selectedIndex];
+      if (!opt || !opt.dataset) return;
+      const subj = opt.dataset.subject || '';
+      const body = opt.dataset.body || '';
+      const subjInput = document.getElementById('nlSubject');
+      const bodyInput = document.getElementById('nlBody');
+      if (subjInput && subj) subjInput.value = subj;
+      if (bodyInput && body) bodyInput.value = body;
+    });
+
+    document.getElementById('nlSendBtn').addEventListener('click', async () => {
+      const statusEl = document.getElementById('nlSendStatus');
+      const subjectInput = document.getElementById('nlSubject');
+      const bodyInput = document.getElementById('nlBody');
+      const serverSelect = document.getElementById('nlServerSelect');
+      const subject = (subjectInput.value || '').trim();
+      const body = (bodyInput.value || '').trim();
+      const serverId = serverSelect ? String(serverSelect.value || '').trim() : '';
+      if (!subject || !body) {
+        statusEl.textContent = 'Subject and message are required.';
+        statusEl.className = 'row status-error';
+        return;
+      }
+
+      const lastPreview = window.__omnistreamLastNewsletterPreview || null;
+      const reuseRange = lastPreview && lastPreview.subject === subject && lastPreview.body === body && lastPreview.startDate && lastPreview.endDate;
+      statusEl.textContent = 'Sending newsletter...';
+      statusEl.className = 'row';
+      try {
+        const resp = await fetch('/api/newsletter/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            subject,
+            body,
+            serverId,
+            startDate: reuseRange ? lastPreview.startDate : undefined,
+            endDate: reuseRange ? lastPreview.endDate : undefined
+          })
+        });
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => '');
+          statusEl.textContent = 'Send failed: ' + (text || resp.status + ' ' + resp.statusText);
+          statusEl.className = 'row status-error';
+          return;
+        }
+        const data = await resp.json();
+        const sent = typeof data.sent === 'number' ? data.sent : 0;
+        const saved = data && Array.isArray(data.saved) ? data.saved : [];
+        statusEl.textContent = `Newsletter sent to ${sent} subscriber${sent === 1 ? '' : 's'}.` + (saved.length ? ` Saved: ${saved.join(', ')}` : '');
+        statusEl.className = 'row status-ok';
+      } catch (e) {
+        console.error('Newsletter send failed:', e);
+        statusEl.textContent = 'Send failed. Check server logs.';
+        statusEl.className = 'row status-error';
+      }
+    });
+
+    document.getElementById('nlPreviewBtn').addEventListener('click', async () => {
+      const statusEl = document.getElementById('nlSendStatus');
+      const subjectInput = document.getElementById('nlSubject');
+      const bodyInput = document.getElementById('nlBody');
+      const serverSelect = document.getElementById('nlServerSelect');
+      const subject = (subjectInput.value || '').trim();
+      const body = (bodyInput.value || '').trim();
+      const serverId = serverSelect ? String(serverSelect.value || '').trim() : '';
+      if (!subject || !body) {
+        statusEl.textContent = 'Subject and message are required.';
+        statusEl.className = 'row status-error';
+        return;
+      }
+      statusEl.textContent = 'Generating preview...';
+      statusEl.className = 'row';
+      try {
+        const resp = await fetch('/api/newsletter/preview', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subject, body, serverId })
+        });
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => '');
+          statusEl.textContent = 'Preview failed: ' + (text || resp.status + ' ' + resp.statusText);
+          statusEl.className = 'row status-error';
+          return;
+        }
+        const data = await resp.json();
+        const html = data && typeof data.html === 'string' && data.html.trim() ? data.html : '';
+        const text = data && typeof data.text === 'string' ? data.text : '';
+        const subj = data && typeof data.subject === 'string' ? data.subject : subject;
+        const startDate = data && typeof data.startDate === 'string' ? data.startDate : '';
+        const endDate = data && typeof data.endDate === 'string' ? data.endDate : '';
+
+        window.__omnistreamLastNewsletterPreview = {
+          subject,
+          body,
+          startDate,
+          endDate
+        };
+
+        const popup = window.open('', '_blank');
+        if (!popup) {
+          statusEl.textContent = 'Preview blocked by popup blocker.';
+          statusEl.className = 'row status-error';
+          return;
+        }
+        popup.document.open();
+        if (html) {
+          // Make the preview tab title match the rendered subject.
+          let renderedHtml = html;
+          if (/<title>[^<]*<\/title>/i.test(renderedHtml)) {
+            renderedHtml = renderedHtml.replace(/<title>[^<]*<\/title>/i, `<title>${subj.replace(/[&<>]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;' }[c]))}</title>`);
+          } else if (/<head\b[^>]*>/i.test(renderedHtml)) {
+            renderedHtml = renderedHtml.replace(/<head\b[^>]*>/i, (m) => m + `<title>${subj.replace(/[&<>]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;' }[c]))}</title>`);
+          }
+          popup.document.write(renderedHtml);
+        } else {
+          const safe = (text || '').replace(/[&<>]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;' }[c]));
+          popup.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${subj}</title></head><body><pre style="white-space:pre-wrap;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;">${safe}</pre></body></html>`);
+        }
+        popup.document.close();
+        statusEl.textContent = 'Preview opened in a new tab.' + (startDate && endDate ? ` Date range: ${startDate} - ${endDate}` : '');
+        statusEl.className = 'row status-ok';
+      } catch (e) {
+        console.error('Newsletter preview failed:', e);
+        statusEl.textContent = 'Preview failed. Check server logs.';
+        statusEl.className = 'row status-error';
+      }
+    });
+    document.getElementById('nlSaveBtn').addEventListener('click', async () => {
+      const statusEl = document.getElementById('nlSaveStatus');
+      statusEl.textContent = 'Saving...';
+      statusEl.className = 'row';
+      try {
+        const payload = {
+          newsletterEmail: {
+            enabled: document.getElementById('nlEnabled').checked,
+            from: document.getElementById('nlFrom').value.trim(),
+            to: document.getElementById('nlTo').value.trim(),
+            smtp: {
+              host: document.getElementById('nlSmtpHost').value.trim() || undefined,
+              port: Number(document.getElementById('nlSmtpPort').value) || undefined,
+              secure: document.getElementById('nlSmtpSecure').checked,
+              auth: {
+                user: document.getElementById('nlSmtpUser').value.trim() || undefined,
+                pass: document.getElementById('nlSmtpPass').value || undefined
+              }
+            }
+          }
+        };
+        const resp = await fetch('/api/config/app', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => '');
+          throw new Error(text || ('HTTP ' + resp.status));
+        }
+        await resp.json().catch(() => ({}));
+        statusEl.textContent = 'Email settings saved.';
+        statusEl.className = 'row status-ok';
+        loadNewsletterConfig();
+      } catch (e) {
+        console.error('Failed to save newsletter email config:', e);
+        statusEl.textContent = 'Save failed. Check server logs.';
+        statusEl.className = 'row status-error';
+      }
+    });
+
+    document.getElementById('nlScheduleSaveBtn').addEventListener('click', async () => {
+      const statusEl = document.getElementById('nlScheduleStatus');
+      statusEl.textContent = 'Saving...';
+      statusEl.className = 'row';
+      try {
+        const wrap = document.getElementById('nlSchedulesWrap');
+        if (!wrap) {
+          statusEl.textContent = 'No schedules to save.';
+          statusEl.className = 'row status-error';
+          return;
+        }
+        const rows = Array.from(wrap.querySelectorAll('tr[data-server-id]'));
+        if (!rows.length) {
+          statusEl.textContent = 'No schedules to save.';
+          statusEl.className = 'row status-error';
+          return;
+        }
+
+        const schedules = [];
+        for (const tr of rows) {
+          const serverId = tr.dataset.serverId ? String(tr.dataset.serverId) : '';
+          const enabled = !!tr.querySelector('input[type="checkbox"]') && tr.querySelector('input[type="checkbox"]').checked;
+          const selects = Array.from(tr.querySelectorAll('select'));
+          const templateSel = selects[0];
+          const daySel = selects[1];
+          const timeInput = tr.querySelector('input[type="time"]');
+          const templateId = templateSel ? String(templateSel.value || '').trim() : '';
+          const dayOfWeek = daySel ? Number(daySel.value) : 0;
+          const time = timeInput ? String(timeInput.value || '').trim() : '';
+
+          if (enabled && (!templateId || !time)) {
+            statusEl.textContent = 'Each enabled schedule must have template and time.';
+            statusEl.className = 'row status-error';
+            return;
+          }
+
+          schedules.push({
+            id: `server-${serverId}`,
+            serverId,
+            enabled,
+            templateId,
+            dayOfWeek,
+            time,
+            lastSentDate: tr.dataset.lastSentDate ? String(tr.dataset.lastSentDate) : ''
+          });
+        }
+
+        const payload = { newsletterSchedules: schedules };
+        const resp = await fetch('/api/config/app', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => '');
+          throw new Error(text || ('HTTP ' + resp.status));
+        }
+        await resp.json().catch(() => ({}));
+        statusEl.textContent = 'Schedules saved.';
+        statusEl.className = 'row status-ok';
+        loadNewsletterConfig();
+      } catch (e) {
+        console.error('Failed to save weekly schedule:', e);
+        statusEl.textContent = 'Save failed. Check server logs.';
+        statusEl.className = 'row status-error';
+      }
+    });
+
+    loadNewsletterConfig();
+    loadSubscriberSummary();
+    loadServersMap().then(() => loadSubscribers());
+    loadNewsletterServerSelect();
+  </script>
+</body>
+</html>

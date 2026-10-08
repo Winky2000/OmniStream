@@ -1,0 +1,16 @@
+[
+  {
+    "id": "mock-plex",
+    "name": "Mock Plex",
+    "type": "plex",
+    "baseUrl": "http://localhost:4000",
+    "apiPath": "/status/sessions"
+  },
+  {
+    "id": "mock-jelly",
+    "name": "Mock Jellyfin",
+    "type": "jellyfin",
+    "baseUrl": "http://localhost:4000",
+    "apiPath": "/Sessions"
+  }
+]

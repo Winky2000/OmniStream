@@ -5,73 +5,493 @@
   <title>OmniStream History</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link rel="stylesheet" href="theme.css">
+  <link rel="stylesheet" href="shell.css">
+  <script src="shell.js" defer></script>
   <style>
-    body{font-family:Segoe UI,Arial;background:var(--bg);color:var(--text-main);margin:0;padding:20px}
-    h1{margin:0 0 8px 0;color:var(--text-main);letter-spacing:1px;font-size:2em}
-    .tabs{display:flex;gap:10px;margin-bottom:20px;border-bottom:1px solid #333;padding-bottom:8px;}
-    .tab-link{padding:6px 14px;border-radius:999px;border:1px solid #444;background:#232837;color:var(--text-main);text-decoration:none;font-size:13px;cursor:pointer;}
-    .tab-link.active{border-color:#00bfff;background:#00bfff;color:#000;}
+    body{font-family:Segoe UI,Arial;background:var(--bg);color:var(--text-main);margin:0;padding:0}
+    h1{margin:0 0 8px 0;color:var(--text-main);letter-spacing:0.5px;font-size:1.8em;font-weight:600;}
+    .subtitle{margin:0 0 10px 0;font-size:12px;color:var(--text-muted);}
     .placeholder{margin-top:24px;font-size:14px;color:var(--text-muted);}
     .back-btn{margin-top:12px;padding:6px 14px;border-radius:8px;border:1px solid var(--btn-border);background:var(--btn-bg);color:var(--btn-text);cursor:pointer;}
     .back-btn:hover{background:var(--btn-bg-hover);color:var(--btn-text-hover);}
+
+    .stats-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:12px;margin-bottom:10px;}
+    @media (max-width: 1100px){.stats-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
+    @media (max-width: 640px){.stats-grid{grid-template-columns:1fr;}}
+    .stat-card{background:rgba(0,0,0,0.18);border:1px solid rgba(148,163,184,0.22);border-radius:12px;padding:12px 14px;}
+    :root[data-theme="light"] .stat-card,
+    :root[data-theme="light-borderless"] .stat-card{background:rgba(0,0,0,0.03);border-color:#dddddd;}
+    .stat-value{font-size:18px;font-weight:700;letter-spacing:0.2px;color:var(--text-main);line-height:1.1;}
+    .stat-label{margin-top:2px;font-size:12px;color:var(--text-muted);}
+
+    .pill-row{margin-top:10px;margin-bottom:10px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;}
+    .pill-group{display:inline-flex;gap:6px;align-items:center;padding:6px;border-radius:12px;background:rgba(0,0,0,0.18);border:1px solid rgba(148,163,184,0.22);}
+    :root[data-theme="light"] .pill-group,
+    :root[data-theme="light-borderless"] .pill-group{background:rgba(0,0,0,0.03);border-color:#dddddd;}
+    .pill{appearance:none;border:1px solid transparent;background:transparent;color:var(--text-muted);padding:6px 10px;border-radius:10px;font-size:12px;cursor:pointer;transition:background 0.15s,color 0.15s,border-color 0.15s;}
+    .pill:hover{background:rgba(148,163,184,0.14);color:var(--text-main);}
+    .pill-active{background:rgba(59,130,246,0.18);color:#e5edff;border-color:rgba(59,130,246,0.35);}
+    .custom-range{display:none;gap:8px;align-items:center;flex-wrap:wrap;}
+    .custom-range input{padding:4px 8px;border-radius:8px;border:1px solid #444;background:#181c24;color:#e0e3e8;}
+    :root[data-theme="light"] .custom-range input,
+    :root[data-theme="light-borderless"] .custom-range input{border-color:#dddddd;background:#ffffff;color:#111111;}
+
+    .toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:6px;}
+    .control{display:inline-flex;align-items:center;gap:8px;padding:6px;border-radius:12px;background:rgba(0,0,0,0.18);border:1px solid rgba(148,163,184,0.22);}
+    :root[data-theme="light"] .control,
+    :root[data-theme="light-borderless"] .control{background:rgba(0,0,0,0.03);border-color:#dddddd;}
+    .field{padding:7px 10px;border-radius:10px;border:1px solid rgba(148,163,184,0.22);background:rgba(0,0,0,0.10);color:var(--text-main);font-size:12px;min-width:220px;outline:none;}
+    .field::placeholder{color:var(--text-faint);}
+    :root[data-theme="light"] .field,
+    :root[data-theme="light-borderless"] .field{background:#ffffff;border-color:#dddddd;color:#111111;}
+    .select{padding:7px 10px;border-radius:10px;border:1px solid rgba(148,163,184,0.22);background:rgba(0,0,0,0.10);color:var(--text-main);font-size:12px;outline:none;}
+    .select option{background:var(--card-bg);color:var(--text-main);}
+    :root[data-theme="light"] .select,
+    :root[data-theme="light-borderless"] .select{background:#ffffff;border-color:#dddddd;color:#111111;}
+    .btn{margin-top:0;padding:7px 12px;border-radius:10px;border:1px solid var(--btn-border);background:var(--btn-bg);color:var(--btn-text);cursor:pointer;font-size:12px;}
+    .btn:hover{background:var(--btn-bg-hover);color:var(--btn-text-hover);}
+
+    .menu{position:relative;display:inline-block;}
+    .menu-panel{display:none;position:absolute;right:0;top:42px;min-width:220px;z-index:30;background:var(--card-bg);border:1px solid rgba(148,163,184,0.22);border-radius:12px;padding:10px;box-shadow:0 8px 24px rgba(0,0,0,0.35);}
+    :root[data-theme="light"] .menu-panel,
+    :root[data-theme="light-borderless"] .menu-panel{box-shadow:0 8px 24px rgba(0,0,0,0.12);}
+    .menu-panel.open{display:block;}
+    .menu-title{font-size:12px;color:var(--text-main);font-weight:600;margin-bottom:6px;}
+    .menu-item{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-muted);padding:6px 4px;border-radius:10px;}
+    .menu-item:hover{background:rgba(148,163,184,0.14);color:var(--text-main);}
+    .menu-item input{accent-color:var(--btn-border);}
+
+    .table-wrap{margin-top:12px;border-radius:14px;border:1px solid rgba(148,163,184,0.18);overflow:auto;background:rgba(0,0,0,0.10);}
+    :root[data-theme="light"] .table-wrap,
+    :root[data-theme="light-borderless"] .table-wrap{background:rgba(0,0,0,0.02);border-color:#e5e7eb;}
+    table.history-table{width:100%;border-collapse:separate;border-spacing:0;font-size:12px;min-width:960px;}
+    .history-table thead th{position:sticky;top:0;background:rgba(0,0,0,0.25);backdrop-filter:blur(6px);text-align:left;font-weight:600;color:var(--text-muted);padding:10px 12px;border-bottom:1px solid rgba(148,163,184,0.18);white-space:nowrap;}
+    :root[data-theme="light"] .history-table thead th,
+    :root[data-theme="light-borderless"] .history-table thead th{background:rgba(255,255,255,0.9);}
+    .history-table tbody td{padding:10px 12px;border-bottom:1px solid rgba(148,163,184,0.10);vertical-align:middle;}
+    .history-table tbody tr:hover{background:rgba(148,163,184,0.10);}
+
+    .cell-main{color:var(--text-main);font-weight:600;line-height:1.2;}
+    .cell-sub{margin-top:2px;color:var(--text-faint);font-size:11px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:320px;}
+
+    .date-cell{display:flex;align-items:center;gap:10px;min-width:160px;}
+    .event-icon{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:999px;background:rgba(148,163,184,0.14);color:var(--text-muted);flex:0 0 auto;font-size:12px;}
+    .event-icon.active{background:rgba(59,130,246,0.18);color:var(--btn-border);}
+    .event-icon.complete{background:rgba(34,197,94,0.18);color:var(--session-direct);}
+    .event-icon.stopped{background:rgba(239,68,68,0.16);color:var(--session-transcode);}
+    .event-icon.abandoned{background:rgba(148,163,184,0.14);color:var(--text-faint);}
+
+    .user-cell{display:inline-flex;align-items:center;gap:8px;min-width:0;}
+    .user-avatar{width:20px;height:20px;border-radius:999px;object-fit:cover;border:1px solid rgba(148,163,184,0.22);background:rgba(0,0,0,0.10);flex:0 0 auto;}
+    .user-link{color:var(--text-main);text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;}
+    .user-link:hover{text-decoration:underline;}
+
+    .badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;border:1px solid rgba(148,163,184,0.22);background:rgba(148,163,184,0.10);color:var(--text-main);font-size:11px;font-weight:600;white-space:nowrap;}
+    .badge.direct{border-color:rgba(34,197,94,0.35);background:rgba(34,197,94,0.16);color:var(--session-direct);}
+    .badge.transcode{border-color:rgba(239,68,68,0.35);background:rgba(239,68,68,0.14);color:var(--session-transcode);}
+
+    .progress-wrap{width:110px;}
+    .bar{width:100%;height:7px;border-radius:999px;background:rgba(148,163,184,0.18);overflow:hidden;}
+    .bar > div{height:100%;background:var(--progress-fill);}
+    .pct{margin-top:4px;font-size:11px;color:var(--text-faint);}
+
+    .pager{margin-top:12px;display:flex;justify-content:flex-end;align-items:center;gap:10px;}
+    .pager-note{font-size:12px;color:var(--text-muted);}
   </style>
 </head>
 <body>
-  <h1>History</h1>
-  <div class="tabs">
-    <a href="admin.html" class="tab-link">Overview</a>
-    <a href="servers.html" class="tab-link">Servers</a>
-    <a href="reports.html" class="tab-link">Reports</a>
-    <a href="notifications.html" class="tab-link">Notifications</a>
-    <a href="notifiers.html" class="tab-link">Notifiers</a>
-    <a href="history.html" class="tab-link active">History</a>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="sidebar-brand">OmniStream</div>
+      <nav class="sidebar-nav">
+        <a href="index.html" class="nav-link">Dashboard</a>
+        <a href="glance.html" class="nav-link">At a glance</a>
+        <a href="history.html" class="nav-link nav-link-active">History</a>
+        <a href="reports.html" class="nav-link">Reports</a>
+        <a href="libraries.html" class="nav-link">Libraries</a>
+        <a href="notifications.html" class="nav-link">Notifications</a>
+        <div class="settings-group">
+          <button type="button" class="nav-group-toggle newsletter-toggle">Newsletter</button>
+          <div class="settings-submenu newsletter-submenu">
+            <a href="overseerr.html" class="submenu-link">Overseerr</a>
+            <a href="subscribers.html" class="submenu-link">Subscribers</a>
+            <a href="templates.html" class="submenu-link">Templates</a>
+            <a href="custom-header.html" class="submenu-link">Custom header</a>
+            <a href="sent-newsletters.html" class="submenu-link">Sent history</a>
+          </div>
+        </div>
+        <div class="settings-group">
+          <button type="button" class="nav-group-toggle settings-toggle">Settings</button>
+          <div class="settings-submenu">
+            <a href="admin.html" class="submenu-link">Connected servers</a>
+            <a href="servers.html" class="submenu-link">Servers</a>
+            <a href="display.html" class="submenu-link">Themes &amp; layout</a>
+            <a href="notifiers.html" class="submenu-link">Notifiers</a>
+            <a href="system.html" class="submenu-link">System</a>
+            <a href="about.html" class="submenu-link">About</a>
+          </div>
+        </div>
+        <a href="/logout" class="nav-link">Logout</a>
+      </nav>
+    </aside>
+    <div class="main-content">
+      <button id="sidebarToggle" class="sidebar-toggle" type="button">Hide menu</button>
+      <h1>History</h1>
+      <p class="subtitle">Browse all streaming sessions with powerful filtering</p>
+
+      <div class="stats-grid" aria-label="History stats">
+        <div class="stat-card">
+          <div class="stat-value" id="statTotalPlays">0</div>
+          <div class="stat-label">Total Plays</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statWatchTime">0m</div>
+          <div class="stat-label">Watch Time</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statUniqueUsers">0</div>
+          <div class="stat-label">Unique Users</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statUniqueTitles">0</div>
+          <div class="stat-label">Unique Titles</div>
+        </div>
+      </div>
+
+      <div class="pill-row">
+        <div class="pill-group" aria-label="Date range">
+          <button id="pill7d" class="pill" data-range="7d" type="button">7d</button>
+          <button id="pill30d" class="pill" data-range="30d" type="button">30d</button>
+          <button id="pill1y" class="pill" data-range="1y" type="button">1y</button>
+          <button id="pillAll" class="pill" data-range="all" type="button">All</button>
+          <button id="pillCustom" class="pill" data-range="custom" type="button">Custom</button>
+        </div>
+        <div id="customRange" class="custom-range">
+          <input id="fromDate" type="date" aria-label="From date">
+          <input id="toDate" type="date" aria-label="To date">
+        </div>
+      </div>
+
+      <div class="toolbar" aria-label="History controls">
+        <div class="control" style="flex:1;min-width:260px;">
+          <input id="searchText" class="field" type="text" placeholder="Search titles, users, locations, IPs..." aria-label="Search history">
+        </div>
+
+        <div class="control">
+          <select id="sortSelect" class="select" aria-label="Sort">
+          <option value="time_desc">Newest first</option>
+          <option value="time_asc">Oldest first</option>
+          <option value="bandwidth_desc">Highest bandwidth</option>
+          <option value="bandwidth_asc">Lowest bandwidth</option>
+          </select>
+        </div>
+
+        <div class="control">
+          <select id="serverSelect" class="select" aria-label="Server">
+            <option value="">All servers</option>
+          </select>
+        </div>
+
+        <button id="applyFilters" class="btn" type="button">Apply</button>
+
+        <div class="menu">
+          <button id="columnsBtn" class="btn" type="button">Columns</button>
+          <div id="columnsMenu" class="menu-panel" role="menu" aria-label="Columns">
+            <div class="menu-title">Show columns</div>
+            <label class="menu-item"><input type="checkbox" data-col="server"> Server</label>
+            <label class="menu-item"><input type="checkbox" data-col="bandwidth"> Bandwidth</label>
+          </div>
+        </div>
+
+        <button id="importBtn" class="btn" type="button">Import History from Servers</button>
+      </div>
+
+      <div class="table-wrap">
+        <table id="historyTable" class="history-table" aria-label="History table">
+          <thead></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="pager">
+        <div class="pager-note" id="pageNote">Showing 0–0</div>
+        <button id="nextPage" class="back-btn" style="margin-top:0;">Next</button>
+      </div>
+      <button class="back-btn" onclick="window.location.href='admin.html'">Back to Settings</button>
+    </div>
   </div>
-  <div class="placeholder">
-    Recent sessions (most recent first):
-  </div>
-  <div style="margin-top:10px;margin-bottom:8px;font-size:12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
-    <input id="searchText" type="text" placeholder="Search user/title/server" style="padding:4px 8px;border-radius:6px;border:1px solid #444;background:#181c24;color:#e0e3e8;min-width:200px;">
-    <select id="sortSelect" style="padding:4px 8px;border-radius:6px;border:1px solid #444;background:#181c24;color:#e0e3e8;">
-      <option value="time_desc">Newest first</option>
-      <option value="time_asc">Oldest first</option>
-      <option value="bandwidth_desc">Highest bandwidth</option>
-      <option value="bandwidth_asc">Lowest bandwidth</option>
-    </select>
-    <button id="applyFilters" class="back-btn" style="margin-top:0;">Apply</button>
-    <button id="importBtn" class="back-btn" style="margin-top:0;">Import History from Servers</button>
-  </div>
-  <table id="historyTable" style="width:100%;margin-top:12px;border-collapse:collapse;font-size:12px;">
-    <thead>
-      <tr style="text-align:left;border-bottom:1px solid #444;">
-        <th style="padding:4px 6px;">Time</th>
-        <th style="padding:4px 6px;">Server</th>
-        <th style="padding:4px 6px;">User</th>
-        <th style="padding:4px 6px;">Title</th>
-        <th style="padding:4px 6px;">Type</th>
-        <th style="padding:4px 6px;">Stream</th>
-        <th style="padding:4px 6px;">Location</th>
-        <th style="padding:4px 6px;">Bandwidth</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
-  <button class="back-btn" onclick="window.location.href='admin.html'">Back to Overview</button>
 
   <script>
-    // Apply saved theme
-    (function() {
-      const savedTheme = localStorage.getItem('omnistreamTheme') || 'default';
-      if (savedTheme && savedTheme !== 'default') {
-        document.documentElement.setAttribute('data-theme', savedTheme);
+    let currentSearch = '';
+    let linkedUser = '';
+    let currentSort = 'time_desc';
+    let currentServerId = '';
+    let currentPage = 0;
+    const PAGE_SIZE = 100;
+
+    const SERVER_PREF_KEY = 'omnistream_history_serverId';
+
+    const DEFAULT_COLUMNS = {
+      server: false,
+      bandwidth: false
+    };
+    let columnPrefs = { ...DEFAULT_COLUMNS };
+
+    let currentRange = '30d';
+    let currentFrom = '';
+    let currentTo = '';
+
+    // Allow deep-linking from Reports: history.html?user=SomeUser
+    (function () {
+      try {
+        const p = new URLSearchParams(window.location.search || '');
+        const u = (p.get('user') || '').trim();
+        if (u) {
+          linkedUser = u;
+          const input = document.getElementById('searchText');
+          if (input) input.value = u;
+        }
+      } catch (e) {
+        // ignore
       }
     })();
 
-    let currentSearch = '';
-    let currentSort = 'time_desc';
+    function fmtDuration(sec) {
+      const s = Number(sec) || 0;
+      if (s <= 0) return '';
+      const h = Math.floor(s / 3600);
+      const m = Math.floor((s % 3600) / 60);
+      const r = Math.floor(s % 60);
+      if (h > 0) return `${h}h ${String(m).padStart(2,'0')}m`;
+      return `${m}m ${String(r).padStart(2,'0')}s`;
+    }
+
+    function fmtWatchTime(sec) {
+      const s = Math.max(0, Math.floor(Number(sec) || 0));
+      const days = Math.floor(s / 86400);
+      const hours = Math.floor((s % 86400) / 3600);
+      const mins = Math.floor((s % 3600) / 60);
+      if (days > 0) return `${days}d ${hours}h`;
+      if (hours > 0) return `${hours}h ${mins}m`;
+      return `${mins}m`;
+    }
+
+    function updateStatsFromServer(stats, historyFallback) {
+      const totalPlays = stats && typeof stats.totalPlays === 'number'
+        ? stats.totalPlays
+        : (Array.isArray(historyFallback) ? historyFallback.length : 0);
+      const uniqueUsers = stats && typeof stats.uniqueUsers === 'number'
+        ? stats.uniqueUsers
+        : 0;
+      const uniqueTitles = stats && typeof stats.uniqueTitles === 'number'
+        ? stats.uniqueTitles
+        : 0;
+      const watchSeconds = stats && typeof stats.watchSeconds === 'number'
+        ? stats.watchSeconds
+        : 0;
+
+      const elTotal = document.getElementById('statTotalPlays');
+      const elWatch = document.getElementById('statWatchTime');
+      const elUsers = document.getElementById('statUniqueUsers');
+      const elTitles = document.getElementById('statUniqueTitles');
+      if (elTotal) elTotal.textContent = totalPlays.toLocaleString();
+      if (elWatch) elWatch.textContent = fmtWatchTime(watchSeconds);
+      if (elUsers) elUsers.textContent = uniqueUsers.toLocaleString();
+      if (elTitles) elTitles.textContent = uniqueTitles.toLocaleString();
+    }
+
+    function setActivePill(range) {
+      ['pill7d','pill30d','pill1y','pillAll','pillCustom'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.classList.toggle('pill-active', el.getAttribute('data-range') === range);
+      });
+      const cr = document.getElementById('customRange');
+      if (cr) cr.style.display = range === 'custom' ? 'inline-flex' : 'none';
+    }
+
+    function loadColumnPrefs() {
+      try {
+        const raw = localStorage.getItem('omnistream_history_columns');
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+          columnPrefs = { ...DEFAULT_COLUMNS, ...parsed };
+        }
+      } catch (_) {
+        // ignore
+      }
+    }
+
+    function saveColumnPrefs() {
+      try {
+        localStorage.setItem('omnistream_history_columns', JSON.stringify(columnPrefs));
+      } catch (_) {
+        // ignore
+      }
+    }
+
+    function loadServerPref() {
+      try {
+        const v = localStorage.getItem(SERVER_PREF_KEY);
+        if (typeof v === 'string' && v.trim()) {
+          currentServerId = v.trim();
+        }
+      } catch (_) {
+        // ignore
+      }
+    }
+
+    function saveServerPref() {
+      try {
+        if (currentServerId) localStorage.setItem(SERVER_PREF_KEY, currentServerId);
+        else localStorage.removeItem(SERVER_PREF_KEY);
+      } catch (_) {
+        // ignore
+      }
+    }
+
+    function setupColumnsMenu() {
+      loadColumnPrefs();
+      const btn = document.getElementById('columnsBtn');
+      const menu = document.getElementById('columnsMenu');
+      if (!btn || !menu) return;
+
+      const syncChecks = () => {
+        menu.querySelectorAll('input[type="checkbox"][data-col]').forEach(cb => {
+          const k = cb.getAttribute('data-col');
+          cb.checked = !!columnPrefs[k];
+        });
+      };
+
+      syncChecks();
+
+      btn.onclick = (e) => {
+        e.preventDefault();
+        menu.classList.toggle('open');
+        syncChecks();
+      };
+
+      document.addEventListener('click', (e) => {
+        if (!menu.classList.contains('open')) return;
+        if (e.target === btn || menu.contains(e.target)) return;
+        menu.classList.remove('open');
+      });
+
+      menu.addEventListener('change', (e) => {
+        const target = e.target;
+        if (!target || target.tagName !== 'INPUT') return;
+        const k = target.getAttribute('data-col');
+        if (!k) return;
+        columnPrefs[k] = !!target.checked;
+        saveColumnPrefs();
+        renderHistory();
+      });
+    }
+
+    function buildTableHeader() {
+      const thead = document.querySelector('#historyTable thead');
+      if (!thead) return;
+      thead.innerHTML = '';
+      const tr = document.createElement('tr');
+      const cols = getVisibleColumns();
+      cols.forEach(c => {
+        const th = document.createElement('th');
+        th.textContent = c.label;
+        tr.appendChild(th);
+      });
+      thead.appendChild(tr);
+    }
+
+    function getVisibleColumns() {
+      const cols = [
+        { key: 'date', label: 'Date' },
+        ...(columnPrefs.server ? [{ key: 'server', label: 'Server' }] : []),
+        { key: 'user', label: 'User' },
+        { key: 'content', label: 'Content' },
+        { key: 'platform', label: 'Platform' },
+        { key: 'location', label: 'Location' },
+        { key: 'quality', label: 'Quality' },
+        { key: 'duration', label: 'Duration' },
+        { key: 'progress', label: 'Progress' },
+        ...(columnPrefs.bandwidth ? [{ key: 'bandwidth', label: 'Bandwidth' }] : [])
+      ];
+      return cols;
+    }
+
+    function formatDateParts(iso) {
+      if (!iso) return { date: '', time: '' };
+      const d = new Date(iso);
+      return {
+        date: d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }),
+        time: d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+      };
+    }
+
+    function computeSessionStatus(h) {
+      const ended = !!h.endedAt;
+      const p = Math.max(0, Math.min(100, Number(h.progress) || 0));
+      const completed = !!h.completed || p >= 95;
+
+      if (!ended) {
+        // Still active (polling keeps updating lastSeenAt)
+        return { kind: 'active', icon: '▶', label: 'Active' };
+      }
+      if (completed) {
+        return { kind: 'complete', icon: '✓', label: 'Completed' };
+      }
+      // If it ended without completing, infer abandoned vs stopped.
+      // Abandoned: very low progress (e.g., user bailed immediately)
+      if (p > 0 && p < 5) {
+        return { kind: 'abandoned', icon: '×', label: 'Abandoned' };
+      }
+      // Stopped: some progress was made but did not complete
+      if (p >= 5) {
+        return { kind: 'stopped', icon: '!', label: `Stopped at ${p}%` };
+      }
+      // Progress unknown or 0
+      return { kind: 'abandoned', icon: '×', label: 'Abandoned' };
+    }
+
+    function formatBandwidth(mbps) {
+      if (typeof mbps !== 'number' || !(mbps > 0)) return '';
+      return `${mbps.toFixed(1)} Mbps`;
+    }
+
+    function computeRange(range) {
+      const now = new Date();
+      if (range === 'all') {
+        return { from: '', to: '' };
+      }
+      if (range === '7d') {
+        return { from: new Date(now.getTime() - 7 * 86400000).toISOString(), to: now.toISOString() };
+      }
+      if (range === '30d') {
+        return { from: new Date(now.getTime() - 30 * 86400000).toISOString(), to: now.toISOString() };
+      }
+      if (range === '1y') {
+        return { from: new Date(now.getTime() - 365 * 86400000).toISOString(), to: now.toISOString() };
+      }
+      if (range === 'custom') {
+        const fromEl = document.getElementById('fromDate');
+        const toEl = document.getElementById('toDate');
+        const f = fromEl && fromEl.value ? fromEl.value : '';
+        const t = toEl && toEl.value ? toEl.value : '';
+        if (!f && !t) return { from: '', to: '' };
+        const fromIso = f ? new Date(f + 'T00:00:00').toISOString() : '';
+        const toIso = t ? new Date(t + 'T23:59:59').toISOString() : '';
+        return { from: fromIso, to: toIso };
+      }
+      return { from: '', to: '' };
+    }
 
     async function fetchHistory() {
       const params = new URLSearchParams();
-      if (currentSearch) params.set('q', currentSearch);
+      if (linkedUser) params.set('user', linkedUser);
+      else if (currentSearch) params.set('q', currentSearch);
+      if (currentServerId) params.set('serverId', currentServerId);
+      if (currentFrom) params.set('from', currentFrom);
+      if (currentTo) params.set('to', currentTo);
       if (currentSort.startsWith('bandwidth')) {
         params.set('sort', 'bandwidth');
         params.set('order', currentSort.endsWith('asc') ? 'asc' : 'desc');
@@ -79,77 +499,304 @@
         params.set('sort', 'time');
         params.set('order', currentSort.endsWith('asc') ? 'asc' : 'desc');
       }
+      params.set('unique', '1');
+      params.set('includeStats', '1');
+      params.set('page', String(currentPage));
+      params.set('pageSize', String(PAGE_SIZE));
       const r = await fetch('/api/history/query?' + params.toString());
       return await r.json();
     }
     async function renderHistory() {
       try {
-        const { history = [] } = await fetchHistory();
-        // Collapse repeated snapshots: keep only one entry per unique combination
-        // of server + user + title + stream + location (using the first row,
-        // which will be the most recent when sorted by time_desc).
-        const seen = new Set();
-        const unique = [];
-        history.forEach(h => {
-          const keyParts = [
-            h.serverId || h.serverName || '',
-            h.user || '',
-            h.title || '',
-            h.stream || '',
-            h.location || ''
-          ].map(v => String(v).toLowerCase());
-          const key = keyParts.join('|');
-          if (!seen.has(key)) {
-            seen.add(key);
-            unique.push(h);
-          }
-        });
-
+        const { history = [], hasMore = false, stats = null } = await fetchHistory();
+        updateStatsFromServer(stats, history);
+        buildTableHeader();
         const tbody = document.querySelector('#historyTable tbody');
         tbody.innerHTML = '';
-        unique.forEach(h => {
+
+        const cols = getVisibleColumns();
+        history.forEach(h => {
           const tr = document.createElement('tr');
-          tr.style.borderBottom = '1px solid #222';
-          function cell(text) {
-            const td = document.createElement('td');
-            td.style.padding = '4px 6px';
-            td.textContent = text;
-            return td;
-          }
-          const timeStr = h.time ? new Date(h.time).toLocaleTimeString() : '';
-          tr.appendChild(cell(timeStr));
-          tr.appendChild(cell(h.serverName || h.serverId || ''));
-          // User cell with link to per-user detail view
-          const userTd = document.createElement('td');
-          userTd.style.padding = '4px 6px';
-          const u = h.user || '';
-          if (u) {
-            const a = document.createElement('a');
-            a.href = 'user.html?user=' + encodeURIComponent(u);
-            a.textContent = u;
-            a.style.color = '#4fc3f7';
-            a.style.textDecoration = 'none';
-            a.onmouseenter = () => a.style.textDecoration = 'underline';
-            a.onmouseleave = () => a.style.textDecoration = 'none';
-            userTd.appendChild(a);
-          }
-          tr.appendChild(userTd);
-          tr.appendChild(cell(h.title || ''));
-          tr.appendChild(cell(h.type || ''));
-          tr.appendChild(cell(h.stream || ''));
-          tr.appendChild(cell(h.location || ''));
-          tr.appendChild(cell(typeof h.bandwidth === 'number' && h.bandwidth > 0 ? h.bandwidth.toFixed(1) + ' Mbps' : ''));
+
+          const mkTd = () => document.createElement('td');
+          const mkMainSub = (main, sub) => {
+            const wrap = document.createElement('div');
+            const a = document.createElement('div');
+            a.className = 'cell-main';
+            a.textContent = main || '';
+            wrap.appendChild(a);
+            if (sub) {
+              const b = document.createElement('div');
+              b.className = 'cell-sub';
+              b.textContent = sub;
+              wrap.appendChild(b);
+            }
+            return wrap;
+          };
+
+          cols.forEach(c => {
+            if (c.key === 'date') {
+              const td = mkTd();
+              const parts = formatDateParts(h.time);
+              const wrap = document.createElement('div');
+              wrap.className = 'date-cell';
+
+              const icon = document.createElement('span');
+              const st = computeSessionStatus(h);
+              icon.className = 'event-icon ' + st.kind;
+              icon.textContent = st.icon;
+              wrap.appendChild(icon);
+
+              // Second line shows time + inferred status.
+              const sub = [parts.time, st.label].filter(Boolean).join(' · ');
+              wrap.appendChild(mkMainSub(parts.date, sub));
+              td.appendChild(wrap);
+              tr.appendChild(td);
+              return;
+            }
+
+            if (c.key === 'server') {
+              const td = mkTd();
+              td.appendChild(mkMainSub(h.serverName || h.serverId || '', (h.type || '').toString().toUpperCase()));
+              tr.appendChild(td);
+              return;
+            }
+
+            if (c.key === 'user') {
+              const td = mkTd();
+              const u = h.user || '';
+              if (u) {
+                const wrap = document.createElement('div');
+                wrap.className = 'user-cell';
+
+                if (h.userAvatar) {
+                  const img = document.createElement('img');
+                  img.className = 'user-avatar';
+                  img.src = h.userAvatar;
+                  img.alt = '';
+                  img.onerror = () => { img.style.display = 'none'; };
+                  wrap.appendChild(img);
+                }
+
+                const a = document.createElement('a');
+                a.href = 'user.html?user=' + encodeURIComponent(u);
+                a.textContent = u;
+                a.className = 'user-link';
+                wrap.appendChild(a);
+                td.appendChild(wrap);
+              }
+              tr.appendChild(td);
+              return;
+            }
+
+            if (c.key === 'content') {
+              const td = mkTd();
+              const title = h.title || '';
+              // Best-effort subtitle: show server name when server column hidden.
+              const sub = columnPrefs.server ? '' : (h.serverName || '');
+              td.appendChild(mkMainSub(title, sub));
+              tr.appendChild(td);
+              return;
+            }
+
+            if (c.key === 'platform') {
+              const td = mkTd();
+              const main = h.platform || h.product || h.player || '';
+              const sub = (h.product && main !== h.product) ? h.product : (h.player && main !== h.player ? h.player : '');
+              td.appendChild(mkMainSub(main, sub));
+              tr.appendChild(td);
+              return;
+            }
+
+            if (c.key === 'location') {
+              const td = mkTd();
+              const main = h.location || '';
+              const sub = h.ip ? String(h.ip) : '';
+              td.appendChild(mkMainSub(main, sub));
+              tr.appendChild(td);
+              return;
+            }
+
+            if (c.key === 'quality') {
+              const td = mkTd();
+              const badge = document.createElement('span');
+              const isTranscoding = !!h.transcoding || (typeof h.stream === 'string' && h.stream.toLowerCase().includes('transcode'));
+              const label = isTranscoding ? 'Transcode' : 'Direct Play';
+              badge.className = 'badge ' + (isTranscoding ? 'transcode' : 'direct');
+              badge.textContent = label;
+
+              const wrap = document.createElement('div');
+              wrap.appendChild(badge);
+              if (h.quality) {
+                const sub = document.createElement('div');
+                sub.className = 'cell-sub';
+                sub.textContent = h.quality;
+                wrap.appendChild(sub);
+              }
+              td.appendChild(wrap);
+              tr.appendChild(td);
+              return;
+            }
+
+            if (c.key === 'duration') {
+              const td = mkTd();
+              td.appendChild(mkMainSub(fmtDuration(h.duration), ''));
+              tr.appendChild(td);
+              return;
+            }
+
+            if (c.key === 'progress') {
+              const td = mkTd();
+              const p = Math.max(0, Math.min(100, Number(h.progress) || 0));
+              const wrap = document.createElement('div');
+              wrap.className = 'progress-wrap';
+              const bar = document.createElement('div');
+              bar.className = 'bar';
+              const fill = document.createElement('div');
+              fill.style.width = `${p}%`;
+              bar.appendChild(fill);
+              wrap.appendChild(bar);
+              const pct = document.createElement('div');
+              pct.className = 'pct';
+              pct.textContent = p ? `${p}%` : '';
+              wrap.appendChild(pct);
+              td.appendChild(wrap);
+              tr.appendChild(td);
+              return;
+            }
+
+            if (c.key === 'bandwidth') {
+              const td = mkTd();
+              td.appendChild(mkMainSub(formatBandwidth(h.bandwidth), ''));
+              tr.appendChild(td);
+              return;
+            }
+
+            const td = mkTd();
+            td.textContent = '';
+            tr.appendChild(td);
+          });
+
           tbody.appendChild(tr);
         });
+
+        const nextBtn = document.getElementById('nextPage');
+        if (nextBtn) nextBtn.disabled = !hasMore;
+        const note = document.getElementById('pageNote');
+        if (note) {
+          const start = history.length ? (currentPage * PAGE_SIZE + 1) : 0;
+          const end = history.length ? (currentPage * PAGE_SIZE + history.length) : 0;
+          note.textContent = `Showing ${start}–${end}`;
+        }
       } catch (e) {
         console.error(e);
       }
     }
     document.getElementById('applyFilters').onclick = async () => {
       currentSearch = document.getElementById('searchText').value.trim();
+      linkedUser = '';
       currentSort = document.getElementById('sortSelect').value;
+      currentServerId = (document.getElementById('serverSelect')?.value || '').trim();
+      saveServerPref();
+      currentPage = 0;
       await renderHistory();
     };
+
+    // Allow pressing Enter in the search box to apply.
+    (function () {
+      const input = document.getElementById('searchText');
+      if (!input) return;
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const btn = document.getElementById('applyFilters');
+          if (btn) btn.click();
+        }
+      });
+    })();
+
+    document.getElementById('nextPage').onclick = async () => {
+      const btn = document.getElementById('nextPage');
+      if (btn && btn.disabled) return;
+      currentPage += 1;
+      await renderHistory();
+    };
+
+    // Range pills
+    function applyRange(range) {
+      currentRange = range;
+      setActivePill(range);
+      const r = computeRange(range);
+      currentFrom = r.from;
+      currentTo = r.to;
+      currentPage = 0;
+      renderHistory();
+    }
+    ['pill7d','pill30d','pill1y','pillAll','pillCustom'].forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.onclick = () => applyRange(el.getAttribute('data-range'));
+    });
+    const fromEl = document.getElementById('fromDate');
+    const toEl = document.getElementById('toDate');
+    if (fromEl) fromEl.onchange = () => { if (currentRange === 'custom') applyRange('custom'); };
+    if (toEl) toEl.onchange = () => { if (currentRange === 'custom') applyRange('custom'); };
+    // Default range
+    applyRange('30d');
+
+    setupColumnsMenu();
+
+    // Load saved server filter before populating options.
+    loadServerPref();
+
+    async function populateServerFilter() {
+      const sel = document.getElementById('serverSelect');
+      if (!sel) return;
+      try {
+        const r = await fetch('/api/status');
+        const payload = await r.json().catch(() => null);
+        const servers = payload && Array.isArray(payload.servers) ? payload.servers : [];
+        const enabled = servers
+          .filter(s => s && (s.id != null) && !s.disabled)
+          .map(s => ({
+            id: String(s.id),
+            name: (s.name || s.baseUrl || `Server ${s.id}`).toString(),
+            type: (s.type || '').toString()
+          }))
+          .sort((a, b) => a.name.localeCompare(b.name));
+
+        sel.innerHTML = '';
+        const optAll = document.createElement('option');
+        optAll.value = '';
+        optAll.textContent = 'All servers';
+        sel.appendChild(optAll);
+
+        enabled.forEach(s => {
+          const opt = document.createElement('option');
+          opt.value = s.id;
+          opt.textContent = s.type ? `${s.name} (${s.type})` : s.name;
+          sel.appendChild(opt);
+        });
+
+        // Preserve current selection if possible
+        if (currentServerId) sel.value = currentServerId;
+      } catch (e) {
+        // ignore; leave dropdown empty-ish
+      }
+    }
+
+    (function setupServerFilterBehavior() {
+      const sel = document.getElementById('serverSelect');
+      if (!sel) return;
+      sel.addEventListener('change', () => {
+        currentServerId = (sel.value || '').trim();
+        saveServerPref();
+        currentPage = 0;
+        renderHistory();
+      });
+    })();
+
+    populateServerFilter();
 
     document.getElementById('importBtn').onclick = async () => {
       try {
@@ -159,13 +806,21 @@
           alert('Import failed: ' + (text || resp.status + ' ' + resp.statusText));
           return;
         }
+        const payload = await resp.json().catch(() => null);
+        const results = payload && Array.isArray(payload.results) ? payload.results : [];
+        const importedTotal = results.reduce((sum, r) => sum + (r && typeof r.imported === 'number' ? r.imported : 0), 0);
+        const errors = results.filter(r => r && r.error).map(r => `${r.serverId || ''} (${r.type || 'server'}): ${r.error}`).filter(Boolean);
+        if (results.length) {
+          alert(`Import complete. Imported ${importedTotal} item(s) across ${results.length} server(s).` + (errors.length ? `\n\nErrors:\n- ${errors.join('\n- ')}` : ''));
+        } else {
+          alert('Import complete, but no enabled servers were imported.');
+        }
         await renderHistory();
       } catch (e) {
         console.error(e);
         alert('Import failed. Check server logs for details.');
       }
     };
-    renderHistory();
     setInterval(renderHistory, 10000);
   </script>
 </body>

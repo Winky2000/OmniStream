@@ -5,64 +5,149 @@
   <title>OmniStream Notifiers</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link rel="stylesheet" href="theme.css">
+  <link rel="stylesheet" href="shell.css">
+  <script src="shell.js" defer></script>
   <style>
-    body{font-family:Segoe UI,Arial;background:var(--bg);color:var(--text-main);margin:0;padding:20px}
-    h1{margin:0 0 8px 0;color:var(--text-main);letter-spacing:1px;font-size:2em}
-    .tabs{display:flex;gap:10px;margin-bottom:20px;border-bottom:1px solid #333;padding-bottom:8px;}
-    .tab-link{padding:6px 14px;border-radius:999px;border:1px solid #444;background:#232837;color:var(--text-main);text-decoration:none;font-size:13px;cursor:pointer;}
-    .tab-link.active{border-color:#00bfff;background:#00bfff;color:#000;}
+    body{font-family:Segoe UI,Arial;background:var(--bg);color:var(--text-main);margin:0;padding:0}
+    h1{margin:0 0 8px 0;color:var(--text-main);letter-spacing:0.5px;font-size:1.8em}
     .section{background:var(--card-bg);border-radius:14px;padding:16px 18px;box-shadow:0 2px 10px #0006;border:1px solid #2f3a52;margin-bottom:18px;max-width:640px;}
     .section h2{margin:0 0 8px 0;font-size:15px;color:var(--text-main);}
     label{display:block;font-size:13px;margin:6px 0;}
-    input[type="text"],input[type="email"],input[type="number"],input[type="password"]{width:100%;max-width:420px;padding:6px 10px;border-radius:6px;border:1px solid #444;background:var(--bg);color:var(--text-main);}
+    input[type="text"],input[type="email"],input[type="number"],input[type="password"],select,textarea{width:100%;max-width:420px;padding:6px 10px;border-radius:6px;border:1px solid #444;background:var(--bg);color:var(--text-main);}
+    textarea{max-width:720px;min-height:90px;resize:vertical;}
     .inline{display:flex;gap:10px;align-items:center;}
     .hint{font-size:12px;color:var(--text-muted);margin-top:4px;}
     .btn{margin-top:12px;padding:6px 14px;border-radius:8px;border:1px solid var(--btn-border);background:var(--btn-bg);color:var(--btn-text);cursor:pointer;font-size:13px;}
     .btn:hover{background:var(--btn-bg-hover);color:var(--btn-text-hover);}
     .danger{border-color:#ff7043;color:#ffab91;}
     .status{font-size:12px;margin-top:8px;}
+    .notifier-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 14px 0;}
+    .notifier-tab{padding:4px 10px;border-radius:999px;border:1px solid var(--btn-border);background:transparent;color:var(--text-muted);font-size:12px;cursor:pointer;}
+    .notifier-tab-active{background:var(--btn-bg);color:var(--btn-text);}
   </style>
 </head>
 <body>
-  <h1>Notifier Settings</h1>
-  <div class="tabs">
-    <a href="admin.html" class="tab-link">Overview</a>
-    <a href="servers.html" class="tab-link">Servers</a>
-    <a href="reports.html" class="tab-link">Reports</a>
-    <a href="notifications.html" class="tab-link">Notifications</a>
-    <a href="history.html" class="tab-link">History</a>
-    <a href="notifiers.html" class="tab-link active">Notifiers</a>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="sidebar-brand">OmniStream</div>
+      <nav class="sidebar-nav">
+        <a href="index.html" class="nav-link">Dashboard</a>
+        <a href="glance.html" class="nav-link">At a glance</a>
+        <a href="history.html" class="nav-link">History</a>
+        <a href="reports.html" class="nav-link">Reports</a>
+        <a href="libraries.html" class="nav-link">Libraries</a>
+        <a href="notifications.html" class="nav-link">Notifications</a>
+        <div class="settings-group">
+          <button type="button" class="nav-group-toggle newsletter-toggle">Newsletter</button>
+          <div class="settings-submenu newsletter-submenu">
+            <a href="overseerr.html" class="submenu-link">Overseerr</a>
+            <a href="subscribers.html" class="submenu-link">Subscribers</a>
+            <a href="templates.html" class="submenu-link">Templates</a>
+            <a href="custom-header.html" class="submenu-link">Custom header</a>
+            <a href="sent-newsletters.html" class="submenu-link">Sent history</a>
+          </div>
+        </div>
+        <div class="settings-group">
+          <button type="button" class="nav-group-toggle settings-toggle">Settings</button>
+          <div class="settings-submenu open">
+            <a href="admin.html" class="submenu-link">Connected servers</a>
+            <a href="servers.html" class="submenu-link">Servers</a>
+            <a href="display.html" class="submenu-link">Themes &amp; layout</a>
+            <a href="notifiers.html" class="submenu-link submenu-link-active">Notifiers</a>
+            <a href="system.html" class="submenu-link">System</a>
+            <a href="about.html" class="submenu-link">About</a>
+          </div>
+        </div>
+        <a href="/logout" class="nav-link">Logout</a>
+      </nav>
+    </aside>
+    <main class="main-content">
+  <button class="sidebar-toggle" id="sidebarToggle">Hide menu</button>
+  <h1>Settings</h1>
+  <h2 style="margin:10px 0 12px 0;font-size:16px;color:var(--text-main);">Notifier settings</h2>
+
+  <div class="notifier-tabs">
+    <button type="button" class="notifier-tab" data-panel="email">Email</button>
+    <button type="button" class="notifier-tab" data-panel="discord">Discord</button>
+    <button type="button" class="notifier-tab" data-panel="webhook">Webhook</button>
+    <button type="button" class="notifier-tab" data-panel="slack">Slack</button>
+    <button type="button" class="notifier-tab" data-panel="telegram">Telegram</button>
+    <button type="button" class="notifier-tab" data-panel="twilio">SMS (Twilio)</button>
+    <button type="button" class="notifier-tab" data-panel="pushover">Pushover</button>
+    <button type="button" class="notifier-tab" data-panel="gotify">Gotify</button>
   </div>
 
-  <div class="section">
+  <div class="section notifier-panel" data-panel="discord">
     <h2>Discord</h2>
+    <label class="inline">
+      <input type="checkbox" id="discordEnabled"> Enable Discord notifications
+    </label>
     <label>
       Webhook URL
       <input type="text" id="discordWebhook" placeholder="https://discord.com/api/webhooks/...">
     </label>
     <div class="hint">Paste a Discord Incoming Webhook URL to receive alerts (offline servers, WAN transcodes, high bandwidth).</div>
+    <label style="margin-top:10px;font-size:12px;font-weight:500;">Notification triggers</label>
+    <label class="inline"><input type="checkbox" id="discordTrigOffline"> Offline servers</label>
+    <label class="inline"><input type="checkbox" id="discordTrigServerBackUp"> Server back up</label>
+    <label class="inline"><input type="checkbox" id="discordTrigWan"> WAN transcodes</label>
+    <label class="inline"><input type="checkbox" id="discordTrigAnyWan"> Any WAN streams</label>
+    <label class="inline"><input type="checkbox" id="discordTrigHigh"> High total bandwidth</label>
+    <label class="inline"><input type="checkbox" id="discordTrigHighWan"> High WAN bandwidth</label>
+    <label class="inline"><input type="checkbox" id="discordTrigHistoryDbBackups"> History DB backups</label>
+    <label class="inline"><input type="checkbox" id="discordTrigPlaybackStart"> Playback start</label>
+    <label class="inline"><input type="checkbox" id="discordTrigPlaybackStop"> Playback stop</label>
   </div>
 
-  <div class="section">
+  <div class="section notifier-panel" data-panel="webhook">
     <h2>Generic Webhook</h2>
+    <label class="inline">
+      <input type="checkbox" id="webhookEnabled"> Enable webhook notifications
+    </label>
     <label>
       Webhook URL
       <input type="text" id="webhookUrl" placeholder="https://your-service.example.com/webhook">
     </label>
     <div class="hint">Useful for Home Assistant, custom bots, or any service that accepts a simple JSON POST.</div>
+    <label style="margin-top:10px;font-size:12px;font-weight:500;">Notification triggers</label>
+    <label class="inline"><input type="checkbox" id="webhookTrigOffline"> Offline servers</label>
+    <label class="inline"><input type="checkbox" id="webhookTrigServerBackUp"> Server back up</label>
+    <label class="inline"><input type="checkbox" id="webhookTrigWan"> WAN transcodes</label>
+    <label class="inline"><input type="checkbox" id="webhookTrigAnyWan"> Any WAN streams</label>
+    <label class="inline"><input type="checkbox" id="webhookTrigHigh"> High total bandwidth</label>
+    <label class="inline"><input type="checkbox" id="webhookTrigHighWan"> High WAN bandwidth</label>
+    <label class="inline"><input type="checkbox" id="webhookTrigHistoryDbBackups"> History DB backups</label>
+    <label class="inline"><input type="checkbox" id="webhookTrigPlaybackStart"> Playback start</label>
+    <label class="inline"><input type="checkbox" id="webhookTrigPlaybackStop"> Playback stop</label>
   </div>
 
-  <div class="section">
+  <div class="section notifier-panel" data-panel="slack">
     <h2>Slack</h2>
+    <label class="inline">
+      <input type="checkbox" id="slackEnabled"> Enable Slack notifications
+    </label>
     <label>
       Incoming Webhook URL
       <input type="text" id="slackWebhook" placeholder="https://hooks.slack.com/services/...">
     </label>
     <div class="hint">Use a Slack Incoming Webhook to post alerts into a channel.</div>
+    <label style="margin-top:10px;font-size:12px;font-weight:500;">Notification triggers</label>
+    <label class="inline"><input type="checkbox" id="slackTrigOffline"> Offline servers</label>
+    <label class="inline"><input type="checkbox" id="slackTrigServerBackUp"> Server back up</label>
+    <label class="inline"><input type="checkbox" id="slackTrigWan"> WAN transcodes</label>
+    <label class="inline"><input type="checkbox" id="slackTrigAnyWan"> Any WAN streams</label>
+    <label class="inline"><input type="checkbox" id="slackTrigHigh"> High total bandwidth</label>
+    <label class="inline"><input type="checkbox" id="slackTrigHighWan"> High WAN bandwidth</label>
+    <label class="inline"><input type="checkbox" id="slackTrigHistoryDbBackups"> History DB backups</label>
+    <label class="inline"><input type="checkbox" id="slackTrigPlaybackStart"> Playback start</label>
+    <label class="inline"><input type="checkbox" id="slackTrigPlaybackStop"> Playback stop</label>
   </div>
 
-  <div class="section">
+  <div class="section notifier-panel" data-panel="telegram">
     <h2>Telegram</h2>
+    <label class="inline">
+      <input type="checkbox" id="telegramEnabled"> Enable Telegram notifications
+    </label>
     <label>
       Bot token
       <input type="text" id="telegramToken" placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11">
@@ -72,10 +157,23 @@
       <input type="text" id="telegramChat" placeholder="@your_channel or numeric chat id">
     </label>
     <div class="hint">Create a bot with @BotFather, then paste its token and the chat/channel ID where you want alerts.</div>
+    <label style="margin-top:10px;font-size:12px;font-weight:500;">Notification triggers</label>
+    <label class="inline"><input type="checkbox" id="telegramTrigOffline"> Offline servers</label>
+    <label class="inline"><input type="checkbox" id="telegramTrigServerBackUp"> Server back up</label>
+    <label class="inline"><input type="checkbox" id="telegramTrigWan"> WAN transcodes</label>
+    <label class="inline"><input type="checkbox" id="telegramTrigAnyWan"> Any WAN streams</label>
+    <label class="inline"><input type="checkbox" id="telegramTrigHigh"> High total bandwidth</label>
+    <label class="inline"><input type="checkbox" id="telegramTrigHighWan"> High WAN bandwidth</label>
+    <label class="inline"><input type="checkbox" id="telegramTrigHistoryDbBackups"> History DB backups</label>
+    <label class="inline"><input type="checkbox" id="telegramTrigPlaybackStart"> Playback start</label>
+    <label class="inline"><input type="checkbox" id="telegramTrigPlaybackStop"> Playback stop</label>
   </div>
 
-  <div class="section">
+  <div class="section notifier-panel" data-panel="twilio">
     <h2>SMS (Twilio)</h2>
+    <label class="inline">
+      <input type="checkbox" id="twilioEnabled"> Enable SMS (Twilio) notifications
+    </label>
     <label>
       Account SID
       <input type="text" id="twilioSid" placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
@@ -93,10 +191,23 @@
       <input type="text" id="twilioTo" placeholder="+1234567890">
     </label>
     <div class="hint">Twilio credentials and numbers are stored in config.json. Use for critical alerts only.</div>
+    <label style="margin-top:10px;font-size:12px;font-weight:500;">Notification triggers</label>
+    <label class="inline"><input type="checkbox" id="twilioTrigOffline"> Offline servers</label>
+    <label class="inline"><input type="checkbox" id="twilioTrigServerBackUp"> Server back up</label>
+    <label class="inline"><input type="checkbox" id="twilioTrigWan"> WAN transcodes</label>
+    <label class="inline"><input type="checkbox" id="twilioTrigAnyWan"> Any WAN streams</label>
+    <label class="inline"><input type="checkbox" id="twilioTrigHigh"> High total bandwidth</label>
+    <label class="inline"><input type="checkbox" id="twilioTrigHighWan"> High WAN bandwidth</label>
+    <label class="inline"><input type="checkbox" id="twilioTrigHistoryDbBackups"> History DB backups</label>
+    <label class="inline"><input type="checkbox" id="twilioTrigPlaybackStart"> Playback start</label>
+    <label class="inline"><input type="checkbox" id="twilioTrigPlaybackStop"> Playback stop</label>
   </div>
 
-  <div class="section">
+  <div class="section notifier-panel" data-panel="pushover">
     <h2>Pushover</h2>
+    <label class="inline">
+      <input type="checkbox" id="pushoverEnabled"> Enable Pushover notifications
+    </label>
     <label>
       User key
       <input type="text" id="pushoverUser" placeholder="your Pushover user key">
@@ -109,10 +220,23 @@
       Priority (default 0)
       <input type="number" id="pushoverPriority" value="0" style="max-width:120px;">
     </label>
+    <label style="margin-top:10px;font-size:12px;font-weight:500;">Notification triggers</label>
+    <label class="inline"><input type="checkbox" id="pushoverTrigOffline"> Offline servers</label>
+    <label class="inline"><input type="checkbox" id="pushoverTrigServerBackUp"> Server back up</label>
+    <label class="inline"><input type="checkbox" id="pushoverTrigWan"> WAN transcodes</label>
+    <label class="inline"><input type="checkbox" id="pushoverTrigAnyWan"> Any WAN streams</label>
+    <label class="inline"><input type="checkbox" id="pushoverTrigHigh"> High total bandwidth</label>
+    <label class="inline"><input type="checkbox" id="pushoverTrigHighWan"> High WAN bandwidth</label>
+    <label class="inline"><input type="checkbox" id="pushoverTrigHistoryDbBackups"> History DB backups</label>
+    <label class="inline"><input type="checkbox" id="pushoverTrigPlaybackStart"> Playback start</label>
+    <label class="inline"><input type="checkbox" id="pushoverTrigPlaybackStop"> Playback stop</label>
   </div>
 
-  <div class="section">
+  <div class="section notifier-panel" data-panel="gotify">
     <h2>Gotify</h2>
+    <label class="inline">
+      <input type="checkbox" id="gotifyEnabled"> Enable Gotify notifications
+    </label>
     <label>
       Server URL
       <input type="text" id="gotifyServer" placeholder="https://gotify.example.com">
@@ -125,9 +249,19 @@
       Priority (default 5)
       <input type="number" id="gotifyPriority" value="5" style="max-width:120px;">
     </label>
+    <label style="margin-top:10px;font-size:12px;font-weight:500;">Notification triggers</label>
+    <label class="inline"><input type="checkbox" id="gotifyTrigOffline"> Offline servers</label>
+    <label class="inline"><input type="checkbox" id="gotifyTrigServerBackUp"> Server back up</label>
+    <label class="inline"><input type="checkbox" id="gotifyTrigWan"> WAN transcodes</label>
+    <label class="inline"><input type="checkbox" id="gotifyTrigAnyWan"> Any WAN streams</label>
+    <label class="inline"><input type="checkbox" id="gotifyTrigHigh"> High total bandwidth</label>
+    <label class="inline"><input type="checkbox" id="gotifyTrigHighWan"> High WAN bandwidth</label>
+    <label class="inline"><input type="checkbox" id="gotifyTrigHistoryDbBackups"> History DB backups</label>
+    <label class="inline"><input type="checkbox" id="gotifyTrigPlaybackStart"> Playback start</label>
+    <label class="inline"><input type="checkbox" id="gotifyTrigPlaybackStop"> Playback stop</label>
   </div>
 
-  <div class="section">
+  <div class="section notifier-panel" data-panel="email">
     <h2>Email</h2>
     <label class="inline">
       <input type="checkbox" id="emailEnabled"> Enable email notifications
@@ -162,18 +296,45 @@
       <input type="password" id="smtpPass" placeholder="smtp password">
     </label>
     <div class="hint">Email credentials are stored in config.json on the server. Use a dedicated app password if possible.</div>
+    <label style="margin-top:10px;font-size:12px;font-weight:500;">Notification triggers</label>
+    <label class="inline"><input type="checkbox" id="emailTrigOffline"> Offline servers</label>
+    <label class="inline"><input type="checkbox" id="emailTrigServerBackUp"> Server back up</label>
+    <label class="inline"><input type="checkbox" id="emailTrigWan"> WAN transcodes</label>
+    <label class="inline"><input type="checkbox" id="emailTrigAnyWan"> Any WAN streams</label>
+    <label class="inline"><input type="checkbox" id="emailTrigHigh"> High total bandwidth</label>
+    <label class="inline"><input type="checkbox" id="emailTrigHighWan"> High WAN bandwidth</label>
+    <label class="inline"><input type="checkbox" id="emailTrigHistoryDbBackups"> History DB backups</label>
+    <label class="inline"><input type="checkbox" id="emailTrigPlaybackStart"> Playback start</label>
+    <label class="inline"><input type="checkbox" id="emailTrigPlaybackStop"> Playback stop</label>
   </div>
 
   <button id="saveBtn" class="btn">Save Settings</button>
   <span id="saveStatus" class="status"></span>
-  <button id="backBtn" class="btn" style="margin-left:8px;">Back to Overview</button>
+  <button id="testBtn" class="btn" style="margin-left:8px;">Send test notification</button>
+  <span id="testStatus" class="status"></span>
+  <button id="backBtn" class="btn" style="margin-left:8px;">Back to Settings</button>
 
   <script>
-    // Apply saved theme
+    let legacyNotifiersConfig = null;
+
     (function() {
-      const savedTheme = localStorage.getItem('omnistreamTheme') || 'default';
-      if (savedTheme && savedTheme !== 'default') {
-        document.documentElement.setAttribute('data-theme', savedTheme);
+      const tabs = document.querySelectorAll('.notifier-tab');
+      const panels = document.querySelectorAll('.notifier-panel');
+      function showPanel(name) {
+        tabs.forEach(tab => {
+          tab.classList.toggle('notifier-tab-active', tab.dataset.panel === name);
+        });
+        panels.forEach(panel => {
+          panel.style.display = panel.dataset.panel === name ? 'block' : 'none';
+        });
+        localStorage.setItem('omnistreamNotifierTab', name);
+      }
+      if (tabs.length && panels.length) {
+        const savedPanel = localStorage.getItem('omnistreamNotifierTab') || 'email';
+        showPanel(savedPanel);
+        tabs.forEach(tab => {
+          tab.addEventListener('click', () => showPanel(tab.dataset.panel));
+        });
       }
     })();
 
@@ -182,10 +343,19 @@
         const r = await fetch('/api/config/notifiers');
         const data = await r.json();
         const n = data.notifiers || {};
+        legacyNotifiersConfig = n;
         const discord = n.discord || {};
         const email = n.email || {};
+        const webhook = n.webhook || {};
+        const slack = n.slack || {};
+        const telegram = n.telegram || {};
+        const twilio = n.twilio || {};
+        const pushover = n.pushover || {};
+        const gotify = n.gotify || {};
+
+        document.getElementById('discordEnabled').checked = discord.enabled !== false;
         document.getElementById('discordWebhook').value = discord.webhookUrl || '';
-        document.getElementById('emailEnabled').checked = email.enabled === true;
+        document.getElementById('emailEnabled').checked = email.enabled !== false;
         document.getElementById('emailFrom').value = email.from || '';
         document.getElementById('emailTo').value = email.to || '';
         const smtp = email.smtp || {};
@@ -195,26 +365,114 @@
         const auth = smtp.auth || {};
         document.getElementById('smtpUser').value = auth.user || '';
         document.getElementById('smtpPass').value = auth.pass || '';
-        const webhook = n.webhook || {};
+        document.getElementById('webhookEnabled').checked = webhook.enabled !== false;
         document.getElementById('webhookUrl').value = webhook.url || '';
-        const slack = n.slack || {};
+        document.getElementById('slackEnabled').checked = slack.enabled !== false;
         document.getElementById('slackWebhook').value = slack.webhookUrl || '';
-        const telegram = n.telegram || {};
+        document.getElementById('telegramEnabled').checked = telegram.enabled !== false;
         document.getElementById('telegramToken').value = telegram.botToken || '';
         document.getElementById('telegramChat').value = telegram.chatId || '';
-        const twilio = n.twilio || {};
+        document.getElementById('twilioEnabled').checked = twilio.enabled !== false;
         document.getElementById('twilioSid').value = twilio.accountSid || '';
         document.getElementById('twilioToken').value = twilio.authToken || '';
         document.getElementById('twilioFrom').value = twilio.from || '';
         document.getElementById('twilioTo').value = twilio.to || '';
-        const pushover = n.pushover || {};
+        document.getElementById('pushoverEnabled').checked = pushover.enabled !== false;
         document.getElementById('pushoverUser').value = pushover.user || '';
         document.getElementById('pushoverToken').value = pushover.token || '';
         document.getElementById('pushoverPriority').value = pushover.priority != null ? pushover.priority : 0;
-        const gotify = n.gotify || {};
+        document.getElementById('gotifyEnabled').checked = gotify.enabled !== false;
         document.getElementById('gotifyServer').value = gotify.serverUrl || '';
         document.getElementById('gotifyToken').value = gotify.token || '';
         document.getElementById('gotifyPriority').value = gotify.priority != null ? gotify.priority : 5;
+
+        const emailTrig = email.triggers || {};
+        document.getElementById('emailTrigOffline').checked = emailTrig.offline !== false;
+        document.getElementById('emailTrigServerBackUp').checked = emailTrig.serverBackUp === true;
+        document.getElementById('emailTrigWan').checked = emailTrig.wanTranscodes !== false;
+        document.getElementById('emailTrigAnyWan').checked = emailTrig.anyWan !== false;
+        document.getElementById('emailTrigHigh').checked = emailTrig.highBandwidth !== false;
+        document.getElementById('emailTrigHighWan').checked = emailTrig.highWanBandwidth !== false;
+        document.getElementById('emailTrigHistoryDbBackups').checked = emailTrig.historyDbBackups !== false;
+        document.getElementById('emailTrigPlaybackStart').checked = emailTrig.playbackStart === true;
+        document.getElementById('emailTrigPlaybackStop').checked = emailTrig.playbackStop === true;
+
+        const discordTrig = discord.triggers || {};
+        document.getElementById('discordTrigOffline').checked = discordTrig.offline !== false;
+        document.getElementById('discordTrigServerBackUp').checked = discordTrig.serverBackUp === true;
+        document.getElementById('discordTrigWan').checked = discordTrig.wanTranscodes !== false;
+        document.getElementById('discordTrigAnyWan').checked = discordTrig.anyWan !== false;
+        document.getElementById('discordTrigHigh').checked = discordTrig.highBandwidth !== false;
+        document.getElementById('discordTrigHighWan').checked = discordTrig.highWanBandwidth !== false;
+        document.getElementById('discordTrigHistoryDbBackups').checked = discordTrig.historyDbBackups !== false;
+        document.getElementById('discordTrigPlaybackStart').checked = discordTrig.playbackStart === true;
+        document.getElementById('discordTrigPlaybackStop').checked = discordTrig.playbackStop === true;
+
+        const webhookTrig = webhook.triggers || {};
+        document.getElementById('webhookTrigOffline').checked = webhookTrig.offline !== false;
+        document.getElementById('webhookTrigServerBackUp').checked = webhookTrig.serverBackUp === true;
+        document.getElementById('webhookTrigWan').checked = webhookTrig.wanTranscodes !== false;
+        document.getElementById('webhookTrigAnyWan').checked = webhookTrig.anyWan !== false;
+        document.getElementById('webhookTrigHigh').checked = webhookTrig.highBandwidth !== false;
+        document.getElementById('webhookTrigHighWan').checked = webhookTrig.highWanBandwidth !== false;
+        document.getElementById('webhookTrigHistoryDbBackups').checked = webhookTrig.historyDbBackups !== false;
+        document.getElementById('webhookTrigPlaybackStart').checked = webhookTrig.playbackStart === true;
+        document.getElementById('webhookTrigPlaybackStop').checked = webhookTrig.playbackStop === true;
+
+        const slackTrig = slack.triggers || {};
+        document.getElementById('slackTrigOffline').checked = slackTrig.offline !== false;
+        document.getElementById('slackTrigServerBackUp').checked = slackTrig.serverBackUp === true;
+        document.getElementById('slackTrigWan').checked = slackTrig.wanTranscodes !== false;
+        document.getElementById('slackTrigAnyWan').checked = slackTrig.anyWan !== false;
+        document.getElementById('slackTrigHigh').checked = slackTrig.highBandwidth !== false;
+        document.getElementById('slackTrigHighWan').checked = slackTrig.highWanBandwidth !== false;
+        document.getElementById('slackTrigHistoryDbBackups').checked = slackTrig.historyDbBackups !== false;
+        document.getElementById('slackTrigPlaybackStart').checked = slackTrig.playbackStart === true;
+        document.getElementById('slackTrigPlaybackStop').checked = slackTrig.playbackStop === true;
+
+        const telegramTrig = telegram.triggers || {};
+        document.getElementById('telegramTrigOffline').checked = telegramTrig.offline !== false;
+        document.getElementById('telegramTrigServerBackUp').checked = telegramTrig.serverBackUp === true;
+        document.getElementById('telegramTrigWan').checked = telegramTrig.wanTranscodes !== false;
+        document.getElementById('telegramTrigAnyWan').checked = telegramTrig.anyWan !== false;
+        document.getElementById('telegramTrigHigh').checked = telegramTrig.highBandwidth !== false;
+        document.getElementById('telegramTrigHighWan').checked = telegramTrig.highWanBandwidth !== false;
+        document.getElementById('telegramTrigHistoryDbBackups').checked = telegramTrig.historyDbBackups !== false;
+        document.getElementById('telegramTrigPlaybackStart').checked = telegramTrig.playbackStart === true;
+        document.getElementById('telegramTrigPlaybackStop').checked = telegramTrig.playbackStop === true;
+
+        const twilioTrig = twilio.triggers || {};
+        document.getElementById('twilioTrigOffline').checked = twilioTrig.offline !== false;
+        document.getElementById('twilioTrigServerBackUp').checked = twilioTrig.serverBackUp === true;
+        document.getElementById('twilioTrigWan').checked = twilioTrig.wanTranscodes !== false;
+        document.getElementById('twilioTrigAnyWan').checked = twilioTrig.anyWan !== false;
+        document.getElementById('twilioTrigHigh').checked = twilioTrig.highBandwidth !== false;
+        document.getElementById('twilioTrigHighWan').checked = twilioTrig.highWanBandwidth !== false;
+        document.getElementById('twilioTrigHistoryDbBackups').checked = twilioTrig.historyDbBackups !== false;
+        document.getElementById('twilioTrigPlaybackStart').checked = twilioTrig.playbackStart === true;
+        document.getElementById('twilioTrigPlaybackStop').checked = twilioTrig.playbackStop === true;
+
+        const pushoverTrig = pushover.triggers || {};
+        document.getElementById('pushoverTrigOffline').checked = pushoverTrig.offline !== false;
+        document.getElementById('pushoverTrigServerBackUp').checked = pushoverTrig.serverBackUp === true;
+        document.getElementById('pushoverTrigWan').checked = pushoverTrig.wanTranscodes !== false;
+        document.getElementById('pushoverTrigAnyWan').checked = pushoverTrig.anyWan !== false;
+        document.getElementById('pushoverTrigHigh').checked = pushoverTrig.highBandwidth !== false;
+        document.getElementById('pushoverTrigHighWan').checked = pushoverTrig.highWanBandwidth !== false;
+        document.getElementById('pushoverTrigHistoryDbBackups').checked = pushoverTrig.historyDbBackups !== false;
+        document.getElementById('pushoverTrigPlaybackStart').checked = pushoverTrig.playbackStart === true;
+        document.getElementById('pushoverTrigPlaybackStop').checked = pushoverTrig.playbackStop === true;
+
+        const gotifyTrigObj = gotify.triggers || {};
+        document.getElementById('gotifyTrigOffline').checked = gotifyTrigObj.offline !== false;
+        document.getElementById('gotifyTrigServerBackUp').checked = gotifyTrigObj.serverBackUp === true;
+        document.getElementById('gotifyTrigWan').checked = gotifyTrigObj.wanTranscodes !== false;
+        document.getElementById('gotifyTrigAnyWan').checked = gotifyTrigObj.anyWan !== false;
+        document.getElementById('gotifyTrigHigh').checked = gotifyTrigObj.highBandwidth !== false;
+        document.getElementById('gotifyTrigHighWan').checked = gotifyTrigObj.highWanBandwidth !== false;
+        document.getElementById('gotifyTrigHistoryDbBackups').checked = gotifyTrigObj.historyDbBackups !== false;
+        document.getElementById('gotifyTrigPlaybackStart').checked = gotifyTrigObj.playbackStart === true;
+        document.getElementById('gotifyTrigPlaybackStop').checked = gotifyTrigObj.playbackStop === true;
       } catch (e) {
         console.error(e);
       }
@@ -224,9 +482,28 @@
       const statusEl = document.getElementById('saveStatus');
       statusEl.textContent = 'Saving...';
       try {
+        // Rules UI removed; preserve whatever the server has.
+        if (!legacyNotifiersConfig) {
+          statusEl.textContent = 'Cannot save yet. Please wait for settings to finish loading.';
+          statusEl.style.color = '#ff8a80';
+          return;
+        }
         const body = {
+          rules: legacyNotifiersConfig.rules || {},
           discord: {
-            webhookUrl: document.getElementById('discordWebhook').value.trim() || undefined
+            enabled: document.getElementById('discordEnabled').checked,
+            webhookUrl: document.getElementById('discordWebhook').value.trim() || undefined,
+            triggers: {
+              offline: document.getElementById('discordTrigOffline').checked,
+              serverBackUp: document.getElementById('discordTrigServerBackUp').checked,
+              wanTranscodes: document.getElementById('discordTrigWan').checked,
+              anyWan: document.getElementById('discordTrigAnyWan').checked,
+              highBandwidth: document.getElementById('discordTrigHigh').checked,
+              highWanBandwidth: document.getElementById('discordTrigHighWan').checked,
+              historyDbBackups: document.getElementById('discordTrigHistoryDbBackups').checked,
+              playbackStart: document.getElementById('discordTrigPlaybackStart').checked,
+              playbackStop: document.getElementById('discordTrigPlaybackStop').checked
+            }
           },
           email: {
             enabled: document.getElementById('emailEnabled').checked,
@@ -240,33 +517,116 @@
                 user: document.getElementById('smtpUser').value.trim() || undefined,
                 pass: document.getElementById('smtpPass').value || undefined
               }
+            },
+            triggers: {
+              offline: document.getElementById('emailTrigOffline').checked,
+              serverBackUp: document.getElementById('emailTrigServerBackUp').checked,
+              wanTranscodes: document.getElementById('emailTrigWan').checked,
+              anyWan: document.getElementById('emailTrigAnyWan').checked,
+              highBandwidth: document.getElementById('emailTrigHigh').checked,
+              highWanBandwidth: document.getElementById('emailTrigHighWan').checked,
+              historyDbBackups: document.getElementById('emailTrigHistoryDbBackups').checked,
+              playbackStart: document.getElementById('emailTrigPlaybackStart').checked,
+              playbackStop: document.getElementById('emailTrigPlaybackStop').checked
             }
           },
           webhook: {
-            url: document.getElementById('webhookUrl').value.trim() || undefined
+            enabled: document.getElementById('webhookEnabled').checked,
+            url: document.getElementById('webhookUrl').value.trim() || undefined,
+            triggers: {
+              offline: document.getElementById('webhookTrigOffline').checked,
+              serverBackUp: document.getElementById('webhookTrigServerBackUp').checked,
+              wanTranscodes: document.getElementById('webhookTrigWan').checked,
+              anyWan: document.getElementById('webhookTrigAnyWan').checked,
+              highBandwidth: document.getElementById('webhookTrigHigh').checked,
+              highWanBandwidth: document.getElementById('webhookTrigHighWan').checked,
+              historyDbBackups: document.getElementById('webhookTrigHistoryDbBackups').checked,
+              playbackStart: document.getElementById('webhookTrigPlaybackStart').checked,
+              playbackStop: document.getElementById('webhookTrigPlaybackStop').checked
+            }
           },
           slack: {
-            webhookUrl: document.getElementById('slackWebhook').value.trim() || undefined
+            enabled: document.getElementById('slackEnabled').checked,
+            webhookUrl: document.getElementById('slackWebhook').value.trim() || undefined,
+            triggers: {
+              offline: document.getElementById('slackTrigOffline').checked,
+              serverBackUp: document.getElementById('slackTrigServerBackUp').checked,
+              wanTranscodes: document.getElementById('slackTrigWan').checked,
+              anyWan: document.getElementById('slackTrigAnyWan').checked,
+              highBandwidth: document.getElementById('slackTrigHigh').checked,
+              highWanBandwidth: document.getElementById('slackTrigHighWan').checked,
+              historyDbBackups: document.getElementById('slackTrigHistoryDbBackups').checked,
+              playbackStart: document.getElementById('slackTrigPlaybackStart').checked,
+              playbackStop: document.getElementById('slackTrigPlaybackStop').checked
+            }
           },
           telegram: {
+            enabled: document.getElementById('telegramEnabled').checked,
             botToken: document.getElementById('telegramToken').value.trim() || undefined,
-            chatId: document.getElementById('telegramChat').value.trim() || undefined
+            chatId: document.getElementById('telegramChat').value.trim() || undefined,
+            triggers: {
+              offline: document.getElementById('telegramTrigOffline').checked,
+              serverBackUp: document.getElementById('telegramTrigServerBackUp').checked,
+              wanTranscodes: document.getElementById('telegramTrigWan').checked,
+              anyWan: document.getElementById('telegramTrigAnyWan').checked,
+              highBandwidth: document.getElementById('telegramTrigHigh').checked,
+              highWanBandwidth: document.getElementById('telegramTrigHighWan').checked,
+              historyDbBackups: document.getElementById('telegramTrigHistoryDbBackups').checked,
+              playbackStart: document.getElementById('telegramTrigPlaybackStart').checked,
+              playbackStop: document.getElementById('telegramTrigPlaybackStop').checked
+            }
           },
           twilio: {
+            enabled: document.getElementById('twilioEnabled').checked,
             accountSid: document.getElementById('twilioSid').value.trim() || undefined,
             authToken: document.getElementById('twilioToken').value || undefined,
             from: document.getElementById('twilioFrom').value.trim() || undefined,
-            to: document.getElementById('twilioTo').value.trim() || undefined
+            to: document.getElementById('twilioTo').value.trim() || undefined,
+            triggers: {
+              offline: document.getElementById('twilioTrigOffline').checked,
+              serverBackUp: document.getElementById('twilioTrigServerBackUp').checked,
+              wanTranscodes: document.getElementById('twilioTrigWan').checked,
+              anyWan: document.getElementById('twilioTrigAnyWan').checked,
+              highBandwidth: document.getElementById('twilioTrigHigh').checked,
+              highWanBandwidth: document.getElementById('twilioTrigHighWan').checked,
+              historyDbBackups: document.getElementById('twilioTrigHistoryDbBackups').checked,
+              playbackStart: document.getElementById('twilioTrigPlaybackStart').checked,
+              playbackStop: document.getElementById('twilioTrigPlaybackStop').checked
+            }
           },
           pushover: {
+            enabled: document.getElementById('pushoverEnabled').checked,
             user: document.getElementById('pushoverUser').value.trim() || undefined,
             token: document.getElementById('pushoverToken').value.trim() || undefined,
-            priority: Number(document.getElementById('pushoverPriority').value)
+            priority: Number(document.getElementById('pushoverPriority').value),
+            triggers: {
+              offline: document.getElementById('pushoverTrigOffline').checked,
+              serverBackUp: document.getElementById('pushoverTrigServerBackUp').checked,
+              wanTranscodes: document.getElementById('pushoverTrigWan').checked,
+              anyWan: document.getElementById('pushoverTrigAnyWan').checked,
+              highBandwidth: document.getElementById('pushoverTrigHigh').checked,
+              highWanBandwidth: document.getElementById('pushoverTrigHighWan').checked,
+              historyDbBackups: document.getElementById('pushoverTrigHistoryDbBackups').checked,
+              playbackStart: document.getElementById('pushoverTrigPlaybackStart').checked,
+              playbackStop: document.getElementById('pushoverTrigPlaybackStop').checked
+            }
           },
           gotify: {
+            enabled: document.getElementById('gotifyEnabled').checked,
             serverUrl: document.getElementById('gotifyServer').value.trim() || undefined,
             token: document.getElementById('gotifyToken').value.trim() || undefined,
-            priority: Number(document.getElementById('gotifyPriority').value)
+            priority: Number(document.getElementById('gotifyPriority').value),
+            triggers: {
+              offline: document.getElementById('gotifyTrigOffline').checked,
+              serverBackUp: document.getElementById('gotifyTrigServerBackUp').checked,
+              wanTranscodes: document.getElementById('gotifyTrigWan').checked,
+              anyWan: document.getElementById('gotifyTrigAnyWan').checked,
+              highBandwidth: document.getElementById('gotifyTrigHigh').checked,
+              highWanBandwidth: document.getElementById('gotifyTrigHighWan').checked,
+              historyDbBackups: document.getElementById('gotifyTrigHistoryDbBackups').checked,
+              playbackStart: document.getElementById('gotifyTrigPlaybackStart').checked,
+              playbackStop: document.getElementById('gotifyTrigPlaybackStop').checked
+            }
           }
         };
         const resp = await fetch('/api/config/notifiers', {
@@ -289,12 +649,53 @@
       }
     }
 
-    document.getElementById('saveBtn').onclick = saveConfig;
-    document.getElementById('backBtn').onclick = () => {
-      window.location.href = 'admin.html';
-    };
+    function wireLegacyNotifiersButtonsUi() {
+      const saveBtn = document.getElementById('saveBtn');
+      const testBtn = document.getElementById('testBtn');
+      const backBtn = document.getElementById('backBtn');
+      if (saveBtn) saveBtn.onclick = saveConfig;
+      if (testBtn) testBtn.onclick = testNotifiers;
+      if (backBtn) {
+        backBtn.onclick = () => {
+          window.location.href = 'admin.html';
+        };
+      }
+    }
 
-    loadConfig();
+    async function testNotifiers() {
+      const statusEl = document.getElementById('testStatus');
+      statusEl.textContent = 'Sending test notification...';
+      statusEl.style.color = '';
+      try {
+        const resp = await fetch('/api/notifiers/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({})
+        });
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => '');
+          statusEl.textContent = 'Test failed: ' + (text || resp.status + ' ' + resp.statusText);
+          statusEl.style.color = '#ff8a80';
+          return;
+        }
+        const data = await resp.json().catch(() => ({}));
+        const channels = Array.isArray(data.channels) && data.channels.length ? data.channels.join(', ') : 'configured notifiers';
+        statusEl.textContent = 'Test notification sent via ' + channels + '. Check your targets to confirm.';
+        statusEl.style.color = '#a5d6a7';
+      } catch (e) {
+        console.error(e);
+        statusEl.textContent = 'Test failed. Check server logs.';
+        statusEl.style.color = '#ff8a80';
+      }
+    }
+
+    // Ensure wiring happens even if something loads slowly.
+    window.addEventListener('DOMContentLoaded', async () => {
+      try { wireLegacyNotifiersButtonsUi(); } catch (e) { console.error(e); }
+      try { await loadConfig(); } catch (e) { console.error(e); }
+    });
   </script>
+    </main>
+  </div>
 </body>
 </html>

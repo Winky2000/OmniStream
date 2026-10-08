@@ -1,0 +1,685 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>OmniStream Libraries</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="theme.css">
+  <link rel="stylesheet" href="shell.css">
+  <script src="shell.js" defer></script>
+  <style>
+    body{font-family:Segoe UI,Arial;background:var(--bg);color:var(--text-main);margin:0;padding:0}
+    h1{margin:0 0 8px 0;color:var(--text-main);letter-spacing:0.5px;font-size:1.8em;font-weight:600;}
+    .subtitle{margin:0 0 10px 0;font-size:12px;color:var(--text-muted);}
+    .placeholder{margin-top:18px;font-size:13px;color:var(--text-muted);}
+    .back-btn{margin-top:12px;padding:6px 14px;border-radius:8px;border:1px solid var(--btn-border);background:var(--btn-bg);color:var(--btn-text);cursor:pointer;}
+    .back-btn:hover{background:var(--btn-bg-hover);color:var(--btn-text-hover);}
+
+    .toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:6px;}
+    .control{display:inline-flex;align-items:center;gap:8px;padding:6px;border-radius:12px;background:rgba(0,0,0,0.18);border:1px solid rgba(148,163,184,0.22);}
+    :root[data-theme="light"] .control,
+    :root[data-theme="light-borderless"] .control{background:rgba(0,0,0,0.03);border-color:#dddddd;}
+    .select{padding:7px 10px;border-radius:10px;border:1px solid rgba(148,163,184,0.22);background:rgba(0,0,0,0.10);color:var(--text-main);font-size:12px;outline:none;min-width:240px;}
+    .select option{background:var(--card-bg);color:var(--text-main);}
+    :root[data-theme="light"] .select,
+    :root[data-theme="light-borderless"] .select{background:#ffffff;border-color:#dddddd;color:#111111;}
+    .btn{margin-top:0;padding:7px 12px;border-radius:10px;border:1px solid var(--btn-border);background:var(--btn-bg);color:var(--btn-text);cursor:pointer;font-size:12px;}
+    .btn:hover{background:var(--btn-bg-hover);color:var(--btn-text-hover);}
+    .btn[disabled]{opacity:0.65;cursor:not-allowed;}
+
+    .progress{height:8px;border-radius:999px;background:rgba(148,163,184,0.18);border:1px solid rgba(148,163,184,0.22);overflow:hidden;}
+    :root[data-theme="light"] .progress,
+    :root[data-theme="light-borderless"] .progress{background:rgba(0,0,0,0.06);border-color:#dddddd;}
+    .progress-fill{height:100%;width:0%;background:var(--progress-fill);border-radius:999px;transition:width 180ms ease;}
+
+    .modal-backdrop{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.55);z-index:9999;padding:18px;box-sizing:border-box;}
+    :root[data-theme="light"] .modal-backdrop,
+    :root[data-theme="light-borderless"] .modal-backdrop{background:rgba(0,0,0,0.20);}
+    .modal{width:min(520px,100%);border-radius:14px;background:var(--card-bg);border:1px solid rgba(148,163,184,0.22);padding:14px 14px 12px 14px;box-sizing:border-box;}
+    :root[data-theme="light"] .modal,
+    :root[data-theme="light-borderless"] .modal{border-color:#dddddd;}
+    .modal-title{font-size:13px;font-weight:800;color:var(--text-main);margin:0 0 6px 0;letter-spacing:0.02em;}
+    .modal-sub{font-size:12px;color:var(--text-muted);margin:0 0 10px 0;line-height:1.35;}
+
+    .stats-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px;margin-bottom:10px;}
+    @media (max-width: 640px){.stats-grid{grid-template-columns:1fr;}}
+    .stat-card{background:rgba(0,0,0,0.18);border:1px solid rgba(148,163,184,0.22);border-radius:12px;padding:12px 14px;}
+    :root[data-theme="light"] .stat-card,
+    :root[data-theme="light-borderless"] .stat-card{background:rgba(0,0,0,0.03);border-color:#dddddd;}
+    .stat-value{font-size:18px;font-weight:700;letter-spacing:0.2px;color:var(--text-main);line-height:1.1;font-variant-numeric:tabular-nums;}
+    .stat-label{margin-top:4px;font-size:12px;color:var(--text-muted);line-height:1.25;}
+
+    .panel{background:rgba(0,0,0,0.18);border:1px solid rgba(148,163,184,0.22);border-radius:12px;padding:12px 14px;margin-top:12px;}
+    :root[data-theme="light"] .panel,
+    :root[data-theme="light-borderless"] .panel{background:rgba(0,0,0,0.03);border-color:#dddddd;}
+    .panel-title{font-size:13px;font-weight:700;color:var(--text-main);margin:0 0 6px 0;}
+    .panel-hint{font-size:12px;color:var(--text-muted);margin:0 0 10px 0;}
+
+    .lib-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;}
+    @media (max-width: 980px){.lib-list{grid-template-columns:repeat(2,minmax(0,1fr));}}
+    @media (max-width: 640px){.lib-list{grid-template-columns:1fr;}}
+    .lib-row{display:flex;gap:12px;align-items:flex-start;padding:10px 12px;border-radius:12px;background:rgba(0,0,0,0.14);border:1px solid rgba(148,163,184,0.18);height:100%;position:relative;overflow:hidden;}
+    .lib-row::before{content:"";position:absolute;inset:-18px;background-image:var(--lib-bg);background-size:cover;background-position:center;filter:blur(14px);transform:scale(1.12);opacity:0;transition:opacity 160ms ease;}
+    .lib-row::after{content:"";position:absolute;inset:0;background:rgba(0,0,0,0.22);opacity:0;transition:opacity 160ms ease;}
+    .lib-row.has-bg::before{opacity:0.30;}
+    .lib-row.has-bg::after{opacity:1;}
+    :root[data-theme="light"] .lib-row,
+    :root[data-theme="light-borderless"] .lib-row{background:rgba(0,0,0,0.02);border-color:#e5e5e5;}
+    .lib-thumb{width:44px;height:44px;border-radius:10px;flex:0 0 auto;border:1px solid rgba(148,163,184,0.22);background:rgba(0,0,0,0.10);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:var(--text-main);user-select:none;position:relative;overflow:hidden;z-index:1;}
+    :root[data-theme="light"] .lib-thumb,
+    :root[data-theme="light-borderless"] .lib-thumb{border-color:#dddddd;background:#ffffff;}
+    .lib-thumb-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
+    .lib-thumb-initial{position:relative;z-index:1;opacity:0.9;}
+    .lib-main{min-width:0;flex:1;background:var(--card-bg);border:1px solid rgba(148,163,184,0.18);border-radius:10px;padding:8px 10px;z-index:1;}
+    :root[data-theme="light"] .lib-main,
+    :root[data-theme="light-borderless"] .lib-main{border-color:#e5e5e5;}
+    .lib-title{font-size:13px;font-weight:700;color:var(--text-main);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .lib-sub{margin-top:2px;font-size:12px;color:var(--text-muted);line-height:1.25;}
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="sidebar-brand">OmniStream</div>
+      <nav class="sidebar-nav">
+        <a href="index.html" class="nav-link">Dashboard</a>
+        <a href="glance.html" class="nav-link">At a glance</a>
+        <a href="history.html" class="nav-link">History</a>
+        <a href="reports.html" class="nav-link">Reports</a>
+        <a href="libraries.html" class="nav-link nav-link-active">Libraries</a>
+        <a href="notifications.html" class="nav-link">Notifications</a>
+        <div class="settings-group">
+          <button type="button" class="nav-group-toggle newsletter-toggle">Newsletter</button>
+          <div class="settings-submenu newsletter-submenu">
+            <a href="overseerr.html" class="submenu-link">Overseerr</a>
+            <a href="subscribers.html" class="submenu-link">Subscribers</a>
+            <a href="templates.html" class="submenu-link">Templates</a>
+            <a href="custom-header.html" class="submenu-link">Custom header</a>
+            <a href="sent-newsletters.html" class="submenu-link">Sent history</a>
+          </div>
+        </div>
+        <div class="settings-group">
+          <button type="button" class="nav-group-toggle settings-toggle">Settings</button>
+          <div class="settings-submenu">
+            <a href="admin.html" class="submenu-link">Connected servers</a>
+            <a href="servers.html" class="submenu-link">Servers</a>
+            <a href="display.html" class="submenu-link">Themes &amp; layout</a>
+            <a href="notifiers.html" class="submenu-link">Notifiers</a>
+            <a href="system.html" class="submenu-link">System</a>
+            <a href="about.html" class="submenu-link">About</a>
+          </div>
+        </div>
+        <a href="/logout" class="nav-link">Logout</a>
+      </nav>
+    </aside>
+
+    <main class="main-content">
+      <button class="sidebar-toggle" id="sidebarToggle">Hide menu</button>
+      <h1>LIBRARIES</h1>
+      <div class="subtitle">Movies + TV totals (uses full scan for sizes)</div>
+
+      <div class="toolbar">
+        <div class="control">
+          <select id="serverSelect" class="select" aria-label="Server"></select>
+        </div>
+        <button id="refreshBtn" class="btn" type="button">Refresh</button>
+      </div>
+
+      <div class="stats-grid" aria-label="Library summary">
+        <div class="stat-card">
+          <div class="stat-value" id="moviesValue">—</div>
+          <div class="stat-label" id="moviesLabel">MOVIES</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="tvValue">—</div>
+          <div class="stat-label" id="tvLabel">TV</div>
+        </div>
+      </div>
+
+      <div class="panel" aria-label="All libraries">
+        <div class="panel-title">All libraries</div>
+        <div class="panel-hint" id="libraryListHint"></div>
+        <div class="lib-list" id="libraryList"></div>
+      </div>
+
+      <div id="status" class="placeholder"></div>
+
+      <button class="back-btn" onclick="window.location.href='admin.html'">Back to Settings</button>
+    </main>
+  </div>
+
+  <div class="modal-backdrop" id="refreshModal" aria-hidden="true" role="dialog" aria-modal="true">
+    <div class="modal">
+      <div class="modal-title">Refreshing libraries…</div>
+      <div class="modal-sub" id="refreshModalStatus">Starting…</div>
+      <div class="progress" id="refreshProgress" aria-hidden="false">
+        <div class="progress-fill" id="refreshProgressFill"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const moviesValue = document.getElementById('moviesValue');
+    const moviesLabel = document.getElementById('moviesLabel');
+    const tvValue = document.getElementById('tvValue');
+    const tvLabel = document.getElementById('tvLabel');
+    const statusEl = document.getElementById('status');
+    const libraryListHintEl = document.getElementById('libraryListHint');
+    const libraryListEl = document.getElementById('libraryList');
+
+    const serverSelect = document.getElementById('serverSelect');
+    const refreshBtn = document.getElementById('refreshBtn');
+    const refreshModalEl = document.getElementById('refreshModal');
+    const refreshModalStatusEl = document.getElementById('refreshModalStatus');
+    const refreshProgressEl = document.getElementById('refreshProgress');
+    const refreshProgressFillEl = document.getElementById('refreshProgressFill');
+
+    const PREF_KEY = 'omnistream_libraries_server';
+
+    function fmtInt(n) {
+      const v = Number(n);
+      if (!Number.isFinite(v)) return '0';
+      return Math.floor(v).toLocaleString();
+    }
+
+    function formatBytes(bytes) {
+      const b = Number(bytes);
+      if (!Number.isFinite(b) || b <= 0) return '0 B';
+      const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+      let v = b;
+      let i = 0;
+      while (v >= 1024 && i < units.length - 1) {
+        v /= 1024;
+        i++;
+      }
+      const dp = v >= 100 ? 0 : (v >= 10 ? 1 : 2);
+      return `${v.toFixed(dp)} ${units[i]}`;
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    function safeParseDate(value) {
+      if (!value) return null;
+      const ms = Date.parse(value);
+      return Number.isFinite(ms) ? new Date(ms) : null;
+    }
+
+    function formatRelativeTime(date) {
+      if (!date) return '—';
+      const diffMs = Date.now() - date.getTime();
+      if (!Number.isFinite(diffMs)) return '—';
+      const abs = Math.abs(diffMs);
+      const sec = Math.floor(abs / 1000);
+      const min = Math.floor(sec / 60);
+      const hr = Math.floor(min / 60);
+      const day = Math.floor(hr / 24);
+      if (day > 0) return `${day} day${day === 1 ? '' : 's'} ago`;
+      if (hr > 0) return `${hr} hour${hr === 1 ? '' : 's'} ago`;
+      if (min > 0) return `${min} minute${min === 1 ? '' : 's'} ago`;
+      return `${sec} second${sec === 1 ? '' : 's'} ago`;
+    }
+
+    function formatAge(fromDate, toDate) {
+      if (!fromDate || !toDate) return '—';
+      const start = new Date(fromDate.getTime());
+      const end = new Date(toDate.getTime());
+      if (end < start) return '0 days';
+
+      let years = 0;
+      while (true) {
+        const next = new Date(start.getTime());
+        next.setFullYear(next.getFullYear() + 1);
+        if (next <= end) {
+          start.setFullYear(start.getFullYear() + 1);
+          years++;
+        } else {
+          break;
+        }
+        if (years > 100) break;
+      }
+
+      let months = 0;
+      while (true) {
+        const next = new Date(start.getTime());
+        next.setMonth(next.getMonth() + 1);
+        if (next <= end) {
+          start.setMonth(start.getMonth() + 1);
+          months++;
+        } else {
+          break;
+        }
+        if (months > 1200) break;
+      }
+
+      const daysTotal = Math.max(0, Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
+      const weeks = Math.floor(daysTotal / 7);
+      const days = daysTotal % 7;
+
+      const parts = [];
+      if (years) parts.push(`${years} year${years === 1 ? '' : 's'}`);
+      if (months) parts.push(`${months} month${months === 1 ? '' : 's'}`);
+      if (!years && weeks) parts.push(`${weeks} week${weeks === 1 ? '' : 's'}`);
+      if (!years && !months) {
+        if (weeks > 0 && days > 0) parts.push(`${days} day${days === 1 ? '' : 's'}`);
+        else if (weeks === 0) parts.push(`${daysTotal} day${daysTotal === 1 ? '' : 's'}`);
+      }
+
+      return parts.slice(0, 2).join(', ');
+    }
+
+    function renderLibraryList(serverId, libraries) {
+      libraryListEl.innerHTML = '';
+      if (!Array.isArray(libraries) || libraries.length === 0) {
+        libraryListHintEl.textContent = '';
+        libraryListEl.innerHTML = '<div class="placeholder" style="margin:0;">No libraries found.</div>';
+        return;
+      }
+
+      let posterAttempts = 0;
+      let posterLoaded = 0;
+      let posterFailed = 0;
+      const baseHint = 'Name • total size • library age • last added';
+      const updateHint = () => {
+        // Only show extra text if posters are actually failing.
+        if (posterFailed > 0 && posterLoaded === 0) {
+          libraryListHintEl.textContent = `${baseHint} • posters unavailable`;
+        } else {
+          libraryListHintEl.textContent = baseHint;
+        }
+      };
+      updateHint();
+
+      const now = new Date();
+      for (const lib of libraries) {
+        if (!lib || typeof lib !== 'object') continue;
+        const name = lib.name ? String(lib.name) : 'Library';
+        const sizeBytes = (lib.fullScan && Number.isFinite(Number(lib.fullScan.bytes)) && Number(lib.fullScan.bytes) > 0)
+          ? Number(lib.fullScan.bytes)
+          : (Number.isFinite(Number(lib.storageBytes)) ? Number(lib.storageBytes) : 0);
+
+        const earliest = safeParseDate((lib.fullScan && lib.fullScan.earliestItemAt) || lib.earliestItemAt);
+        const latest = safeParseDate((lib.fullScan && lib.fullScan.latestItemAt) || lib.latestItemAt || (lib.recentlyAdded && lib.recentlyAdded.latestItemAt));
+
+        const initial = name && name.trim() ? name.trim().slice(0, 1).toUpperCase() : 'L';
+
+        const row = document.createElement('div');
+        row.className = 'lib-row';
+
+        const thumb = document.createElement('div');
+        thumb.className = 'lib-thumb';
+        const initialEl = document.createElement('span');
+        initialEl.className = 'lib-thumb-initial';
+        initialEl.textContent = initial;
+        thumb.appendChild(initialEl);
+
+          const rawThumbPath = (lib.posterPath && String(lib.posterPath).startsWith('/'))
+            ? String(lib.posterPath)
+            : ((lib.thumbPath && String(lib.thumbPath).startsWith('/'))
+              ? String(lib.thumbPath)
+              : ((lib.artPath && String(lib.artPath).startsWith('/')) ? String(lib.artPath) : ''));
+        if (serverId && rawThumbPath) {
+          posterAttempts++;
+          const img = document.createElement('img');
+          img.className = 'lib-thumb-img';
+          img.loading = 'lazy';
+          img.decoding = 'async';
+          img.alt = '';
+          const posterUrl = `/api/poster?serverId=${encodeURIComponent(String(serverId))}&path=${encodeURIComponent(rawThumbPath)}`;
+          img.src = posterUrl;
+          img.addEventListener('load', () => {
+            posterLoaded++;
+            updateHint();
+            row.classList.add('has-bg');
+            row.style.setProperty('--lib-bg', `url("${String(posterUrl).replaceAll('"','%22')}")`);
+            initialEl.style.opacity = '0';
+          });
+          img.addEventListener('error', () => {
+            posterFailed++;
+            updateHint();
+            try { img.remove(); } catch (_) {}
+            row.classList.remove('has-bg');
+            try { row.style.removeProperty('--lib-bg'); } catch (_) {}
+            initialEl.style.opacity = '0.9';
+          });
+          thumb.appendChild(img);
+        }
+
+        const main = document.createElement('div');
+        main.className = 'lib-main';
+
+        const title = document.createElement('div');
+        title.className = 'lib-title';
+        title.textContent = name;
+        main.appendChild(title);
+
+        const line1 = document.createElement('div');
+        line1.className = 'lib-sub';
+        const countLabel = countLabelForLibrary(lib);
+        const sizeLabel = formatBytes(sizeBytes);
+        line1.textContent = countLabel ? `${countLabel} • ${sizeLabel}` : sizeLabel;
+        main.appendChild(line1);
+
+        const line2 = document.createElement('div');
+        line2.className = 'lib-sub';
+        line2.textContent = formatAge(earliest, now);
+        main.appendChild(line2);
+
+        const line3 = document.createElement('div');
+        line3.className = 'lib-sub';
+        line3.textContent = formatRelativeTime(latest);
+        main.appendChild(line3);
+
+        row.appendChild(thumb);
+        row.appendChild(main);
+        libraryListEl.appendChild(row);
+      }
+
+      // If we attempted posters and none load quickly, show the hint.
+      if (posterAttempts > 0) {
+        setTimeout(updateHint, 700);
+      }
+    }
+
+    async function readFetchError(r) {
+      const status = r && typeof r.status === 'number' ? r.status : 0;
+      let text = '';
+      try { text = await r.text(); } catch (_) {}
+
+      const looksLikeExpressCannotPost = (t) => {
+        const s = String(t || '');
+        if (!s) return false;
+        if (!s.toLowerCase().includes('cannot post')) return false;
+        return s.includes('/api/reports/library-inventory/full-scan');
+      };
+
+      let msg = '';
+      try {
+        const j = text ? JSON.parse(text) : null;
+        msg = (j && (j.detail || j.error)) ? String(j.detail || j.error) : '';
+      } catch (_) {
+        msg = text ? String(text).trim() : '';
+      }
+
+      if (status === 404 && looksLikeExpressCannotPost(text)) {
+        msg = 'Full scan endpoint not available on this OmniStream server build. Update OmniStream and restart the server/container.';
+      }
+
+      msg = msg || (status ? `HTTP ${status}` : 'Request failed');
+      return status ? `HTTP ${status}: ${msg}` : msg;
+    }
+
+    async function fetchServers() {
+      const r = await fetch('/api/servers');
+      if (!r.ok) throw new Error(await readFetchError(r));
+      const arr = await r.json();
+      return Array.isArray(arr) ? arr : [];
+    }
+
+    async function startFullScanJob({ serverId, days } = {}) {
+      const r = await fetch('/api/reports/library-inventory/full-scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ serverId, days })
+      });
+      if (r.status !== 202) throw new Error(await readFetchError(r));
+      return await r.json();
+    }
+
+    async function fetchJob(jobId) {
+      const r = await fetch(`/api/reports/library-inventory/full-scan/${encodeURIComponent(String(jobId || ''))}`);
+      if (!r.ok) throw new Error(await readFetchError(r));
+      return await r.json();
+    }
+
+    function num(v) {
+      const n = Number(v);
+      return Number.isFinite(n) ? Math.floor(n) : null;
+    }
+
+    function setStatusText(t) {
+      const msg = t != null ? String(t) : '';
+      if (statusEl) statusEl.textContent = msg;
+      if (refreshModalEl && refreshModalEl.getAttribute('aria-hidden') === 'false' && refreshModalStatusEl) {
+        refreshModalStatusEl.textContent = msg || 'Working…';
+      }
+    }
+
+    function setRefreshingUI(isRefreshing) {
+      try {
+        refreshBtn.disabled = !!isRefreshing;
+        serverSelect.disabled = !!isRefreshing;
+      } catch (_) {}
+      if (refreshModalEl) {
+        refreshModalEl.style.display = isRefreshing ? 'flex' : 'none';
+        refreshModalEl.setAttribute('aria-hidden', isRefreshing ? 'false' : 'true');
+      }
+      if (refreshProgressEl) {
+        refreshProgressEl.setAttribute('aria-hidden', isRefreshing ? 'false' : 'true');
+      }
+      if (!isRefreshing) {
+        setProgressPct(0);
+        if (refreshModalStatusEl) refreshModalStatusEl.textContent = '';
+      }
+    }
+
+    function setProgressPct(pct) {
+      if (!refreshProgressFillEl) return;
+      const p = Number(pct);
+      const clamped = Number.isFinite(p) ? Math.max(0, Math.min(100, p)) : 0;
+      refreshProgressFillEl.style.width = `${clamped}%`;
+    }
+
+    function countLabelForLibrary(lib) {
+      if (!lib || typeof lib !== 'object') return '';
+      const type = String(lib.type || '').toLowerCase();
+
+      const movieCount = num(lib.movieCount);
+      const showCount = num(lib.showCount);
+      const episodeCount = num(lib.episodeCount);
+      const totalItems = num(lib.totalItems);
+      const totalPlayableItems = num(lib.totalPlayableItems);
+
+      const isMovie = type === 'movie' || type === 'movies';
+      const isTv = type === 'show' || type === 'tvshows' || type === 'series';
+
+      if (isMovie) {
+        const n = movieCount ?? totalPlayableItems ?? totalItems;
+        return (n != null) ? `${fmtInt(n)} movie${n === 1 ? '' : 's'}` : '';
+      }
+
+      if (isTv) {
+        const parts = [];
+        const shows = showCount ?? totalItems;
+        if (shows != null) parts.push(`${fmtInt(shows)} show${shows === 1 ? '' : 's'}`);
+        if (episodeCount != null) parts.push(`${fmtInt(episodeCount)} ep${episodeCount === 1 ? '' : 's'}`);
+        return parts.join(' • ');
+      }
+
+      const n = totalPlayableItems ?? totalItems;
+      return (n != null) ? `${fmtInt(n)} item${n === 1 ? '' : 's'}` : '';
+    }
+
+    function computeSummary(payload) {
+      const libs = payload && Array.isArray(payload.libraries) ? payload.libraries : [];
+
+      let moviesCount = 0;
+      let moviesBytes = 0;
+      let tvShows = 0;
+      let tvEpisodes = 0;
+      let tvBytes = 0;
+
+      for (const lib of libs) {
+        if (!lib || typeof lib !== 'object') continue;
+        const type = String(lib.type || '').toLowerCase();
+        const isMovie = type === 'movie' || type === 'movies';
+        const isTv = type === 'show' || type === 'tvshows' || type === 'series';
+
+        const bytes = (lib.fullScan && lib.fullScan.bytes != null) ? num(lib.fullScan.bytes)
+          : (lib.storageBytes != null ? num(lib.storageBytes) : 0);
+
+        if (isMovie) {
+          const cnt = num(lib.movieCount) ?? num(lib.totalItems) ?? 0;
+          moviesCount += cnt;
+          moviesBytes += bytes || 0;
+        } else if (isTv) {
+          const shows = num(lib.showCount) ?? num(lib.totalItems) ?? 0;
+          const eps = num(lib.episodeCount) ?? 0;
+          tvShows += shows;
+          tvEpisodes += eps;
+          tvBytes += bytes || 0;
+        }
+      }
+
+      return { moviesCount, moviesBytes, tvShows, tvEpisodes, tvBytes };
+    }
+
+    function setCards({ moviesCount, moviesBytes, tvShows, tvEpisodes, tvBytes } = {}) {
+      moviesValue.textContent = fmtInt(moviesCount || 0);
+      moviesLabel.textContent = `MOVIES • ${formatBytes(moviesBytes || 0)}`;
+
+      tvValue.textContent = fmtInt(tvShows || 0);
+      tvLabel.textContent = `TV • ${fmtInt(tvEpisodes || 0)} EP • ${formatBytes(tvBytes || 0)}`;
+    }
+
+    async function run() {
+      const serverId = String(serverSelect && serverSelect.value ? serverSelect.value : '');
+      if (!serverId) {
+        setStatusText('Pick a server to load library totals.');
+        setCards({ moviesCount: 0, moviesBytes: 0, tvShows: 0, tvEpisodes: 0, tvBytes: 0 });
+        renderLibraryList('', []);
+        return;
+      }
+
+      try { localStorage.setItem(PREF_KEY, serverId); } catch (_) {}
+
+      setRefreshingUI(true);
+      setProgressPct(2);
+      setStatusText('Starting full scan... (this can take a while)');
+      setCards({ moviesCount: 0, moviesBytes: 0, tvShows: 0, tvEpisodes: 0, tvBytes: 0 });
+
+      let completedSuccessfully = false;
+      try {
+        const job = await startFullScanJob({ serverId, days: 7 });
+        const jobId = job && job.id ? String(job.id) : '';
+        if (!jobId) throw new Error('Full scan job did not return an id');
+
+        const startMs = Date.now();
+        const maxWaitMs = 60 * 60 * 1000; // 1 hour
+        while (true) {
+          const j = await fetchJob(jobId);
+          if (j && j.status === 'done' && j.result) {
+            const summary = computeSummary(j.result);
+            setCards(summary);
+            renderLibraryList(serverId, j.result && Array.isArray(j.result.libraries) ? j.result.libraries : []);
+            setProgressPct(100);
+            setStatusText('Updated.');
+            completedSuccessfully = true;
+            setTimeout(() => setRefreshingUI(false), 450);
+            return;
+          }
+          if (j && j.status === 'error') {
+            throw new Error(j.error || 'Full scan failed');
+          }
+
+        const p = j && j.progress ? j.progress : {};
+        const phase = p.phase != null ? String(p.phase) : '';
+        const libName = p.libraryName ? String(p.libraryName) : '';
+        const libIdx = Number.isFinite(Number(p.libraryIndex)) ? Number(p.libraryIndex) : 0;
+        const libTotal = Number.isFinite(Number(p.librariesTotal)) ? Number(p.librariesTotal) : 0;
+        const scanned = Number.isFinite(Number(p.scanned)) ? Number(p.scanned) : 0;
+        const total = (p.total != null && Number.isFinite(Number(p.total))) ? Number(p.total) : null;
+        const pct = (total && total > 0) ? Math.min(99, Math.floor((scanned / total) * 100)) : null;
+
+          // Progress bar: reserve first ~30% for the build phase and remaining for scanning.
+          if (phase === 'building') {
+            const base = 6;
+            const span = 24;
+            const pctBuild = (libTotal > 0) ? Math.floor(((libIdx + 1) / libTotal) * span) : 0;
+            setProgressPct(base + pctBuild);
+            const lineA = libTotal > 0 ? `Preparing library ${libIdx + 1}/${libTotal}` : 'Preparing libraries';
+            const lineB = libName ? `— ${libName}` : '';
+            setStatusText(`${lineA} ${lineB}`.trim());
+          } else if (phase === 'starting') {
+            setProgressPct(6);
+            setStatusText('Starting full scan... (this can take a while)');
+          } else {
+            let overallPct = 30;
+            if (total && total > 0) {
+              overallPct = 30 + Math.min(69, Math.floor((scanned / total) * 70));
+            } else if (libTotal > 0) {
+              overallPct = 30 + Math.min(69, Math.floor((libIdx / libTotal) * 70));
+            }
+            setProgressPct(overallPct);
+            const lineA = libTotal > 0 ? `Scanning library ${libIdx + 1}/${libTotal}` : 'Scanning libraries';
+            const lineB = libName ? `— ${libName}` : '';
+            const lineC = total ? ` (${fmtInt(scanned)} / ${fmtInt(total)}${pct != null ? `, ${pct}%` : ''})` : ` (${fmtInt(scanned)} scanned)`;
+            setStatusText(`${lineA} ${lineB}${lineC}`);
+          }
+
+          if ((Date.now() - startMs) > maxWaitMs) throw new Error('Full scan timed out waiting for results');
+          await new Promise(r => setTimeout(r, 1000));
+        }
+      } finally {
+        // If we exited due to an error, ensure controls re-enable.
+        if (!completedSuccessfully) setRefreshingUI(false);
+      }
+    }
+
+    async function init() {
+      try {
+        setStatusText('Loading servers...');
+        renderLibraryList('', []);
+        const all = await fetchServers();
+        const eligible = all.filter(s => s && !s.disabled && ['plex','jellyfin','emby'].includes(String(s.type || '').toLowerCase()));
+        if (!eligible.length) {
+          serverSelect.innerHTML = '<option value="">No enabled Plex/Jellyfin/Emby servers</option>';
+          setStatusText('No eligible servers found.');
+          return;
+        }
+
+        let saved = '';
+        try {
+          saved = (localStorage.getItem(PREF_KEY) || localStorage.getItem('omnistream_library_reports_server') || '').trim();
+        } catch (_) {}
+
+        const options = ['<option value="">Pick a server...</option>'];
+        eligible.forEach(s => {
+          const id = String(s.id);
+          const name = s.name ? String(s.name) : String(s.baseUrl || id);
+          const sel = saved && id === saved ? 'selected' : '';
+          options.push(`<option value="${id}" ${sel}>${name}</option>`);
+        });
+        serverSelect.innerHTML = options.join('');
+
+        refreshBtn.addEventListener('click', () => run().catch(e => {
+          console.error(e);
+          setStatusText(e && e.message ? String(e.message) : 'Failed to load.');
+        }));
+        serverSelect.addEventListener('change', () => run().catch(e => {
+          console.error(e);
+          setStatusText(e && e.message ? String(e.message) : 'Failed to load.');
+        }));
+
+        setStatusText('');
+        if (saved) {
+          await run();
+        } else {
+          setStatusText('Pick a server to load library totals.');
+        }
+      } catch (e) {
+        console.error(e);
+        setStatusText(e && e.message ? String(e.message) : 'Failed to initialize.');
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>

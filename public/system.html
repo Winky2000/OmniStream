@@ -1,0 +1,1012 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>OmniStream System</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="theme.css">
+  <link rel="stylesheet" href="shell.css">
+  <script src="shell.js" defer></script>
+  <style>
+    body{font-family:Segoe UI,Arial;background:var(--bg);color:var(--text-main);margin:0;padding:0}
+    h1{margin:0 0 8px 0;color:var(--text-main);letter-spacing:0.5px;font-size:1.8em;font-weight:600;}
+    .card{background:var(--card-bg);border-radius:14px;padding:16px 18px;box-shadow:0 12px 30px rgba(15,23,42,0.85);border:1px solid rgba(148,163,184,0.35);max-width:640px;margin-bottom:18px;}
+    .card h2{margin:0 0 8px 0;font-size:16px;color:var(--text-main);}
+    .row{font-size:13px;margin:4px 0;color:var(--text-muted);}
+    .row b{color:var(--text-main);}
+    .btn{margin-top:10px;padding:6px 14px;border-radius:8px;border:1px solid var(--btn-border);background:var(--btn-bg);color:var(--btn-text);cursor:pointer;font-size:13px;}
+    .btn:hover{background:var(--btn-bg-hover);color:var(--btn-text-hover);}
+    .btn:disabled{opacity:0.55;cursor:not-allowed;}
+    .hint{font-size:12px;color:var(--text-muted);margin-top:4px;}
+    .status-ok{color:#a5d6a7;}
+    .status-warn{color:#ffcc80;}
+    .status-error{color:#ff8a80;}
+    label{display:block;font-size:13px;margin:6px 0;color:var(--text-main);}
+    input[type="text"],input[type="number"],input[type="password"]{width:100%;max-width:420px;padding:6px 10px;border-radius:6px;border:1px solid #444;background:var(--bg);color:var(--text-main);box-sizing:border-box;}
+    .config-row{margin-top:4px;}
+    .config-actions{margin-top:8px;display:flex;align-items:center;gap:10px;font-size:12px;}
+    .platform-preview-grid{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px;}
+    .platform-preview-item{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid var(--btn-border);border-radius:999px;background:transparent;color:var(--text-main);font-size:12px;max-width:100%;}
+    .platform-preview-item span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .platform-icon{width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;}
+    .platform-icon img{width:18px;height:18px;object-fit:contain;display:block;}
+    .platform-icon svg{width:18px;height:18px;display:block;}
+    .system-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 14px 0;}
+    .system-tab{padding:4px 10px;border-radius:999px;border:1px solid var(--btn-border);background:transparent;color:var(--text-muted);font-size:12px;cursor:pointer;}
+    .system-tab-active{background:var(--btn-bg);color:var(--btn-text);}
+    .system-panel{display:none;}
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="sidebar-brand">OmniStream</div>
+      <nav class="sidebar-nav">
+        <a href="index.html" class="nav-link">Dashboard</a>
+        <a href="glance.html" class="nav-link">At a glance</a>
+        <a href="history.html" class="nav-link">History</a>
+        <a href="reports.html" class="nav-link">Reports</a>
+        <a href="libraries.html" class="nav-link">Libraries</a>
+        <a href="notifications.html" class="nav-link">Notifications</a>
+        <div class="settings-group">
+          <button type="button" class="nav-group-toggle newsletter-toggle">Newsletter</button>
+          <div class="settings-submenu newsletter-submenu">
+            <a href="overseerr.html" class="submenu-link">Overseerr</a>
+            <a href="subscribers.html" class="submenu-link">Subscribers</a>
+            <a href="templates.html" class="submenu-link">Templates</a>
+            <a href="custom-header.html" class="submenu-link">Custom header</a>
+            <a href="sent-newsletters.html" class="submenu-link">Sent history</a>
+          </div>
+        </div>
+        <div class="settings-group">
+          <button type="button" class="nav-group-toggle settings-toggle">Settings</button>
+          <div class="settings-submenu open">
+            <a href="admin.html" class="submenu-link">Connected servers</a>
+            <a href="servers.html" class="submenu-link">Servers</a>
+            <a href="display.html" class="submenu-link">Themes &amp; layout</a>
+            <a href="notifiers.html" class="submenu-link">Notifiers</a>
+            <a href="system.html" class="submenu-link submenu-link-active">System</a>
+            <a href="about.html" class="submenu-link">About</a>
+          </div>
+        </div>
+        <a href="/logout" class="nav-link">Logout</a>
+      </nav>
+    </aside>
+    <main class="main-content">
+      <button class="sidebar-toggle" id="sidebarToggle">Hide menu</button>
+      <h1>System</h1>
+      <div class="system-tabs">
+        <button type="button" class="system-tab" data-panel="runtime">Runtime</button>
+        <button type="button" class="system-tab" data-panel="config">Config</button>
+        <button type="button" class="system-tab" data-panel="health">Health</button>
+        <button type="button" class="system-tab" data-panel="tools">Tools</button>
+      </div>
+
+      <div class="system-panel" data-panel="runtime">
+        <div class="card" id="systemCard">
+          <h2>Runtime</h2>
+          <div class="row"><b>Version:</b> <span id="version">-</span></div>
+          <div class="row"><b>Uptime:</b> <span id="uptime">-</span></div>
+          <div class="row"><b>Now:</b> <span id="now">-</span></div>
+          <div class="row"><b>History DB path:</b> <span id="historyPath">-</span></div>
+          <div class="row"><b>Servers file path:</b> <span id="serversPath">-</span></div>
+          <div class="row"><b>History retention (maxHistory):</b> <span id="maxHistory">-</span></div>
+          <div class="hint">History DB and servers.json should both live on a persistent volume for safe upgrades and restarts.</div>
+        </div>
+      </div>
+
+      <div class="system-panel" data-panel="config">
+        <div class="card" id="configCard">
+          <h2>Application config</h2>
+          <div class="config-row">
+            <label>
+              Public base URL (for newsletter images)
+              <input type="text" id="cfgPublicBaseUrl" placeholder="https://omnistream.yourdomain.com">
+            </label>
+            <div class="hint">Used to generate absolute image URLs in newsletter emails (logo, posters). Use an <b>https://</b> URL with no trailing slash.</div>
+          </div>
+          <div class="config-row">
+            <label>
+              Authentication mode
+              <select id="cfgAuthMode" style="width:100%;max-width:420px;padding:6px 10px;border-radius:6px;border:1px solid #444;background:var(--bg);color:var(--text-main);box-sizing:border-box;">
+                <option value="internal">Internal password</option>
+                <option value="nginx">Nginx + 2FA (external)</option>
+              </select>
+            </label>
+            <div class="hint">Internal mode requires login for all UI and APIs. Nginx mode disables internal login entirely (your reverse proxy must enforce authentication).</div>
+            <div class="hint" id="nginxRiskHint" style="display:none;">
+              <b>Warning:</b> If you switch to <b>Nginx + 2FA</b> but do not actually configure authentication in your reverse proxy, OmniStream will be accessible without a login.
+            </div>
+          </div>
+
+          <div class="config-row">
+            <label>
+              History retention (maxHistory)
+              <input type="number" id="cfgMaxHistory" placeholder="500">
+            </label>
+            <div class="hint">Number of history rows to keep. 
+              Use 0 or a negative value for no automatic trimming. Leave blank to use the built-in default (500).</div>
+          </div>
+          <div class="config-actions">
+            <button class="btn" id="configSaveBtn">Save config</button>
+            <span id="configStatus"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="system-panel" data-panel="health">
+        <div class="card">
+          <h2>Polling health</h2>
+          <div class="row"><b>Last poll:</b> <span id="pollLastAt">-</span></div>
+          <div class="row"><b>Duration:</b> <span id="pollDuration">-</span></div>
+          <div class="row"><b>Last poll error:</b> <span id="pollError">None</span></div>
+          <div class="hint">If poll errors occur frequently, OmniStream may be having trouble talking to one or more servers (network, DNS, or token issues).</div>
+        </div>
+
+        <div class="card">
+          <h2>History imports</h2>
+          <div class="row"><b>Last import run:</b> <span id="importLastRun">Never</span></div>
+          <div class="row" id="importSummary">No import results recorded yet.</div>
+          <div class="hint">Use the Import History action on the Reports/History page or via the API to pull lifetime stats from Plex / Jellyfin / Emby.</div>
+        </div>
+
+        <div class="card">
+          <h2>Notifier health</h2>
+          <div class="row"><b>Last notifier error:</b> <span id="notifierError">None</span></div>
+          <div class="row"><b>When:</b> <span id="notifierErrorAt">-</span></div>
+          <div class="row"><b>Channel:</b> <span id="notifierErrorChannel">-</span></div>
+          <div class="hint">If alerts are not reaching their targets, check here for the most recent delivery error and then the server logs for full details.</div>
+        </div>
+      </div>
+
+      <div class="system-panel" data-panel="tools">
+        <div class="card">
+          <h2 id="tools-backups">Backups</h2>
+          <div class="row">Download a zip containing <b>servers.json</b> and <b>history.db</b> for quick backup or migration.</div>
+          <button class="btn" id="backupBtn">Download backup (.zip)</button>
+          <div class="row" id="backupStatus" style="margin-top:6px;"></div>
+          <div class="hint">You can also back up the individual files directly from the host filesystem or via your Docker volume.</div>
+        </div>
+
+        <div class="card">
+          <h2 id="tools-mobile-devices">Mobile devices</h2>
+          <div class="row">Mobile apps are read-only. To use them, create a <b>device token</b> here after logging in, then paste it into the mobile app.</div>
+          <div class="hint">Device tokens are shown once. If you lose it, delete the device and create a new token.</div>
+          <div class="config-row" style="margin-top:10px;">
+            <label>
+              Device name
+              <input type="text" id="mobileDeviceName" placeholder="My phone">
+            </label>
+            <button class="btn" id="mobileDeviceCreateBtn">Create device token</button>
+            <div class="row" id="mobileDeviceCreateStatus" style="margin-top:6px;"></div>
+            <div id="mobileDeviceTokenBox" style="display:none;margin-top:10px;">
+              <label>
+                Device token
+                <textarea id="mobileDeviceToken" readonly style="width:100%;max-width:640px;min-height:72px;padding:6px 10px;border-radius:6px;border:1px solid #444;background:var(--bg);color:var(--text-main);box-sizing:border-box;"></textarea>
+              </label>
+              <div class="config-actions" style="margin-top:6px;">
+                <button class="btn" id="mobileDeviceCopyBtn">Copy token</button>
+                <span class="hint" id="mobileDeviceCopyStatus"></span>
+              </div>
+              <div id="mobileDeviceQrBox" style="display:none;margin-top:10px;">
+                <div class="hint">Scan this QR code from your phone to fill the device token (and server URL when included).</div>
+                <div id="mobileDeviceQr" style="display:inline-block;background:#fff;padding:10px;border-radius:10px;"></div>
+              </div>
+            </div>
+          </div>
+          <div class="row" style="margin-top:12px;"><b>Paired devices</b></div>
+          <div id="mobileDevicesList" class="row" style="display:block;"></div>
+        </div>
+
+        <div class="card">
+          <h2 id="tools-platform-icons">Platform icons (preview)</h2>
+          <div class="row">Test how OmniStream detects and renders platform icons from a platform string.</div>
+          <div class="hint">Optional: add a custom Roku logo at <code>public/roku_logo.png</code> (served as <code>roku_logo.png</code>).</div>
+          <div class="config-row" style="margin-top:10px;">
+            <label>
+              Platform string
+              <input type="text" id="platformIconInput" placeholder="e.g. Roku, Android, iOS, Web, Plex for Roku">
+            </label>
+            <div class="row" id="platformIconResult" style="margin-top:6px;"></div>
+          </div>
+          <div class="row" style="margin-top:12px;"><b>Common examples</b></div>
+          <div id="platformIconExamples" class="platform-preview-grid"></div>
+        </div>
+
+        <div class="card">
+          <h2 id="tools-db-backups">History DB backups</h2>
+          <div class="row" style="gap:10px;flex-wrap:wrap;">
+            <b>Auto backup:</b>
+            <select id="dbBackupInterval" style="min-width:180px;">
+              <option value="off">Off</option>
+              <option value="hourly">Hourly</option>
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+            </select>
+          </div>
+          <div class="row"><b>Last backup:</b> <span id="dbBackupLastAt">-</span></div>
+          <div class="row"><b>Next backup:</b> <span id="dbBackupNextAt">-</span></div>
+          <button class="btn" id="dbBackupNowBtn">Create backup now</button>
+          <div class="row" id="dbBackupMsg" style="margin-top:6px;"></div>
+          <div class="hint">Backups are stored on the server under the <code>backups</code> folder. Restore will replace <code>history.db</code>.</div>
+          <div class="row" style="margin-top:10px;"><b>Available backups</b></div>
+          <div id="dbBackupList" class="row" style="display:block;"></div>
+        </div>
+
+        <div class="card">
+          <h2>Overseerr users</h2>
+          <div class="row"><b>Configured:</b> <span id="overseerrConfigured">No</span></div>
+          <button class="btn" id="overseerrFetchBtn">Fetch users from Overseerr</button>
+          <div class="row" id="overseerrStatus" style="margin-top:6px;"></div>
+          <div class="hint">Requires Overseerr baseUrl and apiKey in config.json under an <code>overseerr</code> block. Only users with an email address are counted.</div>
+        </div>
+      </div>
+    </main>
+  </div>
+  <script>
+    function fmtDuration(sec) {
+      if (!sec || !isFinite(sec) || sec < 0) return '-';
+      const h = Math.floor(sec / 3600);
+      const m = Math.floor((sec % 3600) / 60);
+      if (h > 0) return h + 'h ' + m + 'm';
+      return m + 'm';
+    }
+
+    function fmtTime(iso) {
+      if (!iso) return '-';
+      try {
+        return new Date(iso).toLocaleString();
+      } catch {
+        return iso;
+      }
+    }
+
+    function escapeHtml(s) {
+      return String(s ?? '').replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      }[c]));
+    }
+
+    function fmtBytes(n) {
+      const v = Number(n);
+      if (!Number.isFinite(v) || v < 0) return '-';
+      const units = ['B', 'KB', 'MB', 'GB'];
+      let x = v;
+      let u = 0;
+      while (x >= 1024 && u < units.length - 1) {
+        x /= 1024;
+        u++;
+      }
+      return (u === 0 ? String(Math.round(x)) : x.toFixed(1)) + ' ' + units[u];
+    }
+
+    (function() {
+      const tabs = document.querySelectorAll('.system-tab');
+      const panels = document.querySelectorAll('.system-panel');
+      const toolsPanel = document.querySelector('.system-panel[data-panel="tools"]');
+      const toolsCards = toolsPanel ? Array.from(toolsPanel.querySelectorAll('.card')) : [];
+
+      function setToolsFilter(mode){
+        if(!toolsPanel || !toolsCards.length) return;
+        const filterSet = (mode === 'backups')
+          ? new Set(['tools-backups', 'tools-db-backups'])
+          : (mode === 'mobile-devices')
+            ? new Set(['tools-mobile-devices'])
+            : (mode === 'platform-icons')
+              ? new Set(['tools-platform-icons'])
+            : null;
+
+        toolsCards.forEach(card => {
+          if(!filterSet){
+            card.style.display = '';
+            return;
+          }
+
+          const h2 = card.querySelector('h2');
+          const id = h2 && h2.id ? h2.id : '';
+          const keep = filterSet.has(id);
+          card.style.display = keep ? '' : 'none';
+        });
+      }
+
+      function readHash(){
+        try{
+          const h = String(window.location.hash || '').trim();
+          if(!h || h==='#') return '';
+          return h.replace(/^#/, '').trim();
+        }catch(_){
+          return '';
+        }
+      }
+
+      function showPanel(name) {
+        let found = false;
+        tabs.forEach(tab => {
+          const isActive = tab.dataset.panel === name;
+          tab.classList.toggle('system-tab-active', isActive);
+          if (isActive) found = true;
+        });
+        panels.forEach(panel => {
+          panel.style.display = panel.dataset.panel === name ? 'block' : 'none';
+          if (panel.dataset.panel === name) found = true;
+        });
+
+        // If the saved tab no longer exists, fall back to the first panel.
+        if (!found && panels.length) {
+          const fallback = panels[0].dataset.panel;
+          panels.forEach(panel => {
+            panel.style.display = panel.dataset.panel === fallback ? 'block' : 'none';
+          });
+          tabs.forEach(tab => {
+            tab.classList.toggle('system-tab-active', tab.dataset.panel === fallback);
+          });
+          localStorage.setItem('omnistreamSystemTab', fallback);
+          return;
+        }
+
+        localStorage.setItem('omnistreamSystemTab', name);
+      }
+
+      function applyHash(){
+        const h = readHash();
+        if(!h) return;
+
+        if(h === 'runtime' || h === 'config' || h === 'health' || h === 'tools'){
+          showPanel(h);
+          if(h === 'tools') setToolsFilter('all');
+          return;
+        }
+
+        if(h.startsWith('tools-')){
+          showPanel('tools');
+          if(h === 'tools-backups' || h === 'tools-db-backups'){
+            setToolsFilter('backups');
+          }else if(h === 'tools-mobile-devices'){
+            setToolsFilter('mobile-devices');
+          }else if(h === 'tools-platform-icons'){
+            setToolsFilter('platform-icons');
+          }else{
+            setToolsFilter('all');
+          }
+          // Ensure layout is ready before scrolling
+          setTimeout(() => {
+            const el = document.getElementById(h);
+            if (el) el.scrollIntoView({behavior:'smooth', block:'start'});
+          }, 0);
+        }
+      }
+
+      if (tabs.length && panels.length) {
+        const saved = localStorage.getItem('omnistreamSystemTab') || 'runtime';
+        showPanel(saved);
+        if(saved === 'tools') setToolsFilter('all');
+        // Hash overrides saved state
+        applyHash();
+        window.addEventListener('hashchange', () => applyHash());
+        tabs.forEach(tab => {
+          tab.addEventListener('click', () => {
+            showPanel(tab.dataset.panel);
+            if(tab.dataset.panel === 'tools') setToolsFilter('all');
+          });
+        });
+      }
+    })();
+
+    async function loadSystemInfo() {
+      try {
+        const r = await fetch('/api/system');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const data = await r.json();
+
+        document.getElementById('version').textContent = data.version || 'unknown';
+        document.getElementById('uptime').textContent = fmtDuration(data.uptimeSeconds);
+        document.getElementById('now').textContent = fmtTime(data.now);
+        document.getElementById('historyPath').textContent = data.historyDbPath || '-';
+        document.getElementById('serversPath').textContent = data.serversFilePath || '-';
+        document.getElementById('maxHistory').textContent = (typeof data.maxHistory === 'number') ? data.maxHistory : 'default';
+
+        const poll = data.poll || {};
+        document.getElementById('pollLastAt').textContent = poll.lastPollAt ? fmtTime(poll.lastPollAt) : '-';
+        document.getElementById('pollDuration').textContent = (typeof poll.lastPollDurationMs === 'number') ? (poll.lastPollDurationMs + ' ms') : '-';
+        document.getElementById('pollError').textContent = poll.lastPollError || 'None';
+
+        const importInfo = data.importHistory || {};
+        document.getElementById('importLastRun').textContent = importInfo.lastRunAt ? fmtTime(importInfo.lastRunAt) : 'Never';
+        const results = Array.isArray(importInfo.lastResults) ? importInfo.lastResults : [];
+        const importSummaryEl = document.getElementById('importSummary');
+        if (importSummaryEl) {
+          if (!results.length) {
+            importSummaryEl.textContent = 'No import results recorded yet.';
+          } else {
+            const failed = results.filter(r => r && r.error);
+            const totalImported = results.reduce((sum, r) => sum + (r && r.imported ? r.imported : 0), 0);
+            let text = `Imported ${totalImported} plays from ${results.length} server(s).`;
+            if (failed.length) {
+              text += ` ${failed.length} server(s) reported errors.`;
+            }
+            importSummaryEl.textContent = text;
+          }
+        }
+
+        const notif = data.notifiers || {};
+        const lastErr = notif.lastError;
+        document.getElementById('notifierError').textContent = lastErr || 'None';
+        document.getElementById('notifierErrorAt').textContent = lastErr ? fmtTime(notif.lastErrorAt) : '-';
+        document.getElementById('notifierErrorChannel').textContent = lastErr ? (notif.lastErrorChannel || '-') : '-';
+
+        const overseerrInfo = data.overseerr || {};
+        document.getElementById('overseerrConfigured').textContent = overseerrInfo.configured ? 'Yes' : 'No';
+
+        const backupStatus = document.getElementById('backupStatus');
+        if (backupStatus && !data.backupEnabled) {
+          backupStatus.textContent = 'Backup zip not available: archiver module is not installed on the server.';
+          backupStatus.className = 'row status-warn';
+        }
+      } catch (e) {
+        console.error('Failed to load system info:', e);
+        const card = document.getElementById('systemCard');
+        const row = document.createElement('div');
+        row.className = 'row status-error';
+        row.textContent = 'Failed to load system info. Check server logs.';
+        card.appendChild(row);
+      }
+    }
+
+    async function loadAppConfig() {
+      try {
+        const r = await fetch('/api/config/app');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const data = await r.json();
+        const baseUrlInput = document.getElementById('cfgPublicBaseUrl');
+        if (baseUrlInput) {
+          baseUrlInput.value = (data.publicBaseUrl || '').trim();
+        }
+        const maxHistoryInput = document.getElementById('cfgMaxHistory');
+        if (maxHistoryInput) {
+          if (typeof data.maxHistory === 'number') {
+            maxHistoryInput.value = data.maxHistory;
+          } else {
+            maxHistoryInput.value = '';
+          }
+        }
+
+        const authModeSel = document.getElementById('cfgAuthMode');
+        if (authModeSel) {
+          const mode = data && data.auth && data.auth.mode ? String(data.auth.mode) : 'internal';
+          authModeSel.value = (mode === 'nginx') ? 'nginx' : 'internal';
+        }
+
+        const nginxHint = document.getElementById('nginxRiskHint');
+        const authModeSel2 = document.getElementById('cfgAuthMode');
+        if (nginxHint && authModeSel2) {
+          nginxHint.style.display = (authModeSel2.value === 'nginx') ? 'block' : 'none';
+        }
+
+      } catch (e) {
+        console.error('Failed to load app config:', e);
+        const status = document.getElementById('configStatus');
+        if (status) {
+          status.textContent = 'Failed to load config.';
+          status.className = 'status-error';
+        }
+      }
+    }
+
+    document.getElementById('backupBtn').addEventListener('click', async () => {
+      const statusEl = document.getElementById('backupStatus');
+      statusEl.textContent = 'Preparing backup...';
+      statusEl.className = 'row';
+      try {
+        // Trigger a file download by navigating directly to the backup endpoint
+        window.location.href = '/api/system/backup';
+        statusEl.textContent = 'Backup requested. Your browser should start downloading the zip file.';
+        statusEl.className = 'row status-ok';
+      } catch (e) {
+        console.error('Backup download failed:', e);
+        statusEl.textContent = 'Backup failed. Check server logs.';
+        statusEl.className = 'row status-error';
+      }
+    });
+
+    document.getElementById('overseerrFetchBtn').addEventListener('click', async () => {
+      const statusEl = document.getElementById('overseerrStatus');
+      statusEl.textContent = 'Contacting Overseerr...';
+      statusEl.className = 'row';
+      try {
+        const resp = await fetch('/api/overseerr/users');
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => '');
+          statusEl.textContent = 'Fetch failed: ' + (text || resp.status + ' ' + resp.statusText);
+          statusEl.className = 'row status-error';
+          return;
+        }
+        const data = await resp.json();
+        const total = typeof data.total === 'number' ? data.total : 0;
+        const withEmail = typeof data.withEmail === 'number' ? data.withEmail : 0;
+        statusEl.textContent = `Found ${withEmail} user${withEmail === 1 ? '' : 's'} with email (out of ${total} total).`;
+        statusEl.className = 'row status-ok';
+      } catch (e) {
+        console.error('Overseerr fetch failed:', e);
+        statusEl.textContent = 'Fetch failed. Check server logs.';
+        statusEl.className = 'row status-error';
+      }
+    });
+
+    async function loadDbBackupConfig() {
+      const lastEl = document.getElementById('dbBackupLastAt');
+      const nextEl = document.getElementById('dbBackupNextAt');
+      try {
+        const r = await fetch('/api/system/history-db-backups/config');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const data = await r.json();
+        const sel = document.getElementById('dbBackupInterval');
+        if (sel) sel.value = data.interval || 'off';
+        if (lastEl) lastEl.textContent = data.lastBackupAt ? fmtTime(data.lastBackupAt) : '-';
+        if (nextEl) nextEl.textContent = data.nextBackupAt ? fmtTime(data.nextBackupAt) : '-';
+      } catch (e) {
+        console.error('Failed to load DB backup config:', e);
+        if (lastEl) lastEl.textContent = '-';
+        if (nextEl) nextEl.textContent = '-';
+      }
+    }
+
+    async function loadDbBackupList() {
+      const listEl = document.getElementById('dbBackupList');
+      if (!listEl) return;
+      listEl.textContent = 'Loading...';
+      try {
+        const r = await fetch('/api/system/history-db-backups/list');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const data = await r.json();
+        const items = Array.isArray(data.items) ? data.items : [];
+        if (!items.length) {
+          listEl.innerHTML = '<span class="muted">No backups yet.</span>';
+          return;
+        }
+        let html = '';
+        items.forEach((it) => {
+          const name = (it && it.name) ? String(it.name) : '';
+          const size = fmtBytes(it && it.sizeBytes);
+          const when = it && typeof it.mtimeMs === 'number' ? new Date(it.mtimeMs).toLocaleString() : '';
+          const downloadHref = '/api/system/history-db-backups/download?name=' + encodeURIComponent(name);
+          html += '<div class="row" style="justify-content:space-between;gap:10px;align-items:center;">';
+          html += `<div style="min-width:0;flex:1;">`;
+          html += `<div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(name)}</div>`;
+          html += `<div class="muted" style="font-size:12px;">${escapeHtml(when)} • ${escapeHtml(size)}</div>`;
+          html += '</div>';
+          html += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
+          html += `<a class="btn" href="${downloadHref}">Download</a>`;
+          html += `<button class="btn" data-restore-name="${encodeURIComponent(name)}">Restore</button>`;
+          html += '</div>';
+          html += '</div>';
+        });
+        listEl.innerHTML = html;
+
+        // Wire restore buttons
+        listEl.querySelectorAll('button[data-restore-name]').forEach((btn) => {
+          btn.addEventListener('click', async () => {
+            const enc = btn.getAttribute('data-restore-name') || '';
+            const name = decodeURIComponent(enc);
+            const msgEl = document.getElementById('dbBackupMsg');
+            const ok = confirm('Restore history.db from backup "' + name + '"? This will replace the current database.');
+            if (!ok) return;
+            if (msgEl) {
+              msgEl.textContent = 'Restoring...';
+              msgEl.className = 'row';
+            }
+            try {
+              const resp = await fetch('/api/system/history-db-backups/restore', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name })
+              });
+              if (!resp.ok) {
+                const t = await resp.text().catch(() => '');
+                throw new Error(t || ('HTTP ' + resp.status));
+              }
+              if (msgEl) {
+                msgEl.textContent = 'Restore complete.';
+                msgEl.className = 'row status-ok';
+              }
+              await loadDbBackupConfig();
+              await loadDbBackupList();
+            } catch (e) {
+              console.error('Restore failed:', e);
+              if (msgEl) {
+                msgEl.textContent = 'Restore failed. Check server logs.';
+                msgEl.className = 'row status-error';
+              }
+            }
+          });
+        });
+      } catch (e) {
+        console.error('Failed to load DB backup list:', e);
+        listEl.innerHTML = '<span class="muted">Failed to load backups.</span>';
+      }
+    }
+
+    const dbBackupSel = document.getElementById('dbBackupInterval');
+    if (dbBackupSel) {
+      dbBackupSel.addEventListener('change', async () => {
+        const msgEl = document.getElementById('dbBackupMsg');
+        if (msgEl) {
+          msgEl.textContent = 'Saving...';
+          msgEl.className = 'row';
+        }
+        try {
+          const interval = dbBackupSel.value || 'off';
+          const resp = await fetch('/api/system/history-db-backups/config', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ interval })
+          });
+          if (!resp.ok) {
+            const t = await resp.text().catch(() => '');
+            throw new Error(t || ('HTTP ' + resp.status));
+          }
+          if (msgEl) {
+            msgEl.textContent = 'Auto backup updated.';
+            msgEl.className = 'row status-ok';
+          }
+          await loadDbBackupConfig();
+        } catch (e) {
+          console.error('Failed to update auto backup:', e);
+          if (msgEl) {
+            msgEl.textContent = 'Failed to update auto backup.';
+            msgEl.className = 'row status-error';
+          }
+        }
+      });
+    }
+
+    const dbBackupNowBtn = document.getElementById('dbBackupNowBtn');
+    if (dbBackupNowBtn) {
+      dbBackupNowBtn.addEventListener('click', async () => {
+        const msgEl = document.getElementById('dbBackupMsg');
+        if (msgEl) {
+          msgEl.textContent = 'Creating backup...';
+          msgEl.className = 'row';
+        }
+        try {
+          const resp = await fetch('/api/system/history-db-backups/run', { method: 'POST' });
+          if (!resp.ok) {
+            const t = await resp.text().catch(() => '');
+            throw new Error(t || ('HTTP ' + resp.status));
+          }
+          if (msgEl) {
+            msgEl.textContent = 'Backup created.';
+            msgEl.className = 'row status-ok';
+          }
+          await loadDbBackupConfig();
+          await loadDbBackupList();
+        } catch (e) {
+          console.error('Manual backup failed:', e);
+          if (msgEl) {
+            msgEl.textContent = 'Backup failed. Check server logs.';
+            msgEl.className = 'row status-error';
+          }
+        }
+      });
+    }
+
+    async function loadMobileDevices() {
+      const listEl = document.getElementById('mobileDevicesList');
+      if (!listEl) return;
+      listEl.textContent = 'Loading...';
+      try {
+        const r = await fetch('/api/mobile/devices');
+        if (!r.ok) {
+          const t = await r.text().catch(() => '');
+          throw new Error(t || ('HTTP ' + r.status));
+        }
+        const data = await r.json();
+        const devices = Array.isArray(data.devices) ? data.devices : [];
+        if (!devices.length) {
+          listEl.innerHTML = '<span class="muted">No mobile devices yet.</span>';
+          return;
+        }
+
+        let html = '';
+        devices.forEach(d => {
+          const id = d && d.id ? String(d.id) : '';
+          const name = d && d.name ? String(d.name) : 'Mobile device';
+          const createdAt = d && d.createdAt ? fmtTime(d.createdAt) : '-';
+          const lastUsedAt = d && d.lastUsedAt ? fmtTime(d.lastUsedAt) : '-';
+          html += '<div class="row" style="display:flex;justify-content:space-between;gap:10px;align-items:center;">';
+          html += '<div style="min-width:0;flex:1;">';
+          html += `<div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(name)}</div>`;
+          html += `<div class="muted" style="font-size:12px;">Created: ${escapeHtml(createdAt)} • Last used: ${escapeHtml(lastUsedAt)}</div>`;
+          html += '</div>';
+          html += `<button class="btn" data-mobile-device-delete="${escapeHtml(id)}">Delete</button>`;
+          html += '</div>';
+        });
+        listEl.innerHTML = html;
+
+        listEl.querySelectorAll('button[data-mobile-device-delete]').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const id = btn.getAttribute('data-mobile-device-delete') || '';
+            const ok = confirm('Delete this mobile device? The token will stop working immediately.');
+            if (!ok) return;
+            try {
+              const resp = await fetch('/api/mobile/devices/' + encodeURIComponent(id), { method: 'DELETE' });
+              if (!resp.ok) {
+                const t = await resp.text().catch(() => '');
+                throw new Error(t || ('HTTP ' + resp.status));
+              }
+              await loadMobileDevices();
+            } catch (e) {
+              alert('Delete failed. Check server logs.');
+              console.error('Delete mobile device failed:', e);
+            }
+          });
+        });
+      } catch (e) {
+        console.error('Failed to load mobile devices:', e);
+        listEl.innerHTML = '<span class="muted">Failed to load mobile devices.</span>';
+      }
+    }
+
+    (function() {
+      const createBtn = document.getElementById('mobileDeviceCreateBtn');
+      const nameInput = document.getElementById('mobileDeviceName');
+      const statusEl = document.getElementById('mobileDeviceCreateStatus');
+      const tokenBox = document.getElementById('mobileDeviceTokenBox');
+      const tokenEl = document.getElementById('mobileDeviceToken');
+      const qrBox = document.getElementById('mobileDeviceQrBox');
+      const qrEl = document.getElementById('mobileDeviceQr');
+      const copyBtn = document.getElementById('mobileDeviceCopyBtn');
+      const copyStatus = document.getElementById('mobileDeviceCopyStatus');
+      if (!createBtn || !statusEl || !tokenBox || !tokenEl) return;
+
+      createBtn.addEventListener('click', async () => {
+        statusEl.textContent = 'Creating...';
+        statusEl.className = 'row';
+        tokenBox.style.display = 'none';
+        tokenEl.value = '';
+        if (qrBox) qrBox.style.display = 'none';
+        if (qrEl) qrEl.innerHTML = '';
+        if (copyStatus) copyStatus.textContent = '';
+        try {
+          const payload = { name: (nameInput && nameInput.value) ? String(nameInput.value).trim() : '' };
+          const r = await fetch('/api/mobile/devices', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          const text = await r.text().catch(() => '');
+          if (!r.ok) throw new Error(text || ('HTTP ' + r.status));
+          const data = text ? JSON.parse(text) : {};
+          if (!data || !data.token) throw new Error('Server did not return a token');
+          tokenEl.value = String(data.token);
+          tokenBox.style.display = 'block';
+          if (qrBox && qrEl && data.qrSvg) {
+            qrEl.innerHTML = String(data.qrSvg);
+            qrBox.style.display = 'block';
+          }
+          statusEl.textContent = 'Device token created.';
+          statusEl.className = 'row status-ok';
+          await loadMobileDevices();
+        } catch (e) {
+          console.error('Create mobile device failed:', e);
+          statusEl.textContent = 'Create failed. Check server logs.';
+          statusEl.className = 'row status-error';
+        }
+      });
+
+      if (copyBtn) {
+        copyBtn.addEventListener('click', async () => {
+          try {
+            await navigator.clipboard.writeText(tokenEl.value || '');
+            if (copyStatus) copyStatus.textContent = 'Copied.';
+          } catch (e) {
+            console.error('Copy failed:', e);
+            if (copyStatus) copyStatus.textContent = 'Copy failed.';
+          }
+        });
+      }
+    })();
+    document.getElementById('configSaveBtn').addEventListener('click', async () => {
+      const statusEl = document.getElementById('configStatus');
+      statusEl.textContent = 'Saving...';
+      statusEl.className = '';
+      try {
+        const payload = {};
+        const baseUrlInput = document.getElementById('cfgPublicBaseUrl');
+        if (baseUrlInput) {
+          payload.publicBaseUrl = (baseUrlInput.value || '').trim();
+        }
+        const maxInput = document.getElementById('cfgMaxHistory');
+        if (maxInput) {
+          const raw = (maxInput.value || '').trim();
+          if (raw === '') {
+            payload.maxHistory = null; // reset to default
+          } else {
+            const n = Number(raw);
+            if (Number.isFinite(n)) {
+              payload.maxHistory = n;
+            }
+          }
+        }
+
+        const authModeSel = document.getElementById('cfgAuthMode');
+        if (authModeSel) {
+          payload.authMode = (authModeSel.value === 'nginx') ? 'nginx' : 'internal';
+        }
+
+        const nginxHint = document.getElementById('nginxRiskHint');
+        if (nginxHint && authModeSel) {
+          nginxHint.style.display = (authModeSel.value === 'nginx') ? 'block' : 'none';
+        }
+
+        const resp = await fetch('/api/config/app', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => '');
+          throw new Error(text || ('HTTP ' + resp.status));
+        }
+        const data = await resp.json();
+        // Update read-only runtime view and config inputs based on server response
+        if (typeof data.maxHistory === 'number') {
+          document.getElementById('maxHistory').textContent = data.maxHistory;
+        }
+        if (Object.prototype.hasOwnProperty.call(data, 'publicBaseUrl')) {
+          const baseUrlInput = document.getElementById('cfgPublicBaseUrl');
+          if (baseUrlInput) {
+            baseUrlInput.value = (data.publicBaseUrl || '').trim();
+          }
+        }
+        statusEl.textContent = 'Config saved.';
+        statusEl.className = 'status-ok';
+      } catch (e) {
+        console.error('Failed to save app config:', e);
+        statusEl.textContent = 'Save failed. Check server logs.';
+        statusEl.className = 'status-error';
+      }
+    });
+
+    loadSystemInfo();
+    loadAppConfig();
+    loadDbBackupConfig();
+    loadDbBackupList();
+    loadMobileDevices();
+
+    (function() {
+      const input = document.getElementById('platformIconInput');
+      const resultEl = document.getElementById('platformIconResult');
+      const examplesEl = document.getElementById('platformIconExamples');
+      if (!input || !resultEl || !examplesEl) return;
+
+      const __rokuLogoCacheBust = Date.now();
+      function getRokuLogoUrl() {
+        return 'roku_logo.png?v=' + __rokuLogoCacheBust;
+      }
+
+      function detectPlatform(raw) {
+        const s = String(raw || '').trim();
+        const lower = s.toLowerCase();
+        if (!lower) return { key: 'unknown', label: 'Unknown', raw: s };
+
+        if (lower.includes('roku')) return { key: 'roku', label: 'Roku', raw: s };
+        if (lower.includes('android')) return { key: 'android', label: 'Android', raw: s };
+        if (lower.includes('iphone') || lower.includes('ipad') || lower.includes('ios')) return { key: 'ios', label: 'iOS', raw: s };
+        if (lower.includes('tvos') || lower.includes('apple tv')) return { key: 'tvos', label: 'tvOS', raw: s };
+        if (lower.includes('fire tv') || (lower.includes('fire') && lower.includes('tv'))) return { key: 'firetv', label: 'Fire TV', raw: s };
+        if (lower.includes('webos')) return { key: 'webos', label: 'webOS', raw: s };
+        if (lower.includes('windows')) return { key: 'windows', label: 'Windows', raw: s };
+        if (lower.includes('mac') || lower.includes('os x') || lower.includes('osx')) return { key: 'mac', label: 'macOS', raw: s };
+        if (lower.includes('linux')) return { key: 'linux', label: 'Linux', raw: s };
+        if (lower.includes('chrome') || lower.includes('safari') || lower.includes('edge') || lower.includes('browser') || lower.includes('web')) return { key: 'web', label: 'Web', raw: s };
+        if (lower.includes('tv')) return { key: 'tv', label: 'TV', raw: s };
+
+        return { key: 'unknown', label: 'Unknown', raw: s };
+      }
+
+      function iconSvg(type) {
+        // Monochrome icons using currentColor (no new hard-coded theme colors).
+        if (type === 'tv') {
+          return '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="6" width="18" height="12" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M8 20h8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
+        }
+        if (type === 'phone') {
+          return '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="8" y="3" width="8" height="18" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M11 18h2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
+        }
+        if (type === 'monitor') {
+          return '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="12" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M9 21h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M12 17v4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
+        }
+        if (type === 'terminal') {
+          return '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M7 10l3 3-3 3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 16h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
+        }
+        // globe
+        return '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><path d="M3 12h18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M12 3c2.8 2.8 2.8 15.2 0 18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M12 3c-2.8 2.8-2.8 15.2 0 18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
+      }
+
+      function createPlatformIcon(key) {
+        const wrap = document.createElement('span');
+        wrap.className = 'platform-icon';
+
+        if (key === 'roku') {
+          const img = document.createElement('img');
+          img.alt = 'Roku';
+          img.src = getRokuLogoUrl();
+          img.onerror = () => {
+            wrap.innerHTML = '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><path d="M9 16V8h4.3c1.6 0 2.7 1 2.7 2.5 0 1.4-1 2.3-2.6 2.3H9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+          };
+          wrap.appendChild(img);
+          return wrap;
+        }
+
+        let svgType = 'globe';
+        if (key === 'android' || key === 'ios') svgType = 'phone';
+        else if (key === 'tvos' || key === 'firetv' || key === 'webos' || key === 'tv') svgType = 'tv';
+        else if (key === 'windows' || key === 'mac') svgType = 'monitor';
+        else if (key === 'linux') svgType = 'terminal';
+        else if (key === 'web') svgType = 'globe';
+
+        wrap.innerHTML = iconSvg(svgType);
+        return wrap;
+      }
+
+      function renderResult() {
+        const det = detectPlatform(input.value);
+        const line = document.createElement('div');
+        line.className = 'platform-preview-item';
+        line.title = `key: ${det.key}`;
+        line.appendChild(createPlatformIcon(det.key));
+        const text = document.createElement('span');
+        text.textContent = `${det.label} (key: ${det.key})`;
+        line.appendChild(text);
+        resultEl.replaceChildren(line);
+      }
+
+      function renderExamples() {
+        const examples = [
+          'Roku',
+          'Plex for Roku',
+          'Android',
+          'iOS',
+          'Apple TV (tvOS)',
+          'Fire TV',
+          'webOS',
+          'Web',
+          'Windows',
+          'macOS',
+          'Linux'
+        ];
+        const frag = document.createDocumentFragment();
+        examples.forEach((ex) => {
+          const det = detectPlatform(ex);
+          const item = document.createElement('div');
+          item.className = 'platform-preview-item';
+          item.title = `"${ex}" → ${det.label} (key: ${det.key})`;
+          item.appendChild(createPlatformIcon(det.key));
+          const text = document.createElement('span');
+          text.textContent = ex;
+          item.appendChild(text);
+          frag.appendChild(item);
+        });
+        examplesEl.replaceChildren(frag);
+      }
+
+      input.value = input.value || 'Roku';
+      input.addEventListener('input', renderResult);
+      renderExamples();
+      renderResult();
+    })();
+
+    (function() {
+      const authModeSel = document.getElementById('cfgAuthMode');
+      const nginxHint = document.getElementById('nginxRiskHint');
+      if (!authModeSel || !nginxHint) return;
+      authModeSel.addEventListener('change', () => {
+        nginxHint.style.display = (authModeSel.value === 'nginx') ? 'block' : 'none';
+      });
+    })();
+  </script>
+</body>
+</html>
