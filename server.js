@@ -5073,9 +5073,13 @@ async function pollServer(s) {
     headers['Accept'] = 'application/json';
   }
 
+  const defaultTokenLocation =
+    s.type === 'plex' ? 'query'
+    : (s.type === 'jellyfin' ? 'query' : 'header');
+
   if (s.token) {
-    // Choose sensible defaults: Plex uses query by default, Jellyfin/Emby use headers by default
-    const tokenLoc = s.tokenLocation || (s.type === 'plex' ? 'query' : 'header');
+    // Prefer query auth for Plex and Jellyfin compatibility; keep header auth for Emby/Silo.
+    const tokenLoc = s.tokenLocation || defaultTokenLocation;
     if (tokenLoc === 'header') {
       if (s.type === 'plex') {
         headers['X-Plex-Token'] = s.token;
@@ -5502,7 +5506,7 @@ async function jfEmbyGet(server, relPath, params = {}) {
   const headers = {};
   const requestParams = { ...(params || {}) };
   if (server && server.token) {
-    const tokenLoc = server.tokenLocation || 'header';
+    const tokenLoc = server.tokenLocation || (server.type === 'jellyfin' ? 'query' : 'header');
     if (tokenLoc === 'header') {
       if (server.type === 'jellyfin') headers['X-MediaBrowser-Token'] = server.token;
       else headers['X-Emby-Token'] = server.token;
@@ -6912,7 +6916,7 @@ app.get('/api/poster', async (req, res) => {
     let url = base + rel;
     // Attach token using the same rules as pollServer
     if (server.token) {
-      const tokenLoc = server.tokenLocation || (server.type === 'plex' ? 'query' : 'header');
+      const tokenLoc = server.tokenLocation || (server.type === 'plex' ? 'query' : (server.type === 'jellyfin' ? 'query' : 'header'));
       if (tokenLoc === 'query') {
         const sep = url.includes('?') ? '&' : '?';
         if (server.type === 'plex') {
@@ -6926,7 +6930,7 @@ app.get('/api/poster', async (req, res) => {
     }
     const headers = {};
     if (server.token) {
-      const tokenLoc = server.tokenLocation || (server.type === 'plex' ? 'query' : 'header');
+      const tokenLoc = server.tokenLocation || (server.type === 'plex' ? 'query' : (server.type === 'jellyfin' ? 'query' : 'header'));
       if (tokenLoc === 'header') {
         if (server.type === 'plex') {
           headers['X-Plex-Token'] = server.token;
@@ -6983,7 +6987,7 @@ app.get('/api/poster/signed', async (req, res) => {
 
     // Attach token using the same rules as pollServer
     if (server.token) {
-      const tokenLoc = server.tokenLocation || (server.type === 'plex' ? 'query' : 'header');
+      const tokenLoc = server.tokenLocation || (server.type === 'plex' ? 'query' : (server.type === 'jellyfin' ? 'query' : 'header'));
       if (tokenLoc === 'query') {
         const sep = url.includes('?') ? '&' : '?';
         if (server.type === 'plex') {
@@ -6998,7 +7002,7 @@ app.get('/api/poster/signed', async (req, res) => {
 
     const headers = {};
     if (server.token) {
-      const tokenLoc = server.tokenLocation || (server.type === 'plex' ? 'query' : 'header');
+      const tokenLoc = server.tokenLocation || (server.type === 'plex' ? 'query' : (server.type === 'jellyfin' ? 'query' : 'header'));
       if (tokenLoc === 'header') {
         if (server.type === 'plex') {
           headers['X-Plex-Token'] = server.token;
@@ -8188,7 +8192,9 @@ app.get('/api/subscribers/summary', (req, res) => {
 
   function getJellyfinOrEmbyAuth(server) {
     const token = server && server.token ? String(server.token) : '';
-    const tokenLoc = (server && server.tokenLocation) ? String(server.tokenLocation) : 'header';
+    const tokenLoc = (server && server.tokenLocation)
+      ? String(server.tokenLocation)
+      : ((server && server.type === 'jellyfin') ? 'query' : 'header');
     const headers = {};
     const params = {};
     if (!token) return { headers, params };

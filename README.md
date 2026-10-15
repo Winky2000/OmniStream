@@ -433,7 +433,7 @@ Each server entry uses this shape (fields with defaults are optional):
 
 Optional fields (normally filled in by the app):
 
-- `tokenLocation` — defaults to `query` for Plex, `header` for Jellyfin/Emby.
+- `tokenLocation` — defaults to `query` for Plex/Jellyfin, `header` for Emby.
 - `apiPath` — defaults to `/status/sessions` (Plex) or `/Sessions` (Jellyfin/Emby).
 
 You can edit servers via the **Servers** UI rather than hand-editing `servers.json`.
@@ -453,7 +453,8 @@ You can edit servers via the **Servers** UI rather than hand-editing `servers.js
 
 - **Jellyfin shows offline / 401**
 	- Confirm `baseUrl` and port are correct (e.g. `http://YOUR_JELLYFIN_HOST:8096`).
-	- Use a valid API key; OmniStream sends it using the expected Jellyfin headers/query.
+	- Use a valid API key; current OmniStream builds prefer Jellyfin `api_key` query auth for compatibility.
+	- If this started after a Jellyfin update and your server entry was hand-edited with `"tokenLocation": "header"`, switch it to `"query"`.
 
 Once servers are online, the main dashboard shows live sessions, and the Admin tabs (Servers, Reports, Notifications, History) provide management and insights.
 
