@@ -2,7 +2,8 @@ version: '3.8'
 
 services:
   omnistream:
-    image: ghcr.io/winky2000/omnistream:latest
+    # Image can be overridden by setting the IMAGE environment variable (useful for testing tags)
+    image: ${IMAGE:-ghcr.io/winky2000/omnistream:v1.0.3}
     container_name: omnistream
     restart: unless-stopped
     ports:
