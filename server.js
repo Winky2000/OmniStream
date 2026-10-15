@@ -3976,10 +3976,12 @@ async function importJellyfinHistory(server, { limitPerUser = 100 } = {}) {
   const headers = {};
   const authParams = {};
   const tokenLoc = server.tokenLocation || 'header';
+  if (server.type === 'jellyfin') {
+    // Backward compatibility for legacy header configs.
+    authParams.api_key = server.token;
+  }
   if (tokenLoc === 'query') {
-    if (server.type === 'jellyfin') {
-      authParams.api_key = server.token;
-    } else {
+    if (server.type !== 'jellyfin') {
       authParams['X-Emby-Token'] = server.token;
     }
   } else {
@@ -5080,6 +5082,11 @@ async function pollServer(s) {
   if (s.token) {
     // Prefer query auth for Plex and Jellyfin compatibility; keep header auth for Emby/Silo.
     const tokenLoc = s.tokenLocation || defaultTokenLocation;
+    if (s.type === 'jellyfin') {
+      // Backward compatibility: always include api_key for Jellyfin, even for legacy header configs.
+      const sep = finalUrl.includes('?') ? '&' : '?';
+      finalUrl += `${sep}api_key=${encodeURIComponent(s.token)}`;
+    }
     if (tokenLoc === 'header') {
       if (s.type === 'plex') {
         headers['X-Plex-Token'] = s.token;
@@ -5507,13 +5514,15 @@ async function jfEmbyGet(server, relPath, params = {}) {
   const requestParams = { ...(params || {}) };
   if (server && server.token) {
     const tokenLoc = server.tokenLocation || (server.type === 'jellyfin' ? 'query' : 'header');
+    if (server.type === 'jellyfin') {
+      // Backward compatibility for legacy header configs.
+      requestParams.api_key = server.token;
+    }
     if (tokenLoc === 'header') {
       if (server.type === 'jellyfin') headers['X-MediaBrowser-Token'] = server.token;
       else headers['X-Emby-Token'] = server.token;
     } else {
-      if (server.type === 'jellyfin') {
-        requestParams.api_key = server.token;
-      } else {
+      if (server.type !== 'jellyfin') {
         // Emby: prefer api_key in query, but also include X-Emby-Token for compatibility.
         requestParams.api_key = server.token;
         requestParams['X-Emby-Token'] = server.token;
@@ -6914,6 +6923,10 @@ app.get('/api/poster', async (req, res) => {
     if (base.endsWith('/')) base = base.slice(0, -1);
     const rel = relRaw;
     let url = base + rel;
+    if (server.token && server.type === 'jellyfin') {
+      const sep = url.includes('?') ? '&' : '?';
+      url += `${sep}api_key=${encodeURIComponent(server.token)}`;
+    }
     // Attach token using the same rules as pollServer
     if (server.token) {
       const tokenLoc = server.tokenLocation || (server.type === 'plex' ? 'query' : (server.type === 'jellyfin' ? 'query' : 'header'));
@@ -6922,7 +6935,7 @@ app.get('/api/poster', async (req, res) => {
         if (server.type === 'plex') {
           url += `${sep}X-Plex-Token=${encodeURIComponent(server.token)}`;
         } else if (server.type === 'jellyfin') {
-          url += `${sep}api_key=${encodeURIComponent(server.token)}`;
+          // Jellyfin api_key already added above for compatibility.
         } else {
           url += `${sep}api_key=${encodeURIComponent(server.token)}&X-Emby-Token=${encodeURIComponent(server.token)}`;
         }
@@ -6984,6 +6997,10 @@ app.get('/api/poster/signed', async (req, res) => {
     if (base.endsWith('/')) base = base.slice(0, -1);
     const rel = relRaw;
     let url = base + rel;
+    if (server.token && server.type === 'jellyfin') {
+      const sep = url.includes('?') ? '&' : '?';
+      url += `${sep}api_key=${encodeURIComponent(server.token)}`;
+    }
 
     // Attach token using the same rules as pollServer
     if (server.token) {
@@ -6993,7 +7010,7 @@ app.get('/api/poster/signed', async (req, res) => {
         if (server.type === 'plex') {
           url += `${sep}X-Plex-Token=${encodeURIComponent(server.token)}`;
         } else if (server.type === 'jellyfin') {
-          url += `${sep}api_key=${encodeURIComponent(server.token)}`;
+          // Jellyfin api_key already added above for compatibility.
         } else {
           url += `${sep}api_key=${encodeURIComponent(server.token)}&X-Emby-Token=${encodeURIComponent(server.token)}`;
         }
@@ -8200,9 +8217,9 @@ app.get('/api/subscribers/summary', (req, res) => {
     if (!token) return { headers, params };
 
     if (server.type === 'jellyfin') {
-      if (tokenLoc === 'query') {
-        params.api_key = token;
-      } else {
+      // Backward compatibility: always send Jellyfin api_key query param.
+      params.api_key = token;
+      if (tokenLoc !== 'query') {
         headers['X-MediaBrowser-Token'] = token;
       }
     } else {
