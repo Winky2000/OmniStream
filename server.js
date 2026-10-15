@@ -3969,7 +3969,7 @@ scheduleHistoryDbBackups();
 // Jellyfin/Emby: pull per-user played movies/episodes
 async function importJellyfinHistory(server, { limitPerUser = 100 } = {}) {
   if (!historyDb) return { serverId: server.id, type: server.type, imported: 0, error: 'history DB not available' };
-  const base = (server.baseUrl || '').replace(/\/$/, '');
+  const base = serverBaseUrl(server);
   if (!server.token) {
     return { serverId: server.id, type: server.type, imported: 0, error: 'no token configured' };
   }
@@ -5060,7 +5060,7 @@ function summaryFromResponse(resp) {
 }
 
 async function pollServer(s) {
-  const base = (s.baseUrl || '').replace(/\/$/, '');
+  const base = serverBaseUrl(s);
   let pathSuffix = s.apiPath || defaultPathForType(s.type) || '/';
   // For Jellyfin/Emby, override legacy /System/Info path to use /Sessions so we actually get active sessions
   if ((s.type === 'jellyfin' || s.type === 'emby') && (!s.apiPath || s.apiPath === '/System/Info')) {
@@ -5492,7 +5492,15 @@ function addCount(map, key, inc = 1) {
 }
 
 function serverBaseUrl(server) {
-  const base = (server && server.baseUrl ? String(server.baseUrl) : '').replace(/\/$/, '');
+  let base = (server && server.baseUrl ? String(server.baseUrl) : '').replace(/\/$/, '');
+  const type = String((server && server.type) || '').toLowerCase();
+
+  // Jellyfin 12 removed legacy /emby and /mediabrowser route prefixes.
+  // Normalize old saved base URLs so upgrades continue to work.
+  if (type === 'jellyfin' || type === 'silo') {
+    base = base.replace(/\/(emby|mediabrowser)$/i, '');
+  }
+
   return base;
 }
 
@@ -6919,8 +6927,7 @@ app.get('/api/poster', async (req, res) => {
     if (!server || !server.baseUrl) {
       return res.status(404).end();
     }
-    let base = server.baseUrl;
-    if (base.endsWith('/')) base = base.slice(0, -1);
+    let base = serverBaseUrl(server);
     const rel = relRaw;
     let url = base + rel;
     if (server.token && server.type === 'jellyfin') {
@@ -6993,8 +7000,7 @@ app.get('/api/poster/signed', async (req, res) => {
     if (!server || !server.baseUrl) {
       return res.status(404).end();
     }
-    let base = server.baseUrl;
-    if (base.endsWith('/')) base = base.slice(0, -1);
+    let base = serverBaseUrl(server);
     const rel = relRaw;
     let url = base + rel;
     if (server.token && server.type === 'jellyfin') {
